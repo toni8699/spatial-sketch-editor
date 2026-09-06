@@ -265,7 +265,11 @@
 
 	h2 {
 		margin: 0;
-		font-size: 0.9rem;
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+		color: var(--editor-text-muted);
 	}
 
 	.section-heading span {
@@ -282,8 +286,11 @@
 
 	legend {
 		padding: 0 0.25rem;
-		color: var(--editor-text-secondary);
-		font-size: 0.72rem;
+		color: var(--editor-text-muted);
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
 	}
 
 	.field-grid {

@@ -184,8 +184,8 @@
 
 <style>
 	.material { display: flex; flex-direction: column; gap: 0.55rem; }
-	.material h2 { margin: 0; font-size: 0.78rem; font-weight: 650; color: var(--editor-text-secondary); }
-	.material label { display: flex; flex-direction: column; gap: 0.25rem; color: var(--editor-text-secondary); font-size: 0.68rem; }
+	.material h2 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--editor-text-muted); }
+	.material label { display: flex; flex-direction: column; gap: 0.25rem; color: var(--editor-text-secondary); font-size: 12px; font-weight: 400; }
 	.material select {
 		min-width: 0;
 		padding: 0.42rem;
@@ -193,10 +193,10 @@
 		border-radius: 0.32rem;
 		background: var(--editor-bg-panel-raised);
 		color: var(--editor-text-primary);
-		font: inherit;
+		font: 500 12.5px var(--editor-font);
 	}
 	.material select:focus { outline: 1px solid var(--editor-accent); border-color: var(--editor-accent); }
-	.instance-name { margin: 0; font-size: 0.74rem; color: var(--editor-text-primary); overflow-wrap: anywhere; }
+	.instance-name { margin: 0; font-size: 12.5px; font-weight: 500; color: var(--editor-text-primary); overflow-wrap: anywhere; }
 	.instance-name.muted { color: var(--editor-text-muted); }
 	.instance-name .id { color: var(--editor-text-muted); font-size: 0.64rem; font-family: var(--editor-font); }
 	.overrides { display: grid; gap: 0.45rem; }

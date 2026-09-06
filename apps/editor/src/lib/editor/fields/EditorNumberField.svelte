@@ -165,7 +165,7 @@
 		border: 0;
 		background: transparent;
 		color: var(--editor-text-primary);
-		font: 500 12px var(--editor-font);
+		font: 500 12.5px var(--editor-font);
 		font-variant-numeric: tabular-nums;
 	}
 

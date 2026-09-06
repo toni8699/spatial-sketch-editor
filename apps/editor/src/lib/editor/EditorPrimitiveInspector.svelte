@@ -134,8 +134,8 @@
 
 <style>
 	.primitive { display: flex; flex-direction: column; gap: 0.55rem; }
-	.primitive h2 { margin: 0; font-size: 0.78rem; font-weight: 650; color: var(--editor-text-secondary); }
-	.name, .primitive label:not(.checkbox) { display: flex; flex-direction: column; gap: 0.25rem; color: var(--editor-text-secondary); font-size: 0.68rem; }
+	.primitive h2 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--editor-text-muted); }
+	.name, .primitive label:not(.checkbox) { display: flex; flex-direction: column; gap: 0.25rem; color: var(--editor-text-secondary); font-size: 12px; font-weight: 400; }
 	.name input, .primitive select {
 		min-width: 0;
 		padding: 0.42rem;
@@ -143,13 +143,13 @@
 		border-radius: 0.32rem;
 		background: var(--editor-bg-panel-raised);
 		color: var(--editor-text-primary);
-		font: inherit;
+		font: 500 12.5px var(--editor-font);
 	}
 	.name input:focus, .primitive select:focus { outline: 1px solid var(--editor-accent); border-color: var(--editor-accent); }
 	dl { display: grid; gap: 0.35rem; margin: 0; }
 	dl div { display: grid; grid-template-columns: 5.5rem 1fr; gap: 0.4rem; align-items: baseline; }
-	dt { margin: 0; color: var(--editor-text-tint); font-size: 0.68rem; }
-	dd { margin: 0; color: var(--editor-text-primary); font-size: 0.74rem; word-break: break-word; }
-	.checkbox { display: flex; align-items: center; gap: 0.45rem; color: var(--editor-text-secondary); font-size: 0.74rem; }
+	dt { margin: 0; color: var(--editor-text-secondary); font-size: 12px; font-weight: 400; }
+	dd { margin: 0; color: var(--editor-text-primary); font-size: 12.5px; font-weight: 500; font-variant-numeric: tabular-nums; word-break: break-word; }
+	.checkbox { display: flex; align-items: center; gap: 0.45rem; color: var(--editor-text-secondary); font-size: 12px; font-weight: 400; }
 	.checkbox input { accent-color: var(--editor-accent); }
 </style>

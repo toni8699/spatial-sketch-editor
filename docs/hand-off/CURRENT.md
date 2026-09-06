@@ -5,7 +5,7 @@ slice plus one next action only.
 
 ## Working tree
 
-- P21.1 shared shell + P21.2 Scene reconciliation + P21.3 Camera reconciliation + P21.4 Preview + project flows + P21.5 Slices 1–3 (surface-step/buttons, canvas de-clutter + §2.6 gizmo detach + 2B node colors, Inspector density + selection isolation) implemented; registered in the tracker.
+- P21.1 shared shell + P21.2 Scene reconciliation + P21.3 Camera reconciliation + P21.4 Preview + project flows + P21.5 Slices 1–4 (surface-step/buttons, canvas de-clutter + §2.6 gizmo detach + 2B node colors, Inspector density + selection isolation, typography grammar + theme sweep) implemented; registered in the tracker.
 
 - Planning delta: **Roadmap revised 2026-09-05 (owner), reconciled 2026-09-06:**
   P21.5 stays strictly presentation-only (no authoring-depth expansion —
@@ -57,11 +57,11 @@ slice plus one next action only.
 
 ## Next action
 
-- Implement P21.5 Slice 4 (all-theme verification sweep + typography grammar) then Slice 5 (timeline density) per [the P21.5 brief](../plans/2026-09-05-P21.5-ui-polish-pass.md) (presentation-only, no behavior change) — §2.6 gizmo detach + [Slice 2B camera node colors](../plans/2026-09-06-P21.5-slice-2B-camera-node-colors.md) are code-complete with owner eye-test QA pending — then run the P21 final acceptance gate (six-reference visual comparison + axe/contrast sweep) and close the tracker.
+- Implement P21.5 Slice 5 (timeline density) per [the P21.5 brief](../plans/2026-09-05-P21.5-ui-polish-pass.md) (presentation-only, no behavior change) — §2.6 gizmo detach + [Slice 2B camera node colors](../plans/2026-09-06-P21.5-slice-2B-camera-node-colors.md) are code-complete with owner eye-test QA pending — then run the P21 final acceptance gate (six-reference visual comparison + axe/contrast sweep) and close the tracker.
 
 ## Verification
 
-- Full Vitest: 186 files passed, 1 skipped; 2,431 tests passed, 1 skipped.
+- Full Vitest: 186 files passed, 1 skipped; 2,436 tests passed, 1 skipped.
 - `npm run check`: 0 errors / 0 warnings.
 - `npm run check:camera-core`, `npm run check:layout-core`, and
   `npm run check:project-model`: passed.
@@ -104,6 +104,7 @@ slice plus one next action only.
 
 ## Traps
 
+- Track-vs-raised fills measure 1.05–1.12 (borders carry the edge); Slice 4 holds the Slice 1.1 calibration by decision — no new track hexes without owner eye-test.
 - Both Plan workspaces stay mounted. Hidden cells retain `inert` and
   `plan-cell--hidden`; shared `view` remains one Plan|3D axis.
 - Camera 3D rig unmount during a main-editor Camera Plan switch must preserve

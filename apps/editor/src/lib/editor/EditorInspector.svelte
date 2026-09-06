@@ -1058,15 +1058,15 @@
 <style>
 	.panel { display: flex; flex-direction: column; gap: 1rem; padding: 1rem 1.1rem; overflow: auto; background: var(--editor-bg-panel); }
 	.inspector { border-left: 1px solid var(--editor-border-subtle); }
-	header h2, section h2 { margin: 0; font-size: 0.95rem; font-weight: 650; letter-spacing: 0.02em; }
+	header h2, section h2 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--editor-text-muted); }
 	header p { margin: 0.35rem 0 0; color: var(--editor-text-secondary); font-size: 0.75rem; line-height: 1.4; }
 	section { display: flex; flex-direction: column; gap: 0.55rem; }
 	.id { font-family: var(--editor-font); font-size: 0.75rem; overflow-wrap: anywhere; }
 	.layout-inspector { display: flex; flex-direction: column; gap: 0.8rem; }
 	.layout-inspector dl { display: flex; flex-direction: column; gap: 0.45rem; margin: 0; }
 	.layout-inspector dl div { display: flex; justify-content: space-between; gap: 0.7rem; }
-	.layout-inspector dt { color: var(--editor-text-tint); font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.04em; }
-	.layout-inspector dd { margin: 0; color: var(--editor-text-primary); font-size: 0.72rem; text-align: right; }
+	.layout-inspector dt { color: var(--editor-text-secondary); font-size: 12px; font-weight: 400; }
+	.layout-inspector dd { margin: 0; color: var(--editor-text-primary); font-size: 12.5px; font-weight: 500; font-variant-numeric: tabular-nums; text-align: right; }
 	.layout-inspector-note { margin: 0; color: var(--editor-text-secondary); font-size: 0.7rem; line-height: 1.45; }
 	.layout-primer { display: flex; flex-direction: column; gap: 0.35rem; padding: 0.6rem 0.65rem; border: 1px solid var(--editor-border-subtle); border-radius: 0.4rem; background: var(--editor-bg-panel-raised); }
 	.layout-primer strong { font-size: 0.74rem; font-weight: 650; letter-spacing: 0.02em; color: var(--editor-text-primary); }
@@ -1089,8 +1089,8 @@
 	.layout-selection-content { display: flex; flex-direction: column; gap: 0.5rem; }
 	.layout-selected-room { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.6rem; border: 1px solid var(--editor-accent-border); border-radius: 0.35rem; background: var(--editor-bg-selected); color: var(--editor-text-primary); font-size: 0.7rem; }
 	.layout-selected-room span { color: var(--editor-text-secondary); font-size: 0.66rem; overflow-wrap: anywhere; }
-	.layout-selected-room label { display: flex; flex-direction: column; gap: 0.25rem; color: var(--editor-text-secondary); font-size: 0.66rem; }
-	.layout-selected-room input, .layout-selected-room select { box-sizing: border-box; width: 100%; padding: 0.34rem; border: 1px solid var(--editor-border-normal); border-radius: 0.28rem; background: var(--editor-bg-panel-raised); color: var(--editor-text-primary); font: inherit; }
+	.layout-selected-room label { display: flex; flex-direction: column; gap: 0.25rem; color: var(--editor-text-secondary); font-size: 12px; font-weight: 400; }
+	.layout-selected-room input, .layout-selected-room select { box-sizing: border-box; width: 100%; padding: 0.34rem; border: 1px solid var(--editor-border-normal); border-radius: 0.28rem; background: var(--editor-bg-panel-raised); color: var(--editor-text-primary); font: 500 12.5px var(--editor-font); font-variant-numeric: tabular-nums; }
 	.layout-selected-room input:focus, .layout-selected-room select:focus { outline: 1px solid var(--editor-accent); border-color: var(--editor-accent); }
 	.layout-selected-room input:disabled, .layout-selected-room select:disabled, .layout-danger:disabled { opacity: 0.48; cursor: default; }
 	.layout-opening-actions { display: flex; gap: 0.35rem; }
@@ -1105,8 +1105,8 @@
 	.asset-details > div > .id { margin: 0.2rem 0 0; color: var(--editor-text-muted); font-size: 0.66rem; }
 	.asset-details dl, .selection dl { display: flex; flex-direction: column; gap: 0.4rem; margin: 0; }
 	.asset-details dl div { display: grid; grid-template-columns: 4.5rem minmax(0, 1fr); gap: 0.4rem; }
-	.asset-details dt, .selection dt { color: var(--editor-text-muted); font-size: 0.64rem; text-transform: uppercase; letter-spacing: 0.04em; }
-	.asset-details dd { min-width: 0; margin: 0; font-size: 0.69rem; overflow-wrap: anywhere; }
+	.asset-details dt, .selection dt { color: var(--editor-text-secondary); font-size: 12px; font-weight: 400; }
+	.asset-details dd { min-width: 0; margin: 0; color: var(--editor-text-primary); font-size: 12.5px; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 	.place { padding: 0.48rem 0.6rem; border: 1px solid var(--editor-accent-border); border-radius: 0.32rem; background: var(--editor-bg-control); color: var(--editor-text-primary); font: inherit; font-size: 0.73rem; cursor: pointer; }
 	.place.active { background: var(--editor-bg-selected); box-shadow: inset 0 0 0 1px var(--editor-accent); }
 	.unsupported, .empty-selection p { margin: 0; color: var(--editor-text-secondary); font-size: 0.72rem; line-height: 1.4; }
@@ -1121,7 +1121,7 @@
 		background: var(--editor-bg-panel-raised);
 	}
 	.plan-readonly-head { display: flex; align-items: center; gap: 0.45rem; color: var(--editor-accent-hover); }
-	.plan-readonly-head h2 { margin: 0; font-size: 0.9rem; color: var(--editor-text-primary); }
+	.plan-readonly-head h2 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--editor-text-muted); }
 	.plan-readonly-card p { margin: 0; color: var(--editor-text-secondary); font-size: 0.72rem; line-height: 1.4; }
 	.plan-readonly-more {
 		display: inline-flex;
@@ -1145,7 +1145,7 @@
 	.staging-selection .staging-warning { color: var(--editor-danger-fg); }
 	.staging-selection .staging-status { color: var(--editor-text-secondary); }
 	.staging-transform-fields { margin: 0; border: 1px solid var(--editor-border-subtle); border-radius: 0.35rem; padding: 0.55rem; }
-	.staging-transform-fields legend { padding: 0 0.3rem; color: var(--editor-text-secondary); font-size: 0.68rem; }
+	.staging-transform-fields legend { padding: 0 0.3rem; color: var(--editor-text-muted); font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; }
 	.staging-field-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.4rem; }
 	.plan-footer-note {
 		display: flex;
@@ -1161,7 +1161,7 @@
 	.plan-footer-note__icon { display: inline-flex; flex: 0 0 auto; margin-top: 0.05rem; color: var(--editor-accent); }
 	.deselect { padding: 0.38rem 0.5rem; border: 1px solid var(--editor-border-normal); border-radius: 0.32rem; background: var(--editor-bg-panel-raised); color: var(--editor-text-primary); font: inherit; font-size: 0.72rem; cursor: pointer; }
 	.selection dl div { display: flex; flex-direction: column; gap: 0.1rem; }
-	.selection dd { margin: 0; font-size: 0.8rem; }
+	.selection dd { margin: 0; color: var(--editor-text-primary); font-size: 12.5px; font-weight: 500; font-variant-numeric: tabular-nums; }
 	.selection p { margin: 0; color: var(--editor-text-secondary); font-size: 0.75rem; line-height: 1.4; }
 	.grouping { padding: 0.85rem; border: 1px solid var(--editor-border-subtle); border-radius: 0.45rem; background: var(--editor-bg-panel-raised); }
 	.grouped-badge { padding: 0.18rem 0.42rem; border: 1px solid var(--editor-accent-border); border-radius: 999px; background: var(--editor-bg-selected); color: var(--editor-text-primary); font-size: 0.65rem; font-weight: 650; letter-spacing: 0.04em; text-transform: uppercase; }
@@ -1171,7 +1171,7 @@
 	.group-hint { margin: 0; }
 	.rename-form { display: flex; flex-direction: column; gap: 0.55rem; }
 	.rename { display: flex; flex-direction: column; gap: 0.3rem; color: var(--editor-text-secondary); font-size: 0.75rem; }
-	.rename input { padding: 0.4rem; border: 1px solid var(--editor-border-normal); border-radius: 0.3rem; background: var(--editor-bg-panel-raised); color: var(--editor-text-primary); font: inherit; }
+	.rename input { padding: 0.4rem; border: 1px solid var(--editor-border-normal); border-radius: 0.3rem; background: var(--editor-bg-panel-raised); color: var(--editor-text-primary); font: 500 12.5px var(--editor-font); }
 	.rename input:focus { outline: 1px solid var(--editor-accent); border-color: var(--editor-accent); }
 	.group-actions { display: flex; gap: 0.4rem; }
 	.group-button, .primary-action, .danger-action { padding: 0.46rem 0.58rem; border: 1px solid var(--editor-border-normal); border-radius: 0.32rem; background: var(--editor-bg-control); color: var(--editor-text-primary); font: inherit; font-size: 0.73rem; cursor: pointer; }

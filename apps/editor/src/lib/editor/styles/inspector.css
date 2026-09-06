@@ -8,7 +8,7 @@
 	--editor-inspector-section-title: 600 var(--editor-font-size-section)
 		var(--editor-font);
 	--editor-inspector-label: 400 var(--editor-font-size-label) var(--editor-font);
-	--editor-inspector-value: 400 var(--editor-font-size-input) var(--editor-font);
+	--editor-inspector-value: 500 var(--editor-font-size-input) var(--editor-font);
 	--editor-inspector-metadata: 400 var(--editor-font-size-metadata)
 		var(--editor-font);
 

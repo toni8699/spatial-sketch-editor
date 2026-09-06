@@ -493,16 +493,16 @@
 <style>
 	.camera-node { display: flex; flex-direction: column; gap: 0.75rem; }
 	.section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
-	h2 { margin: 0; font-size: 0.9rem; }
+	h2 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--editor-text-muted); }
 	.section-heading span { color: var(--editor-text-muted); font-size: 0.68rem; }
 	.status { margin: 0.75rem 0 0; color: var(--editor-warning); font-size: 0.7rem; line-height: 1.4; }
 	dl { display: flex; flex-direction: column; gap: 0.4rem; margin: 0; }
 	dl div { display: grid; grid-template-columns: 4.4rem 1fr; gap: 0.45rem; }
-	dt, .label-field span { color: var(--editor-text-muted); font-size: 0.67rem; letter-spacing: 0.04em; text-transform: uppercase; }
-	dd { display: flex; flex-direction: column; gap: 0.1rem; margin: 0; font-size: 0.76rem; }
+	dt, .label-field span { color: var(--editor-text-secondary); font-size: 12px; font-weight: 400; }
+	dd { display: flex; flex-direction: column; gap: 0.1rem; margin: 0; color: var(--editor-text-primary); font-size: 12.5px; font-weight: 500; font-variant-numeric: tabular-nums; }
 	.id { font-family: var(--editor-font); overflow-wrap: anywhere; }
 	.label-field { display: flex; flex-direction: column; gap: 0.3rem; }
-	.label-field input { width: 100%; box-sizing: border-box; padding: 0.42rem; border: 1px solid var(--editor-border-normal); border-radius: 0.3rem; background: var(--editor-bg-panel); color: var(--editor-text-primary); }
+	.label-field input { width: 100%; box-sizing: border-box; padding: 0.42rem; border: 1px solid var(--editor-border-normal); border-radius: 0.3rem; background: var(--editor-bg-panel); color: var(--editor-text-primary); font: 500 12.5px var(--editor-font); }
 	.handles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.35rem; }
 	.topology { display: grid; grid-template-columns: 1fr; gap: 0.35rem; }
 	button { padding: 0.42rem 0.4rem; border: 1px solid var(--editor-border-normal); border-radius: 0.3rem; background: var(--editor-bg-panel-raised); color: var(--editor-text-secondary); font: inherit; font-size: 0.72rem; cursor: pointer; }
@@ -510,10 +510,10 @@
 	button.danger { border-color: var(--editor-danger-border); color: var(--editor-danger-fg); }
 	button:disabled, input:disabled { opacity: 0.42; cursor: default; }
 	.aim { display: flex; flex-direction: column; gap: 0.45rem; padding-top: 0.4rem; border-top: 1px solid var(--editor-border-subtle); }
-	.aim .section-heading h3 { margin: 0; font-size: 0.78rem; letter-spacing: 0.02em; color: var(--editor-text-secondary); }
+	.aim .section-heading h3 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--editor-text-muted); }
 	.aim-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.45rem; }
 	.connections { display: flex; flex-direction: column; gap: 0.45rem; padding-top: 0.4rem; border-top: 1px solid var(--editor-border-subtle); }
-	.connections h3 { margin: 0; font-size: 0.78rem; letter-spacing: 0.02em; color: var(--editor-text-secondary); }
+	.connections h3 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--editor-text-muted); }
 	.connections-empty { margin: 0; color: var(--editor-text-muted); font-size: 0.7rem; }
 	.connection-list { display: flex; flex-direction: column; gap: 0.28rem; margin: 0; padding: 0; list-style: none; }
 	.connection-row { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.3rem 0.4rem; border: 1px solid var(--editor-border-subtle); border-radius: 0.28rem; background: var(--editor-bg-panel); }

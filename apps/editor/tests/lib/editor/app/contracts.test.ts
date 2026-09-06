@@ -860,6 +860,131 @@ describe('P21.5 Slice 3 inspector density + selection isolation', () => {
 	});
 });
 
+describe('P21.5 Slice 4 inspector typography + theme sweep', () => {
+	it('locks the three-tier Inspector type grammar in tokens + inspector shorthands', () => {
+		const tokens = readLibSource('editor/styles/tokens.css');
+		expect(tokens).toContain('--editor-font-size-section: 11px;');
+		expect(tokens).toContain('--editor-font-size-label: 12px;');
+		expect(tokens).toContain('--editor-font-size-input: 12.5px;');
+		const inspectorTokens = readLibSource('editor/styles/inspector.css');
+		expect(inspectorTokens).toContain(
+			'--editor-inspector-value: 500 var(--editor-font-size-input) var(--editor-font);'
+		);
+	});
+
+	it('renders Inspector section headers as 11px uppercase muted across every panel', () => {
+		const tier = [
+			'font-size: 11px;',
+			'font-weight: 600;',
+			'letter-spacing: 0.05em;',
+			'text-transform: uppercase;',
+			'color: var(--editor-text-muted);'
+		];
+		for (const component of [
+			'editor/EditorInspector.svelte',
+			'editor/EditorTransformInspector.svelte',
+			'editor/EditorPlacementInspector.svelte',
+			'editor/app/CameraPlanInspector.svelte',
+			'editor/camera/EditorCameraInspector.svelte',
+			'editor/camera/EditorCameraConnectionTiming.svelte',
+			'editor/EditorLightInspector.svelte',
+			'editor/EditorPrimitiveInspector.svelte',
+			'editor/EditorMaterialInspector.svelte'
+		]) {
+			const source = readLibSource(component);
+			for (const fragment of tier) {
+				expect(source, `${component} misses section-header tier ${fragment}`).toContain(fragment);
+			}
+		}
+	});
+
+	it('keeps Inspector property labels at 12px secondary and values at 12.5px tabular primary', () => {
+		// EditorTransformInspector carries no label/value rows of its own —
+		// its Position/Rotation/Scale rows reuse the shared number field.
+		for (const component of [
+			'editor/EditorInspector.svelte',
+			'editor/EditorPlacementInspector.svelte',
+			'editor/app/CameraPlanInspector.svelte',
+			'editor/camera/EditorCameraInspector.svelte',
+			'editor/camera/EditorCameraConnectionTiming.svelte',
+			'editor/EditorLightInspector.svelte',
+			'editor/EditorPrimitiveInspector.svelte',
+			'editor/EditorMaterialInspector.svelte'
+		]) {
+			const source = readLibSource(component);
+			expect(source, `${component} misses label tier`).toContain('font-size: 12px;');
+			expect(source, `${component} misses value tier`).toContain('12.5px');
+		}
+		// Tabular numerals on every panel with numeric rows (coordinates,
+		// dimensions, angles, timing). The Material panel carries no numeric
+		// rows of its own — its roughness/metalness rows reuse the shared
+		// number field pinned below.
+		for (const component of [
+			'editor/EditorInspector.svelte',
+			'editor/EditorPlacementInspector.svelte',
+			'editor/app/CameraPlanInspector.svelte',
+			'editor/camera/EditorCameraInspector.svelte',
+			'editor/camera/EditorCameraConnectionTiming.svelte',
+			'editor/EditorLightInspector.svelte',
+			'editor/EditorPrimitiveInspector.svelte'
+		]) {
+			expect(readLibSource(component), `${component} misses tabular values`).toContain(
+				'font-variant-numeric: tabular-nums;'
+			);
+		}
+	});
+
+	it('reads Inspector numeric fields through the shared 12.5px tabular inputs (no fork)', () => {
+		for (const component of [
+			'editor/fields/EditorNumberField.svelte',
+			'editor/fields/EditorVec3Field.svelte',
+			'editor/fields/EditorProgressField.svelte'
+		]) {
+			const source = readLibSource(component);
+			expect(source, `${component} misses value tier`).toContain(
+				'font: 500 12.5px var(--editor-font);'
+			);
+			expect(source, `${component} misses tabular values`).toContain(
+				'font-variant-numeric: tabular-nums;'
+			);
+		}
+	});
+
+	it('holds the Slice 1.1 surface-step calibration across all seven themes (sweep baseline)', () => {
+		const tokens = readLibSource('editor/styles/tokens.css');
+		// Four recalibrated dark blocks; porcelain/synth/velvet verified only.
+		for (const control of [
+			'--editor-bg-control: #121f2e;',
+			'--editor-bg-control: #221a16;',
+			'--editor-bg-control: #211538;',
+			'--editor-bg-control: #1c2b22;',
+			'--editor-bg-control: #e4ddd2;',
+			'--editor-bg-control: #1f273d;',
+			'--editor-bg-control: #2a2620;'
+		]) {
+			expect(tokens).toContain(control);
+		}
+		// Every override block stays complete: resting control surface + the
+		// subtle track edge resolve through theme-aware tokens, never hard hexes.
+		for (const id of [
+			'salon-espresso',
+			'electric-plum',
+			'acid-moss',
+			'porcelain-atelier',
+			'synth-sunset',
+			'velvet-kodachrome'
+		]) {
+			const start = tokens.indexOf(`:root[data-theme='${id}']`);
+			expect(start, `missing theme block ${id}`).toBeGreaterThanOrEqual(0);
+			const next = tokens.indexOf(":root[data-theme='", start + 1);
+			const end = tokens.indexOf('.project-editor', start);
+			const block = tokens.slice(start, next === -1 ? end : Math.min(next, end));
+			expect(block, `${id} misses resting control surface`).toContain('--editor-bg-control:');
+			expect(block, `${id} misses subtle track edge`).toContain('--editor-border-subtle:');
+		}
+	});
+});
+
 describe('unified hierarchy contracts', () => {
 	it('mounts the editor sidebar + unified tree in the editor shell, never in the relic', () => {
 		// editor shell imports the new sidebar (and the unified tree through it).

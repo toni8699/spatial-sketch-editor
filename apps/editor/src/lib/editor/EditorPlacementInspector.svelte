@@ -129,7 +129,11 @@
 
 	h2 {
 		margin: 0;
-		font-size: 0.9rem;
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
+		color: var(--editor-text-muted);
 	}
 
 	.section-heading span {
@@ -143,7 +147,8 @@
 		align-items: center;
 		gap: 0.45rem;
 		color: var(--editor-text-secondary);
-		font-size: 0.75rem;
+		font-size: 12px;
+		font-weight: 400;
 	}
 
 	.field {
@@ -158,8 +163,8 @@
 		border-radius: 0.3rem;
 		background: var(--editor-bg-panel-raised);
 		color: var(--editor-text-primary);
-		font: inherit;
-		font-size: 0.75rem;
+		font: 500 12.5px var(--editor-font);
+		font-variant-numeric: tabular-nums;
 	}
 
 	select:disabled {

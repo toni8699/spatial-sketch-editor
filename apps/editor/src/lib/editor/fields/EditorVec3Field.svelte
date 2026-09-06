@@ -120,8 +120,11 @@
 
 	legend {
 		padding: 0 0.25rem;
-		color: var(--editor-text-secondary);
-		font-size: 0.72rem;
+		color: var(--editor-text-muted);
+		font-size: 11px;
+		font-weight: 600;
+		letter-spacing: 0.05em;
+		text-transform: uppercase;
 	}
 
 	.field-grid {
@@ -177,7 +180,7 @@
 		border: 0;
 		background: transparent;
 		color: var(--editor-text-primary);
-		font: 500 12px var(--editor-font);
+		font: 500 12.5px var(--editor-font);
 		font-variant-numeric: tabular-nums;
 	}
 

@@ -67,8 +67,8 @@
 
 <style>
 	label { display: flex; flex-direction: column; gap: 0.3rem; }
-	span { color: var(--editor-text-muted); font-size: 0.67rem; letter-spacing: 0.04em; text-transform: uppercase; }
-	input { width: 100%; box-sizing: border-box; padding: 0.42rem; border: 1px solid var(--editor-border-normal); border-radius: 0.3rem; background: var(--editor-bg-panel); color: var(--editor-text-primary); font: 0.76rem var(--editor-font); }
+	span { color: var(--editor-text-secondary); font-size: 12px; font-weight: 400; }
+	input { width: 100%; box-sizing: border-box; padding: 0.42rem; border: 1px solid var(--editor-border-normal); border-radius: 0.3rem; background: var(--editor-bg-panel); color: var(--editor-text-primary); font: 500 12.5px var(--editor-font); font-variant-numeric: tabular-nums; }
 	input:focus { outline: 1px solid var(--editor-accent); border-color: var(--editor-accent); }
 	input:disabled { opacity: 0.42; }
 </style>
