@@ -855,7 +855,16 @@
 		onpointercancel={endTimelineScrub}
 		onlostpointercapture={cancelTimelineScrub}
 	>
-		<div class="ruler-label">Time</div>
+		<div class="ruler-label">
+			<span>Time</span>
+			<button
+				type="button"
+				class="add-view-key"
+				data-timeline-interactive
+				disabled={!timelineApi.canAddViewKeyframeAtPlayhead}
+				onclick={() => timelineApi.addViewKeyframeAtPlayhead()}
+			>+ View Key</button>
+		</div>
 		<div
 			bind:this={scrubTrackElement}
 			class="time-ruler scrub-surface"
@@ -964,7 +973,7 @@
 	>
 		<div class="ruler-label">
 			<span>Time</span>
-			{#if !store.isRelic && viewMode === '3d'}
+			{#if !store.isRelic}
 				<button
 					type="button"
 					class="add-view-key"

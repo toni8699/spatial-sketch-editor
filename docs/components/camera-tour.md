@@ -98,9 +98,13 @@ Plan ↔ 3D; a persisted view-keyframe selection gets only a passive
   byte-for-byte; snap adjusts X/Z only.
 - **Timing:** each edge shows one compact pill at the spline midpoint with
   durations only — `4.2s` when both directions resolve the same readout,
-  otherwise `4.2s · 3.8s` (forward · reverse); non-finite reads `—`. Automatic
-  segments render muted with a dotted underline, authored segments solid; the
-  selected edge's pill takes the accent fill + light ink. Node names,
+  otherwise `4.2s · 3.8s` (forward · reverse); non-finite reads `—`. Pill ink
+  is canvas-invariant (the Plan canvas is paper in every theme — never the
+  chrome accent): unselected pills are white with a slate border + charcoal
+  ink so they read on paper and room floors; the selected edge's pill takes a
+  deep-sapphire fill + white ink with an electric-blue perimeter tied to the
+  route. Automatic segments carry a dotted underline (3px offset) + tooltip,
+  authored segments render solid. Node names,
   direction breakdown, and derived speed live in the connection Inspector.
   The Camera Plan connection inspector authors `durationSeconds` per direction
   through `setConnectionTiming` (finite-positive validation, one undo step,

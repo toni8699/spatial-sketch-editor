@@ -742,13 +742,16 @@ describe('P21.3 camera reconciliation', () => {
 		expect(app.match(/<EditorCameraTimelineFrame/g)).toHaveLength(1);
 	});
 
-	it('pins the shared Timeline density (120px labels, 28px ruler, 44/48/34/34/32 lanes, 48px mini-player, 3D-Sequence +View Key)', () => {
+	it('pins the shared Timeline density (120px labels, 28px ruler, 44/48/34/34/32 lanes, 48px mini-player, live-dock +View Key)', () => {
 		const dots = readLibSource('editor/camera/EditorCameraTimelineDots.svelte');
 		expect(dots).toContain('grid-template-columns: 7.5rem minmax(30rem, 1fr);');
 		expect(dots).toContain('grid-template-rows: 28px 44px 48px 34px 34px 32px;');
-		// +View Key stays 3D-only (Sequence branch); the Edge branch stays quiet.
-		expect(dots).toContain("{#if !store.isRelic && viewMode === '3d'}");
-		expect(dots).toContain('>+ View Key</button>');
+		// +View Key renders in both live branches (Edge + Sequence, Plan + 3D)
+		// and stays out of the relic (which keeps its Ruler button); the
+		// disabled state — not visibility — gates eligibility.
+		expect(dots.match(/>\+ View Key<\/button>/g)).toHaveLength(2);
+		expect(dots).not.toContain('<div class="ruler-label">Time</div>');
+		expect(dots.match(/\{#if !store\.isRelic\}/g)).toHaveLength(2);
 		const frame = readLibSource('editor/camera/EditorCameraTimelineFrame.svelte');
 		expect(frame).toContain('height: 48px;');
 		expect(frame).toContain('flex: 0 0 48px;');
@@ -982,6 +985,61 @@ describe('P21.5 Slice 4 inspector typography + theme sweep', () => {
 			expect(block, `${id} misses resting control surface`).toContain('--editor-bg-control:');
 			expect(block, `${id} misses subtle track edge`).toContain('--editor-border-subtle:');
 		}
+	});
+});
+
+describe('P21.5 Slice 5 timeline density (P12 geometry frozen)', () => {
+	it('freezes the 48px collapsed pill and the 36px expanded header', () => {
+		const frame = readLibSource('editor/camera/EditorCameraTimelineFrame.svelte');
+		expect(frame).toContain('flex: 0 0 48px;');
+		expect(frame).toContain('height: 48px;');
+		expect(frame).toContain('height: 36px;');
+		expect(frame).toContain('flex: 0 0 36px;');
+		// No red/coral border anywhere — the collapsed pill carries the
+		// neutral border + shadow only, within the existing floating geometry.
+		expect(frame).toContain('border: 1px solid var(--editor-border-normal);');
+		expect(frame).toContain('box-shadow: 0 12px 32px rgb(0 0 0 / 60%)');
+		expect(frame).not.toMatch(/coral|#ef626c/);
+	});
+
+	it('keeps the expanded transport as quiet ghost buttons above the lanes', () => {
+		const frame = readLibSource('editor/camera/EditorCameraTimelineFrame.svelte');
+		// Resting tier is transparent; the accent cue arrives on hover/focus/active only.
+		expect(frame).toContain('border: 1px solid transparent;');
+		expect(frame).toContain('background: transparent;');
+		expect(frame).toContain('.mode-control button:focus-visible,');
+		// The frozen mini-player composition is never swapped for generic icons.
+		for (const fragment of [
+			'scope-capsule',
+			'swapEdgeReverse',
+			'mini-player__transport',
+			'mini-player__scrubber',
+			'>POV</span>',
+			'>Observer</span>'
+		]) {
+			expect(frame, `missing frozen transport fragment ${fragment}`).toContain(fragment);
+		}
+	});
+
+	it('reads ruler timecodes at 11px tabular with the playhead on current time', () => {
+		const tokens = readLibSource('editor/styles/tokens.css');
+		expect(tokens).toContain('--editor-font-size-ruler: 11px;');
+		const dots = readLibSource('editor/camera/EditorCameraTimelineDots.svelte');
+		expect(dots).toContain('font: var(--editor-timeline-ruler-font);');
+		expect(dots).toContain('font-variant-numeric: tabular-nums;');
+		expect(dots).toContain('left: var(--playhead-progress);');
+		const ruler = readLibSource('editor/camera/EditorCameraTimelineRuler.svelte');
+		expect(ruler).toContain('font-variant-numeric: tabular-nums;');
+	});
+
+	it('gives the collapsed pill full keyboard parity within its floating geometry', () => {
+		const frame = readLibSource('editor/camera/EditorCameraTimelineFrame.svelte');
+		expect(frame).toContain('.mini-player__icon:focus-visible,');
+		expect(frame).toContain('.mini-player__scrubber input:focus-visible');
+		expect(frame).toContain('.toggle:focus-visible');
+		// Geometry untouched: no resize, no re-dock, no new controls.
+		expect(frame).toContain('bottom: 16px;');
+		expect(frame).toContain('transform: translateX(-50%);');
 	});
 });
 

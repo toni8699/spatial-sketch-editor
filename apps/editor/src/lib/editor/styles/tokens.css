@@ -155,6 +155,23 @@
 	--editor-plan-selection: #2f8cff;
 	--editor-plan-readonly: #92908a;
 
+	/* ── DS §9 — camera edge timing pill (invariant drafting ink) ──
+	   The Plan canvas is paper in every theme (no theme block overrides any
+	   `--editor-plan-*` token), so pill ink never follows the chrome accent
+	   (`--editor-accent` is terracotta in porcelain, violet in plum — a
+	   selected pill filled with it clashes with the blue route and fails
+	   contrast). P21.5 Slice 2.5 contrast fix — measured text ratios:
+	   selected 13.1:1, selected-auto 8.0:1, unselected 14.6:1 (all ≥ 4.5). */
+	--editor-plan-edge-pill-selected-bg: #0c2d6b;
+	--editor-plan-edge-pill-selected-border: #2f8cff;
+	--editor-plan-edge-pill-selected-text: #ffffff;
+	--editor-plan-edge-pill-selected-auto-text: rgb(255 255 255 / 78%);
+	--editor-plan-edge-pill-selected-auto-underline: rgb(255 255 255 / 60%);
+	--editor-plan-edge-pill-unselected-bg: #ffffff;
+	--editor-plan-edge-pill-unselected-border: #cbd5e1;
+	--editor-plan-edge-pill-unselected-text: #1e293b;
+	--editor-plan-edge-pill-auto-underline: #64748b;
+
 	/* ── DS §8 — 3D viewport canvas ──
    The Three.js scene clear color and calibration grid. The canvas is
    never pure black or pure white (geometry/highlights vanish into either);

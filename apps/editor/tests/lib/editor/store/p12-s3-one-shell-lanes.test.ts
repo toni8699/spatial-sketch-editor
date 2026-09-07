@@ -58,7 +58,14 @@ describe('P12.3 one-shell Edge lanes', () => {
 		expect(dots).toContain('class="edge edge-local"');
 
 		const edgeBranch = dots.slice(dots.indexOf('{#if edgeTimeline}'), dots.indexOf('{:else if timeline}'));
-		expect(edgeBranch).not.toMatch(/on(?:click|pointer|contextmenu)=/);
+		// Owner 2026-09-07: the Edge ruler-label chrome carries +View Key
+		// (disabled-gated); the lane projection itself stays inert.
+		expect(edgeBranch).toContain('>+ View Key</button>');
+		expect(edgeBranch).toContain('disabled={!timelineApi.canAddViewKeyframeAtPlayhead}');
+		const edgeLanes = edgeBranch.slice(edgeBranch.indexOf('class="lanes edge-lanes"'));
+		// The lanes carry no click handlers of their own — the single onclick
+		// is the ruler-label +View Key chrome above.
+		expect(edgeLanes.match(/onclick=/g) ?? []).toHaveLength(1);
 		expect(edgeBranch).not.toContain('cameraTimelineProgressAtEdgeProgress');
 		expect(edgeBranch).not.toContain('cameraTimelineEdgeProgressAtProgress');
 

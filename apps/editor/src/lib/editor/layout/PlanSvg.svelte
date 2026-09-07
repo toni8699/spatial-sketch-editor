@@ -201,7 +201,7 @@
 			{:else if primitive.pill}
 				{@const screen = screenAt(primitive.anchor, primitive.offsetPx)}
 				{@const pill = primitive.pill}
-				{@const width = Math.max(30, primitive.text.length * 6.6 + 14)}
+				{@const width = Math.max(30, primitive.text.length * 7.1 + 16)}
 				<g class="pill-badge" class:selected={pill.selected === true} pointer-events="none">
 					<title>
 						{pill.segments.every((segment) => segment.authored)
@@ -306,16 +306,20 @@
 	.camera-anchor.hovered { fill: var(--editor-accent-hover); stroke: var(--editor-text-primary); stroke-width: 2.5; }
 	.camera-order-label { fill: var(--editor-plan-node-seq-text); font: 700 11px var(--editor-font); font-variant-numeric: tabular-nums; text-anchor: middle; dominant-baseline: middle; paint-order: stroke; stroke: var(--editor-plan-node-seq-bg-active); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
 	/* P21.5 §2.5 — camera timing labels render as compact midpoint pills:
-	   ~18px rounded badge behind 11px tabular text; automatic segments are
-	   muted + dotted underline, authored segments solid; selected edges get
-	   the accent fill + light ink. pointer-events stays none (the Inspector
-	   owns the full breakdown). */
-	.camera-timing-label { fill: var(--editor-text-secondary); font: 11px var(--editor-font); font-variant-numeric: tabular-nums; text-anchor: middle; pointer-events: none; }
+	   ~18px rounded badge behind 11px/600 tabular text on invariant pill ink
+	   (the canvas is paper in every theme — never the chrome accent).
+	   Unselected pills read on paper and room floors (white + slate border +
+	   charcoal ink); selected pills take deep sapphire + white ink with an
+	   electric-blue perimeter tied to the route. Automatic segments carry a
+	   dotted underline (offset 3px) + tooltip, authored segments solid.
+	   pointer-events stays none (the Inspector owns the full breakdown). */
+	.camera-timing-label { fill: var(--editor-plan-edge-pill-unselected-text); font: 600 11px var(--editor-font); font-variant-numeric: tabular-nums; text-anchor: middle; pointer-events: none; }
 	.pill-badge { pointer-events: none; }
-	.pill-badge rect { fill: var(--editor-bg-panel-raised); stroke: var(--editor-border-normal); stroke-width: 1; }
-	.pill-badge.selected rect { fill: var(--editor-accent); stroke: var(--editor-accent); }
-	.pill-badge.selected .camera-timing-label { fill: #fff; }
-	.pill-badge .auto { fill: var(--editor-text-muted); text-decoration: underline dotted; text-decoration-color: var(--editor-border-strong); }
+	.pill-badge rect { fill: var(--editor-plan-edge-pill-unselected-bg); stroke: var(--editor-plan-edge-pill-unselected-border); stroke-width: 1; filter: drop-shadow(0 1px 2px rgb(0 0 0 / 18%)); }
+	.pill-badge.selected rect { fill: var(--editor-plan-edge-pill-selected-bg); stroke: var(--editor-plan-edge-pill-selected-border); stroke-width: 1.5; }
+	.pill-badge.selected .camera-timing-label { fill: var(--editor-plan-edge-pill-selected-text); }
+	.pill-badge .auto { fill: var(--editor-plan-edge-pill-unselected-text); text-decoration: underline dotted; text-decoration-color: var(--editor-plan-edge-pill-auto-underline); text-underline-offset: 3px; text-decoration-thickness: 1.5px; }
+	.pill-badge.selected .auto { fill: var(--editor-plan-edge-pill-selected-auto-text); text-decoration-color: var(--editor-plan-edge-pill-selected-auto-underline); }
 	.camera-connect-band { fill: none; stroke: var(--editor-plan-selection); stroke-width: 2; stroke-dasharray: 6 4; vector-effect: non-scaling-stroke; pointer-events: none; }
 	.camera-placement-ghost { fill: var(--editor-accent-soft); stroke: var(--editor-plan-selection); stroke-width: 2; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; pointer-events: none; }
 	.camera-placement-ghost.invalid { fill: rgb(239 98 108 / 20%); stroke: var(--editor-danger); }

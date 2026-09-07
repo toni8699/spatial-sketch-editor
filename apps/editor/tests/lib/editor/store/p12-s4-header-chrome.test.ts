@@ -58,8 +58,12 @@ describe('P12.4 S4 — live header chrome', () => {
 		expect(panel).toContain('<EditorCameraTimelineRuler {store} {viewMode} />');
 		expect(panel).toContain('{#if store.isRelic}');
 		expect(panel).toContain('<EditorCameraPreviewControls {store} />');
-		expect(dots).toContain("!store.isRelic && viewMode === '3d'");
 		expect(dots).toContain('+ View Key');
+		// Owner 2026-09-07: +View Key renders live-dock-wide (Edge + Sequence,
+		// Plan + 3D) — eligibility gates on disabled, not visibility — so the
+		// old 3D-only gate is gone while the relic keeps its Ruler button.
+		expect(dots).not.toContain("!store.isRelic && viewMode === '3d'");
+		expect(dots.match(/>\+ View Key<\/button>/g)).toHaveLength(2);
 		expect(ruler).toContain('+ Camera Key');
 		expect(ruler).toContain('type="range"');
 		expect(dots).toContain('class="timeline-playhead-overlay"');
