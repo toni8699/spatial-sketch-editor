@@ -60,7 +60,7 @@ Policy rules:
 | P13 | Sequence stop-at-node playback | proposed — nice-to-have, unscheduled (owner 2026-08-27) | P12 | [2026-08-27-P13-stop-at-node-playback.md](2026-08-27-P13-stop-at-node-playback.md) |
 | P19 | First project persistence | shipped 2026-09-03 — live smoke passed; doc archival pending | P18 | [umbrella](2026-08-30-P19-project-persistence.md) · [P19.4 annex](2026-09-02-P19.4-editor-shell.md) |
 | P20 | Project Asset Registry + R2 | shipped 2026-09-04 — local smoke vs real R2; prod-topology smoke deferred; doc archival pending | P19 | [umbrella](2026-08-19-P20-Project-assets-registry-R2.md) · [S2](2026-09-03-P20.2-spatial-registry-integration.md) · [S3](2026-09-03-P20.3-texture-durable-conversion.md) · [S4](2026-09-03-P20.4-load-runtime-resolution.md) |
-| P21 | Unified Project Shell + Spatial UI reconciliation | in-progress — P21.1–P21.4 complete; P21.5 pending; final acceptance gate pending | P20 | [umbrella](2026-09-04-P21-unified-project-shell-spatial-reconciliation.md) · [P21.4](2026-09-05-P21.4-preview-project-flows.md) · [P21.5](2026-09-05-P21.5-ui-polish-pass.md) |
+| P21 | Unified Project Shell + Spatial UI reconciliation | in-progress — P21.1–P21.5 complete (eye tests passed 2026-09-07); P21.6 closeout pending; final acceptance gate pending | P20 | [umbrella](2026-09-04-P21-unified-project-shell-spatial-reconciliation.md) · [P21.4](2026-09-05-P21.4-preview-project-flows.md) · [P21.5](2026-09-05-P21.5-ui-polish-pass.md) · [P21.6](2026-09-05-P21.6-3D-camera-UI-polish.md) |
 | — | Branch rejoin — experiment, no schedule | proposed | P8 conceptually | [2026-08-21-branch-rejoin-experiment.md](2026-08-21-branch-rejoin-experiment.md) |
 | … | future work re-registers here | | | |
 
@@ -86,7 +86,7 @@ Policy rules:
 Ship narrative for P1–P20 (execution order, scope decisions, the P12/P3B hard
 gate) now lives in the archived docs, not here.
 
-- Next: P21.5 polish → final acceptance gate (full Vitest + `check` + `build`
+- Next: P21.6 closeout → final acceptance gate (full Vitest + `check` + `build`
   + bundle gates + six-PNG comparison + axe sweep), then the P22 brief.
 - Long-term tiers renumbered 2026-09-05 (owner): P23 Layout Depth, P24
   Scene/Staging Depth, P25 Experience Foundation, P26+ platform expansion;
@@ -137,7 +137,7 @@ conditional infrastructure):
 - **P20 — Project Asset Registry + R2.** Shipped 2026-09-04 (local live smoke
   vs real R2 passed; production-topology smoke deferred).
 - **P21 — Product shell + Project Hub + core editor UX polish.** In progress —
-  see the Active table (P21.1–P21.4 complete; P21.5 + final gate pending).
+  see the Active table (P21.1–P21.5 complete, eye tests passed; P21.6 + final gate pending).
 - **P22 — Basic Publish + visitor runtime.** Publish an owned project, resolve
   project assets, hosted visitor-safe output, and basic preview/publish
   status. Direction only; its brief is written once P21 closes — after the

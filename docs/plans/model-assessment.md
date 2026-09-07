@@ -61,7 +61,8 @@ success percentages.
 | **P21.2** | 66 | Sol medium | shipped — Scene reconciliation (Plan ghost/primer/openings/status + 3D density); presentation-only, preserved X/Z/yaw authority, Y preservation, single tagged entry, untouched gizmo pipeline |
 | **P21.3** | 74 | Sol medium | shipped — Camera reconciliation (Plan sidebar/Inspector/footprints/undirected edges/per-direction timing + 3D framing/overlays + shared Timeline density, transport above lanes); preserved topology, timing, Y rule, Camera-only Timeline, shared selection/state |
 | **P21.4** | 82 | Sol high | shipped — Preview takeover + Hub/flows: layout-owned takeover, exact session restore, generic visitor composition, preview-surface import-closure gate, project-switch teardown, strict Hub + entry/OAuth integrity; highest ambiguity and consequence in P21 |
-| **P21.5** | 45 (provisional) | Luna high | in-progress (registered 2026-09-05) — UI polish pass; implementation spec filed (six slices incl. pinned single-ended gizmo declutter + edge timing pill); presentation-only, no behavior change; lands before the P21 final acceptance gate and before P22 |
+| **P21.5** | 45 | Luna high | closed 2026-09-07 — UI polish pass, Slices 1–5 + §2.6 gizmo detach + 2B node colors; owner eye tests passed; presentation-only, no behavior change |
+| **P21.6** | 65 | Sol medium | spec-filed 2026-09-05 (ratified 2026-09-06; combined 2026-09-07 into A token-swap/box-retire → B cinematic-3D → C focus-mode, C parallel-safe) — 3D camera visualization + focus-mode closeout; presentation-only precedent (cf. P21.2 66 / P21.3 74 → Sol medium); Slice A delegable to Luna high, Slice C carries the shell-state risk |
 
 Pre-P20 numbers still proposed/unscheduled (P13 stop-at-node, branch-rejoin
 experiment) are assessed when scheduled — no standing rows. P22+ entries are

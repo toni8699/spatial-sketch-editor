@@ -5,7 +5,8 @@ slice plus one next action only.
 
 ## Working tree
 
-- P21.1 shared shell + P21.2 Scene reconciliation + P21.3 Camera reconciliation + P21.4 Preview + project flows + P21.5 Slices 1–5 (surface-step/buttons, canvas de-clutter + §2.6 gizmo detach + 2B node colors, Inspector density + selection isolation, typography grammar + theme sweep, timeline density) implemented; registered in the tracker.
+- P21.1 shared shell + P21.2 Scene reconciliation + P21.3 Camera reconciliation + P21.4 Preview + project flows + P21.5 Slices 1–5 (surface-step/buttons, canvas de-clutter + §2.6 gizmo detach + 2B node colors, Inspector density + selection isolation, typography grammar + theme sweep, timeline density) implemented; registered in the tracker. Owner eye-tests passed 2026-09-07 (§2.6 gizmo detach + Slice 2B camera node colors) — P21.5 closed.
+- P21.6 closeout slice (3D camera visualization + viewport focus mode) pending — spec-only, unimplemented in tree (no camera palette tokens, no focus mode); registered in the tracker.
 - Owner delta 2026-09-07: `+ View Key` renders live-dock-wide (Edge + Sequence, Plan + 3D; disabled gates eligibility, relic keeps its Ruler button) — P12.3/P12.4/Slice-5 pins updated to the new contract.
 - Reviewer delta 2026-09-07: timing pill re-inked to invariant draft ink (sapphire selected / white unselected, never the chrome accent) — Slice 2.5 + `camera-tour.md` + P12 pins updated; contrast pinned ≥ 4.5 by `plan-timing-pill.test.ts`.
 
@@ -59,11 +60,11 @@ slice plus one next action only.
 
 ## Next action
 
-- Run the P21 final acceptance gate (six-reference visual comparison + axe/contrast sweep) and close the tracker per [the P21.5 brief](../plans/2026-09-05-P21.5-ui-polish-pass.md) — P21.5 Slices 1–5 are code-complete; §2.6 gizmo detach + [Slice 2B camera node colors](../plans/2026-09-06-P21.5-slice-2B-camera-node-colors.md) carry owner eye-test QA pending.
+- Implement [P21.6](../plans/2026-09-05-P21.6-3D-camera-UI-polish.md) (3D camera visualization + focus mode), then run the P21 final acceptance gate (six-reference visual comparison + axe/contrast sweep) and close the tracker — P21.5 Slices 1–5 are code-complete and eye-test-passed.
 
 ## Verification
 
-- Full Vitest: 186 files passed, 1 skipped; 2,444 tests passed, 1 skipped.
+- Full Vitest: 187 files passed, 1 skipped; 2,444 tests passed, 1 skipped.
 - `npm run check`: 0 errors / 0 warnings.
 - `npm run check:camera-core`, `npm run check:layout-core`, and
   `npm run check:project-model`: passed.
