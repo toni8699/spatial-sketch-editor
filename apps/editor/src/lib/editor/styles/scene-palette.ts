@@ -25,7 +25,18 @@ export const SCENE_PALETTE = {
 	axisZ: 0x3b82f6,
 	/** Active/hover emphasis on gizmo interaction states. */
 	gizmoActive: 0x2f8cff,
-	gizmoHover: 0x55a1ff
+	gizmoHover: 0x55a1ff,
+	/** P21.6 Slice A — camera spatial invariants (identical across all themes). */
+	cameraPath: 0x2f8cff,
+	cameraPathSelected: 0x55a1ff,
+	cameraNodeSeq: 0x2f8cff,
+	cameraNodeSeqActive: 0x1976df,
+	cameraNodeUnseq: 0x10b981,
+	cameraFrustumLine: 0x2f8cff,
+	cameraFrustumFill: 0x2f8cff,
+	cameraTarget: 0x38bdf8,
+	cameraLookAtRay: 0x94a3b8,
+	cameraAnchor: 0xe2e8f0
 } as const;
 
 /**

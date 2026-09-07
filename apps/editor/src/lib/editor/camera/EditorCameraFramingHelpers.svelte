@@ -2,8 +2,8 @@
 	import { onDestroy } from 'svelte';
 	import { useTask, useThrelte } from '@threlte/core';
 	import {
-		BoxGeometry,
 		BufferGeometry,
+		ConeGeometry,
 		Group,
 		LineBasicMaterial,
 		LineSegments,
@@ -29,12 +29,19 @@
 	let { store }: { store: EditorStore } = $props();
 	const { scene, camera, invalidate } = useThrelte();
 
-	const bodyGeometry = new BoxGeometry(0.28, 0.2, 0.38);
+	const bodyGeometry = new ConeGeometry(0.09, 0.16, 4);
+	// P21.6 Slice A §2.2 — minimal dark apex nub (retires the wireframe box proxy).
+	// ConeGeometry is centered on origin with tip at local +Y (+0.08 m).
+	// Single pose convention shared by nub, frustum, handles, and preview:
+	//   1. translate tip to origin, 2. rotate +Y → +Z (forward under lookAt).
+	// Parent mesh sits at the eye and orients via mesh.lookAt(target).
+	bodyGeometry.translate(0, -0.08, 0);
+	bodyGeometry.rotateX(Math.PI / 2);
 	const bodyMaterial = new MeshBasicMaterial({
-		color: 0xffcf67,
-		wireframe: true,
+		color: 0x1e293b,
 		depthTest: false,
-		depthWrite: false
+		depthWrite: false,
+		toneMapped: false
 	});
 	const body = new Mesh(bodyGeometry, bodyMaterial);
 	body.name = 'EditorSelectedVirtualCameraBody';

@@ -13,8 +13,8 @@
 	import { OrbitControls } from '@threlte/extras';
 	import {
 		Box3,
-		BoxGeometry,
 		BufferGeometry,
+		ConeGeometry,
 		LineBasicMaterial,
 		LineSegments,
 		MOUSE,
@@ -49,6 +49,7 @@
 		createEditorCameraFramingGeometry,
 		createEditorCameraFrustumLinePoints
 	} from './editor-camera-framing';
+	import { SCENE_PALETTE } from '../styles/scene-palette';
 	import {
 		useDirectorPreview,
 		useVisitorPreview
@@ -294,22 +295,34 @@
 		const frustum = new LineSegments(
 			new BufferGeometry(),
 			new LineBasicMaterial({
-				color: 0xffcf67,
+				color: SCENE_PALETTE.cameraFrustumLine,
 				transparent: true,
 				opacity: 0.86,
 				depthTest: false,
-				depthWrite: false
+				depthWrite: false,
+				toneMapped: false
 			})
 		);
 		frustum.name = 'EditorVirtualVisitorCameraFiniteFrustum';
 		frustum.raycast = () => undefined as never;
 		frustum.renderOrder = 1000;
+		// P21.6 Slice A §2.3 — preview-camera nub (same dark apex language as
+		// the selected-body helper). Parent is a PerspectiveCamera (-Z
+		// forward), so the tip-at-origin cone rotates -90° (base at +Z,
+		// behind the lens). The legacy BoxGeometry centering offset
+		// (position.z = 0.12) is retired: tip-at-origin needs no compensation.
+		const nubGeometry = new ConeGeometry(0.09, 0.16, 4);
+		nubGeometry.translate(0, -0.08, 0);
+		nubGeometry.rotateX(-Math.PI / 2);
 		const body = new Mesh(
-			new BoxGeometry(0.28, 0.2, 0.38),
-			new MeshBasicMaterial({ color: 0xffcf67, wireframe: true, depthTest: false })
+			nubGeometry,
+			new MeshBasicMaterial({
+				color: 0x1e293b,
+				depthTest: false,
+				toneMapped: false
+			})
 		);
 		body.name = 'EditorVirtualVisitorCameraBody';
-		body.position.z = 0.12;
 		body.raycast = () => undefined as never;
 		body.renderOrder = 1001;
 		frustum.visible = false;

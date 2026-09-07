@@ -15,6 +15,7 @@
 		getCameraPathVisualSampleCount,
 		getScenePathAnchorWorldPosition
 	} from './editor-camera-path';
+	import { SCENE_PALETTE } from '../styles/scene-palette';
 	import type {
 		EditorCameraAnchorUserData,
 		EditorCameraConnectionUserData
@@ -68,10 +69,10 @@
 	function createConnectionHelper(connectionId: string): ConnectionHelper {
 		const visualGeometry = new LineGeometry();
 		const visualMaterial = new LineMaterial({
-			color: 0xd6b35f,
-			linewidth: 1.25,
+			color: SCENE_PALETTE.cameraPath,
+			linewidth: 1.5,
 			transparent: true,
-			opacity: 0.3,
+			opacity: 0.45,
 			depthTest: false,
 			depthWrite: false,
 			worldUnits: false
@@ -235,7 +236,7 @@
 			helper.visualMaterial.dashScale = retained ? 3 : 1;
 			helper.visualMaterial.dashSize = retained ? 0.18 : 0;
 			helper.visualMaterial.gapSize = retained ? 0.12 : 0;
-			helper.visualMaterial.linewidth = selected ? 2 : hovered ? 1.6 : 1.25;
+			helper.visualMaterial.linewidth = selected ? 2.5 : hovered ? 1.6 : 1.5;
 			helper.visualMaterial.opacity = retained
 				? selected
 					? 0.8
@@ -246,9 +247,15 @@
 					? 0.9
 					: hovered
 						? 0.55
-						: 0.3;
+						: 0.45;
 			helper.visualMaterial.color.set(
-				selected ? 0xffdd83 : retained ? 0x8a8a8a : hovered ? 0xffe0a0 : 0xd6b35f
+				selected
+					? SCENE_PALETTE.cameraPathSelected
+					: retained
+						? 0x8a8a8a
+						: hovered
+							? SCENE_PALETTE.cameraPathSelected
+							: SCENE_PALETTE.cameraPath
 			);
 			helper.visualMaterial.needsUpdate = true;
 		}

@@ -123,6 +123,22 @@
 	--editor-layout-box: #e7e4dd;
 	--editor-layout-box-hover: #d8d5cc;
 
+	/* ── DS §8/§10 — invariant spatial camera tokens (P21.6 Slice A) ──
+	   Camera nodes/paths/frustums are authored spatial truth, identical in
+	   every theme (2D–3D parity). Never override in theme blocks. Pure
+	   6-digit hex only — the scene-palette contract test cannot parse
+	   rgba(); opacities live in the Three.js material definitions. */
+	--editor-camera-path: #2f8cff;
+	--editor-camera-path-selected: #55a1ff;
+	--editor-camera-node-seq: #2f8cff;
+	--editor-camera-node-seq-active: #1976df;
+	--editor-camera-node-unseq: #10b981;
+	--editor-camera-frustum-line: #2f8cff;
+	--editor-camera-frustum-fill: #2f8cff;
+	--editor-camera-target: #38bdf8;
+	--editor-camera-lookat-ray: #94a3b8;
+	--editor-camera-anchor: #e2e8f0;
+
 	/* ── DS §8 — Scene 3D orientation box ── */
 	--editor-orientation-surface: #0d1925;
 	--editor-orientation-hover: #142230;

@@ -31,7 +31,17 @@ describe('scene palette ↔ tokens.css contract (P3.2)', () => {
 			['axisY', 'gizmo-y'],
 			['axisZ', 'gizmo-z'],
 			['gizmoActive', 'accent'],
-			['gizmoHover', 'accent-hover']
+			['gizmoHover', 'accent-hover'],
+			['cameraPath', 'camera-path'],
+			['cameraPathSelected', 'camera-path-selected'],
+			['cameraNodeSeq', 'camera-node-seq'],
+			['cameraNodeSeqActive', 'camera-node-seq-active'],
+			['cameraNodeUnseq', 'camera-node-unseq'],
+			['cameraFrustumLine', 'camera-frustum-line'],
+			['cameraFrustumFill', 'camera-frustum-fill'],
+			['cameraTarget', 'camera-target'],
+			['cameraLookAtRay', 'camera-lookat-ray'],
+			['cameraAnchor', 'camera-anchor']
 		];
 		for (const [paletteKey, tokenName] of expected) {
 			const hex = tokenHex(source, tokenName);
