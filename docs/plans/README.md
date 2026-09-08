@@ -60,6 +60,7 @@ Policy rules:
 | P13 | Sequence stop-at-node playback | proposed — nice-to-have, unscheduled (owner 2026-08-27) | P12 | [2026-08-27-P13-stop-at-node-playback.md](2026-08-27-P13-stop-at-node-playback.md) |
 | P22 | Basic Publish + visitor runtime | proposed — brief written assuming P21 complete (owner 2026-09-07) | P21 | [plan](2026-09-07-P22-basic-publish-visitor-runtime.md) |
 | P23 | Layout Depth — minimum useful Build set | proposed — brief written assuming P22 complete (owner 2026-09-07) | P22 | [plan](2026-09-07-P23-layout-depth-minimum-build.md) |
+| P24 | Scene / Staging Depth umbrella — P24A asset supply + P24B rich 3D staging | proposed — umbrella registered; detailed subtrack briefs TBD Phase 2/4 research (owner 2026-09-08) | P23 | [plan](2026-09-08-P24-scene-staging-depth-umbrella.md) |
 | — | Branch rejoin — experiment, no schedule | proposed | P8 conceptually | [2026-08-21-branch-rejoin-experiment.md](2026-08-21-branch-rejoin-experiment.md) |
 | … | future work re-registers here | | | |
 
@@ -97,8 +98,10 @@ gate) now lives in the archived docs, not here.
   typed DB is conditional infrastructure, not a tier. Owner reconciliation
   2026-09-06: P23/P24 are staged (minimum useful slices first, optional
   depth tails later); P25 may follow the minima before the tails; a bounded
-  agent/reuse proof follows the first complete visitor-authoring slice. See
-  Long-term roadmap.
+  agent/reuse proof follows the first complete visitor-authoring slice. P24
+  umbrella registered 2026-09-08 with internal P24A asset-supply/canonical-
+  ingest and P24B rich-3D-staging subtracks; detailed contracts await Phase
+  2/4 research. See Long-term roadmap.
 - Deferred / non-blocking: P3B.7b (incl. the P3.4/P3.5 acceptance tail).
 - Proposed / unscheduled: P13, branch rejoin.
 - Shipped baseline: P12 + core P3B gate 2026-08-28; P14–P18 extraction slice;
@@ -108,7 +111,7 @@ gate) now lives in the archived docs, not here.
 ## Archived plans (recent 5 only)
 
 - `archived → [2026-09-04-P21-unified-project-shell-spatial-reconciliation.md](../archive/plans/2026-09-04-P21-unified-project-shell-spatial-reconciliation.md)` (shipped 2026-09-08 — P21.1–P21.6 + final acceptance gate; set includes P21.4, P21.5, P21.6, slice-2B annex)
-- `archived → [2026-08-19-P20-Project-assets-registry-R2.md](../archive/plans/2026-08-19-P20-Project-assets-registry-R2.md)` (shipped 2026-09-04 — local smoke vs real R2; set includes S2/S3/S4 briefs)
+- `archived → [2026-08-19-P20-Project-assets-registry-R2.md](../archive/plans/2026-08-19-P20-Project-assets-registry-R2.md)` (shipped 2026-09-04 — local live smoke vs real R2; set includes S2/S3/S4 briefs)
 - `archived → [2026-08-30-P19-project-persistence.md](../archive/plans/2026-08-30-P19-project-persistence.md)` (shipped 2026-09-03 — live smoke passed; set includes P19.4 annex)
 - `archived → [2026-09-06-scope-decision-roadmap-reconciliation.md](../archive/plans/2026-09-06-scope-decision-roadmap-reconciliation.md)` (scope decision — audit-review roadmap reconciliation: broad category, staged P23/P24, narrow P25 after minima, early bounded agent/reuse proof; ratified 2026-09-06)
 - `archived → [2026-08-31-scope-decision-experience-interaction-boundary.md](../archive/plans/2026-08-31-scope-decision-experience-interaction-boundary.md)` (scope decision — Experience/Interaction authoring boundary; ratified 2026-08-31)
@@ -172,18 +175,28 @@ conditional infrastructure):
   document, deterministic operation, validation/preconditions, one history
   transaction, Plan+3D consumption, headless invocability — no premature
   universal command framework.
-- **P24 — Scene / Staging Depth family (staged).** First the minimum useful
-  Stage set: durable supported asset placement/replacement, duplicate,
-  strong transforms, multi-select where justified, align/distribute,
-  floor/wall placement, material editing, core authored lighting, one useful
-  reusable lighting/environment setup. Later depth (advanced grouping,
-  richer placement tools, larger environment catalogue, richer lighting
-  rigs, advanced material workflows) follows evidence. Lighting stays
-  Scene-owned authored state, never shell/global truth. P24 expands the
-  **Stage vocabulary** (structured, inspectable, reusable scene state rather than
-  bespoke rendering code) under the same operation-first planning rule as
-  P23: lighting, placement, and composition become semantic operations over
-  Scene truth, not behavior hidden inside Svelte components.
+- **P24 — Scene / Staging Depth umbrella (registered, staged).** The umbrella
+  is registered above and split internally into **P24A — Asset Supply +
+  Canonical Ingest** and **P24B — Rich 3D Scene / Staging Editor**. P24A is
+  informed primarily by Phase 2 research and owns the bounded starter supply
+  and normalization side: reusable models, PBR materials/textures, HDRIs,
+  provenance/license metadata, web-ready derivatives, dimensions/placement
+  metadata, thumbnails and Plan representation where eligible, all converging
+  on the existing project asset registry rather than a new Scene-only store.
+  P24B is informed primarily by Phase 4 research and owns the authoring side:
+  asset place/replace, strong transforms, duplicate, multi-select where
+  justified, align/distribute, floor/wall/support-aware placement, material
+  assignment/editing, authored Scene lighting, environment/HDRI authoring,
+  one useful lighting/environment setup, and bounded 3D-editor polish. The
+  exact minimum, sequencing/parallelism and acceptance contracts are **TBD
+  until the owner supplies Phase 2 + Phase 4 research**; directional bullets
+  are not implementation tickets. Material/texture/HDRI assets may originate
+  in P24A while assignment/editing/light/environment operations belong to
+  P24B. Both preserve one project asset registry, `SceneDocument` ownership,
+  room-local transforms, canonical selection/history, existing gizmo/transform
+  authority, Threlte patterns and visitor/editor isolation. P25 waits only for
+  the accepted useful minimum from both subtracks, never for catalogue/DCC
+  depth tails. See [P24 umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md).
 - **P25 — Experience foundation (narrow, after P23/P24 minima).** Navigation
   · Content · Interactions, referencing existing Spatial / camera / assets
   work. Begins once the P23/P24 minimum useful slices exist, before their
@@ -242,10 +255,10 @@ conditional infrastructure):
   publish/visitor-runtime boundary (P22 — the first complete product loop:
   author → preview → publish → visitor sees it, and an early stress test of
   the visitor/editor isolation boundary), then minimum useful authoring
-  slices split by document ownership (P23 Layout Depth minimum, P24
-  Scene/Staging Depth minimum), the narrow Experience foundation (P25),
-  a bounded agent/reuse proof, then evidence-led depth tails and expansion
-  (P26+). The design
+  slices split by document ownership (P23 Layout Depth minimum, P24 Scene /
+  Staging minimum split internally into P24A asset supply/ingest + P24B rich
+  3D staging), the narrow Experience foundation (P25), a bounded agent/reuse
+  proof, then evidence-led depth tails and expansion (P26+). The design
   track runs in parallel from Now. Auth UX/hardening and richer permissions
   ride with the P26+ collaborative tier, not P19/P20.
 - **Medium-term product infrastructure** (possible direction, unscheduled):
