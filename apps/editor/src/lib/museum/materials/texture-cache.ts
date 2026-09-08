@@ -67,17 +67,24 @@ export type TextureLoadScope = {
   loader: TextureSourceLoader;
 };
 
-function scopeIdOf(scope?: TextureLoadScope | null): string | null {
+/**
+ * Key-only view of a scope. Acquire/release never load — they only need the
+ * cache namespace — so callers holding just a retained key (e.g. a remap key)
+ * can release without fabricating a loader.
+ */
+export type TextureScopeKey = Pick<TextureLoadScope, 'scopeId'>;
+
+function scopeIdOf(scope?: TextureLoadScope | TextureScopeKey | null): string | null {
   const id = scope?.scopeId;
   return id && id.length > 0 ? id : null;
 }
 
-function sourceKey(scope: TextureLoadScope | null | undefined, url: string): string {
+function sourceKey(scope: TextureLoadScope | TextureScopeKey | null | undefined, url: string): string {
   const id = scopeIdOf(scope);
   return id ? `${id}::${url}` : url;
 }
 
-function materialPromiseKey(scope: TextureLoadScope | null | undefined, materialId: string): string {
+function materialPromiseKey(scope: TextureLoadScope | TextureScopeKey | null | undefined, materialId: string): string {
   const id = scopeIdOf(scope);
   return id ? `${id}::${materialId}` : materialId;
 }
@@ -192,7 +199,7 @@ function variantKey(
   repeatX: number,
   repeatY: number,
   rotation: number,
-  scope?: TextureLoadScope | null
+  scope?: TextureLoadScope | TextureScopeKey | null
 ): VariantKey {
   const id = scopeIdOf(scope);
   const base = `${materialId}|${repeatX.toFixed(4)}|${repeatY.toFixed(4)}|${rotation.toFixed(4)}`;
@@ -273,7 +280,7 @@ export function acquireMaterialVariant(
   repeatX: number,
   repeatY: number,
   rotation = 0,
-  scope?: TextureLoadScope | null
+  scope?: TextureLoadScope | TextureScopeKey | null
 ): LoadedTextureMaps {
   const key = variantKey(definition.id, repeatX, repeatY, rotation, scope ?? null);
   const existing = variantCache.get(key);
@@ -292,7 +299,7 @@ export function releaseMaterialVariant(
   repeatX: number,
   repeatY: number,
   rotation = 0,
-  scope?: TextureLoadScope | null
+  scope?: TextureLoadScope | TextureScopeKey | null
 ) {
   const key = variantKey(materialId, repeatX, repeatY, rotation, scope ?? null);
   const existing = variantCache.get(key);
@@ -379,7 +386,7 @@ function effectiveVariantKey(
   rx: number,
   ry: number,
   rot: number,
-  scope?: TextureLoadScope | null
+  scope?: TextureLoadScope | TextureScopeKey | null
 ): VariantKey {
   const id = scopeIdOf(scope);
   const base = `eff|${seed}|${rx.toFixed(4)}|${ry.toFixed(4)}|${rot.toFixed(4)}`;
@@ -391,7 +398,7 @@ export function acquireEffectiveVariant(
   repeatX: number,
   repeatY: number,
   rotation = 0,
-  scope?: TextureLoadScope | null
+  scope?: TextureLoadScope | TextureScopeKey | null
 ): LoadedTextureMaps {
   const key = effectiveVariantKey(effective.variantSeed, repeatX, repeatY, rotation, scope ?? null);
   const existing = variantCache.get(key);
@@ -427,7 +434,7 @@ export function releaseEffectiveVariant(
   repeatX: number,
   repeatY: number,
   rotation = 0,
-  scope?: TextureLoadScope | null
+  scope?: TextureLoadScope | TextureScopeKey | null
 ): void {
   const key = effectiveVariantKey(seed, repeatX, repeatY, rotation, scope ?? null);
   const existing = variantCache.get(key);

@@ -6,3 +6,4 @@ export * from './project-layout-semantics';
 export * from './project-types';
 export * from './scene';
 export * from './scene-codec';
+export * from './shipped-static';

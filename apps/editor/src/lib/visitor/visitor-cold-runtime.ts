@@ -70,7 +70,13 @@ function isSessionLocalUri(uri: string): boolean {
 	return PACKAGE_REWRITE_PATTERN.test(uri) || LOCAL_BINARY_PATTERN.test(uri);
 }
 
-function isRootRelativeSafe(uri: string): boolean {
+/**
+ * Root-relative, query-free, traversal-free texture URI check. Exported for
+ * parity testing against the canonical `isSafeTextureUri` — the duplication
+ * is deliberate (this module must not import app facades), and the parity
+ * test fails on drift.
+ */
+export function isRootRelativeSafe(uri: string): boolean {
 	if (!uri.startsWith('/') || uri.startsWith('//')) return false;
 	if (uri.includes('\\') || uri.includes('?') || uri.includes('#')) return false;
 	let decoded = uri;

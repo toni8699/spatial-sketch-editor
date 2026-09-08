@@ -117,21 +117,25 @@
           acquiredRemap = null;
         }
         if (activeScope) {
-          // Warm the scoped source cache through the supplied release
-          // resolver so the override below reads release bytes, never
-          // editor-warmed globals. Fire-and-forget: the remap effect
-          // re-applies once the scoped load lands.
+          // Scoped cold path: wait for the release resolver before the first
+          // remap, so the mounted frame is already textured — one acquire,
+          // no transient mapless variant. Mount, inspection publish and the
+          // ready status all ride the same gate below; the tail after this
+          // block is the unscoped editor path only.
+          const animNames = gltf.animations.map((animation) => animation.name).filter(Boolean);
           void loadEffectiveTextures(activeEffective, activeScope)
+            .catch(() => undefined)
             .then(() => {
-              if (cancelled || instance !== ownedInstance) return;
-              if (acquiredRemap) releaseModelMaterialRemap(acquiredRemap, activeScope);
-              if (ownedInstance) {
-                acquiredRemap = remapModelMaterials(ownedInstance, activeEffective, [1, 1], activeScope).acquiredKey;
-              }
-            })
-            .catch(() => {
-              // Load failure surfaces through material status; keep fallback.
+              if (cancelled) return;
+              if (!ownedInstance) return;
+              acquiredRemap = remapModelMaterials(ownedInstance, activeEffective, [1, 1], activeScope).acquiredKey;
+              const inspection = inspectModel(ownedInstance, animNames);
+              instance = ownedInstance;
+              rawBounds = inspection.bounds;
+              rawMetrics = inspection.metrics;
+              loadStatus = 'ready';
             });
+          return;
         }
         acquiredRemap = remapModelMaterials(ownedInstance, activeEffective, [1, 1], activeScope).acquiredKey;
       }
@@ -222,16 +226,31 @@
     const seed = effective?.variantSeed;
     const activeEffective = effective;
     const activeScope = scope;
-    if (!instance || !activeEffective || seed === undefined) return;
+    const mounted = instance;
+    if (!mounted || !activeEffective || seed === undefined) return;
     if (acquiredRemap && acquiredRemap.seed === seed && (acquiredRemap.scopeId ?? null) === (activeScope?.scopeId ?? null)) return;
     if (acquiredRemap) {
       releaseModelMaterialRemap(acquiredRemap, activeScope);
       acquiredRemap = null;
     }
-    if (activeScope && activeEffective) {
-      void loadEffectiveTextures(activeEffective, activeScope).catch(() => {});
+    if (activeScope) {
+      // Scoped path: remap once after the release resolver lands so the
+      // swapped frame is already textured. The previous scoped variant was
+      // released above; a failed load keeps the GLB's own materials.
+      let cancelled = false;
+      void loadEffectiveTextures(activeEffective, activeScope)
+        .catch(() => undefined)
+        .then(() => {
+          if (cancelled) return;
+          if (instance !== mounted) return;
+          if (acquiredRemap) releaseModelMaterialRemap(acquiredRemap, activeScope);
+          acquiredRemap = remapModelMaterials(mounted, activeEffective, [1, 1], activeScope).acquiredKey;
+        });
+      return () => {
+        cancelled = true;
+      };
     }
-    acquiredRemap = remapModelMaterials(instance, activeEffective, [1, 1], activeScope).acquiredKey;
+    acquiredRemap = remapModelMaterials(mounted, activeEffective, [1, 1], activeScope).acquiredKey;
     return () => {
       if (acquiredRemap) {
         releaseModelMaterialRemap(acquiredRemap, activeScope);

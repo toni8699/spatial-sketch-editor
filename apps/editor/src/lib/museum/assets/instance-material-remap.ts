@@ -2,7 +2,8 @@ import { Mesh, MeshStandardMaterial, type Object3D } from 'three';
 import {
 	acquireEffectiveVariant,
 	releaseEffectiveVariant,
-	type TextureLoadScope
+	type TextureLoadScope,
+	type TextureScopeKey
 } from '../materials/texture-cache';
 import type { EffectiveSceneMaterial } from '../materials/scene-instance-material';
 
@@ -51,8 +52,9 @@ export function remapModelMaterials(
 
 export function releaseModelMaterialRemap(
 	key: RemapKey,
-	scope?: TextureLoadScope | null
+	scope?: TextureLoadScope | TextureScopeKey | null
 ): void {
-	const resolved = scope ?? (key.scopeId ? { scopeId: key.scopeId, loader: async () => { throw new Error('remap release needs no loader'); } } : null);
-	releaseEffectiveVariant(key.seed, key.rx, key.ry, key.rot, resolved);
+	// Release needs only the cache namespace: prefer the explicit scope, else
+	// the scopeId retained on the key. Neither path loads.
+	releaseEffectiveVariant(key.seed, key.rx, key.ry, key.rot, scope ?? (key.scopeId ? { scopeId: key.scopeId } : null));
 }

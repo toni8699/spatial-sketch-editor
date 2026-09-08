@@ -7,7 +7,7 @@ slice plus one next action only.
 
 - P21 shipped 2026-09-08 (closed at `7fece5e`); prior CURRENT dirty claim resolved — P21.6 + gate fix are committed, no source changes pending.
 - Uncommitted docs (P22 approval): tracker P22 → approved, P22 plan → approved with P22.1→P22.5 sequential, `model-assessment.md` P22.1–P22.5 rows (80/high, 78/high, 74/med, 68/med, 64/med).
-- P22.1 in progress (uncommitted): cold runtime + asset seam — `visitor-cold-runtime.ts` + `visitor-texture-scope.ts` + `shipped-static-registry.ts`, release-scoped `TextureLoadScope` through texture-cache/remap/visitor surfaces, `p22-1-cold-runtime.test.ts` (10 tests) + boundary two-hop fixture.
+- P22.1 in progress (uncommitted): cold runtime + asset seam — `visitor-cold-runtime.ts` + `visitor-texture-scope.ts` + `shipped-static-registry.ts`, release-scoped `TextureLoadScope` through texture-cache/remap/visitor surfaces, `p22-1-cold-runtime.test.ts` (14 tests) + boundary two-hop fixture. Review follow-up: registry retention proof (append-only snapshot + catalogue self-containment + parity vs canonical URI guard + built-output check), AssetModel single-remap scoped gate, key-only `TextureScopeKey` releases.
 - Owner rulings carry over: visitor-preview black first frame is unlit content, not a bug (lighting expands in P23/P24).
 
 - Immediate previous slice: **P21 closeout (2026-09-08).**

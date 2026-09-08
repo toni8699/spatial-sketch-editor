@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -18,8 +18,10 @@ import {
 } from '$lib/visitor/visitor-texture-scope';
 import {
 	composeColdReleaseBundle,
+	isRootRelativeSafe,
 	validateColdReleaseReferences
 } from '$lib/visitor/visitor-cold-runtime';
+import { isSafeTextureUri as canonicalIsSafeTextureUri } from '$lib/content/texture-uri';
 import {
 	SHIPPED_STATIC_REGISTRY_VERSION,
 	isAllowedShippedTextureUri,
@@ -345,6 +347,126 @@ describe('P22.1 cold runtime + asset seam', () => {
 			expect(scope.resolveTexture('/project-assets/a')).toBeNull();
 		} finally {
 			URL.revokeObjectURL = originalRevoke;
+		}
+	});
+
+	it('registry is append-only: golden snapshot fails on removal, allows additions', () => {
+		// An existing release keeps resolving after a later catalogue/deploy
+		// change only if entries are never removed or renamed. Pin the P22.1
+		// set here: deletions break this test by design; additions pass.
+		const pinnedTextures = [
+			'/textures/plaster-warm/map.png',
+			'/textures/plaster-warm/roughness.png',
+			'/textures/wood-walnut/map.png',
+			'/textures/wood-walnut/roughness.png',
+			'/textures/brass-aged/map.png'
+		];
+		const pinnedModels = [
+			'/museum/models/piano/grand-piano.glb',
+			'/museum/models/furniture/chair/salon-chair.glb',
+			'/museum/models/furniture/sofa/sofa-03.glb',
+			'/museum/models/furniture/table/salon-table.glb',
+			'/museum/models/decor/chandelier/chandelier2.glb',
+			'/museum/models/decor/oil-lamp/victorian-oil-lamp.glb',
+			'/museum/models/decor/clock/grandfather-clock.glb'
+		];
+		const actualTextures = listShippedTextureUris();
+		const actualModels = listShippedModelFiles();
+		for (const uri of pinnedTextures) {
+			expect(actualTextures, `removed registry texture: ${uri}`).toContain(uri);
+		}
+		for (const file of pinnedModels) {
+			expect(actualModels, `removed registry model: ${file}`).toContain(file);
+		}
+		// Every registry texture must stay allowlisted even if the live
+		// catalogue later drops the material that implied it.
+		for (const uri of listShippedTextureUris()) {
+			expect(isAllowedShippedTextureUri(uri), uri).toBe(true);
+		}
+	});
+
+	it('cold modules are self-contained: deleting the live catalogue cannot break release validation', () => {
+		// Simulates the "later catalogue change" by proving the cold path
+		// never reads it: no live-catalogue or session imports in the three
+		// new modules, and validation passes without them.
+		const testDir = dirname(fileURLToPath(import.meta.url));
+		const sources = [
+			'visitor-cold-runtime.ts',
+			'visitor-texture-scope.ts',
+			'shipped-static-registry.ts'
+		].map((file) => readFileSync(resolve(testDir, '../../../src/lib/visitor', file), 'utf8'));
+		for (const source of sources) {
+			for (const token of [
+				'$lib/editor/',
+				'content/materials',
+				'content/assets',
+				'content/scene',
+				'content/rooms',
+				'chopin-',
+				'project-codec',
+				'export-store',
+				'texture-store'
+			]) {
+				expect(source, token).not.toContain(token);
+			}
+		}
+		expect(sources[0]).toContain('@portfolio/project-model');
+		// A release built from registry identities alone validates with an
+		// empty manifest — no live catalogue read involved.
+		expect(
+			validateColdReleaseReferences({
+				scene: {
+					textures: [{ id: 't1', name: 'Plaster', uri: '/textures/plaster-warm/map.png' }],
+					materials: [],
+					entities: [{ kind: 'model', assetId: 'paris-grand-piano', materialInstanceId: null }]
+				},
+				manifest: { releaseId: 'r-drift', bytesByUri: new Map() }
+			})
+		).toEqual([]);
+	});
+
+	it('release URI guard matches the canonical safe-URI predicate (no drift)', () => {
+		const corpus = [
+			'/textures/a.png',
+			'/textures/plaster-warm/map.png',
+			'/textures/space%20name.png',
+			'/project-assets/abc_123-XY',
+			'/local/abcdef123456/a.png',
+			'/textures/package-abcdef123456/a.png',
+			'//evil.com/x.png',
+			'/a/../b.png',
+			'/a/./b.png',
+			'/a?b',
+			'/a#b',
+			'/a\\b',
+			'blob:https://x/y',
+			'data:image/png;base64,AAAA',
+			'https://x/y.png',
+			'/textures/%2e%2e/secret.png',
+			'/textures/%252e%252e/secret.png',
+			'/textures/\x01bad.png',
+			''
+		];
+		for (const uri of corpus) {
+			expect(isRootRelativeSafe(uri), uri).toBe(canonicalIsSafeTextureUri(uri));
+		}
+	});
+
+	it('registry resources survive into production build output', () => {
+		const testDir = dirname(fileURLToPath(import.meta.url));
+		const staticRoot = resolve(testDir, '../../../static');
+		const clientRoot = resolve(testDir, '../../../.svelte-kit/output/client');
+		if (!existsSync(clientRoot)) {
+			// No production build in this checkout — static/ coverage above is
+			// the durable assertion; the built-output half runs post-build.
+			expect(existsSync(staticRoot)).toBe(true);
+			return;
+		}
+		for (const uri of listShippedTextureUris()) {
+			expect(existsSync(resolve(clientRoot, uri.slice(1))), `build output: ${uri}`).toBe(true);
+		}
+		for (const file of listShippedModelFiles()) {
+			expect(existsSync(resolve(clientRoot, file.slice(1))), `build output: ${file}`).toBe(true);
 		}
 	});
 });
