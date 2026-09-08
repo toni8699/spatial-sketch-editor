@@ -9,16 +9,19 @@
 	import { sphereRenderScale } from '$lib/layout/layout-geometry-objects';
 	import { toWallBufferGeometry } from '$lib/render/wall-geometry-adapter';
 	import { createVisitorWallMaterialFactory } from '$lib/museum/layout/wall-material-factory';
+	import type { TextureLoadScope } from '$lib/museum/materials/texture-cache';
 	import MuseumMaterial from '$lib/museum/materials/MuseumMaterial.svelte';
 	import RoomPortal from '$lib/museum/layout/RoomPortal.svelte';
 	import GroundPlinth from '$lib/museum/layout/GroundPlinth.svelte';
 
 	let {
 		geometry,
-		presentation
+		presentation,
+		textureScope = null
 	}: {
 		geometry: CompiledLayoutGeometry;
 		presentation: Readonly<Record<string, VisitorRoomPresentation>>;
+		textureScope?: TextureLoadScope | null;
 	} = $props();
 
 	function polygonShape(points: readonly LayoutVec2[], invertZ = true): Shape {
@@ -98,7 +101,7 @@
 				receiveShadow
 			>
 				<T.ShapeGeometry args={[polygonShape(room.floorPolygon)]} />
-				<MuseumMaterial materialId="wood-walnut" surfaceSize={[8, 8]} tint={colors.color} />
+				<MuseumMaterial materialId="wood-walnut" surfaceSize={[8, 8]} tint={colors.color} scope={textureScope} />
 			</T.Mesh>
 			<T.Mesh
 				name={`VisitorCeiling:${room.roomId}`}
@@ -106,7 +109,7 @@
 				rotation={[Math.PI / 2, 0, 0]}
 			>
 				<T.ShapeGeometry args={[polygonShape(room.ceilingPolygon, false)]} />
-				<MuseumMaterial materialId="plaster-warm" surfaceSize={[8, 8]} tint="#111018" textures="off" />
+				<MuseumMaterial materialId="plaster-warm" surfaceSize={[8, 8]} tint="#111018" textures="off" scope={textureScope} />
 			</T.Mesh>
 
 			{#if adapted?.ok}

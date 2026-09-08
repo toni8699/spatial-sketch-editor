@@ -54,6 +54,34 @@ export type TextureSourceLoader = (
   slot: MaterialTextureSlot
 ) => Promise<ThreeTexture>;
 
+/**
+ * P22.1 — explicit release scope for cold visitor loads.
+ *
+ * When supplied, texture loads use `loader` (never the mutable process-global
+ * default) and every cache key is prefixed with `scopeId`, so the same logical
+ * URI in two projects/releases cannot share bytes. Editor callers omit the
+ * scope and keep the legacy global-loader behavior untouched.
+ */
+export type TextureLoadScope = {
+  scopeId: string;
+  loader: TextureSourceLoader;
+};
+
+function scopeIdOf(scope?: TextureLoadScope | null): string | null {
+  const id = scope?.scopeId;
+  return id && id.length > 0 ? id : null;
+}
+
+function sourceKey(scope: TextureLoadScope | null | undefined, url: string): string {
+  const id = scopeIdOf(scope);
+  return id ? `${id}::${url}` : url;
+}
+
+function materialPromiseKey(scope: TextureLoadScope | null | undefined, materialId: string): string {
+  const id = scopeIdOf(scope);
+  return id ? `${id}::${materialId}` : materialId;
+}
+
 let defaultSourceLoader: TextureSourceLoader | null = null;
 
 export function setDefaultTextureSourceLoader(loader: TextureSourceLoader | null): void {
@@ -65,23 +93,32 @@ export function __resetDefaultSourceLoaderForTests(): void {
   defaultSourceLoader = null;
 }
 
-function loadSource(url: string, slot: MaterialTextureSlot, materialId: string): Promise<ThreeTexture> {
-  const existing = sourceCache.get(url);
+function loadSource(
+  url: string,
+  slot: MaterialTextureSlot,
+  materialId: string,
+  scope?: TextureLoadScope | null
+): Promise<ThreeTexture> {
+  const key = sourceKey(scope ?? null, url);
+  const existing = sourceCache.get(key);
   if (existing) {
     if (existing.error) return Promise.reject(new Error(existing.error));
     if (existing.texture) return Promise.resolve(existing.texture);
     return existing.promise;
   }
 
-  const promise = defaultSourceLoader
-    ? loadViaDefaultSourceLoader(url, slot, materialId)
-    : loadViaTextureLoader(url, slot, materialId);
+  const promise = scope
+    ? loadViaScopedLoader(key, url, slot, materialId, scope.loader)
+    : defaultSourceLoader
+      ? loadViaDefaultSourceLoader(key, url, slot, materialId)
+      : loadViaTextureLoader(key, url, slot, materialId);
 
-  sourceCache.set(url, { promise });
+  sourceCache.set(key, { promise });
   return promise;
 }
 
 function loadViaTextureLoader(
+  key: string,
   url: string,
   slot: MaterialTextureSlot,
   materialId: string
@@ -91,7 +128,7 @@ function loadViaTextureLoader(
       url,
       (texture) => {
         applySourceDefaults(texture, slot);
-        const entry = sourceCache.get(url);
+        const entry = sourceCache.get(key);
         if (entry) entry.texture = texture;
         resolve(texture);
       },
@@ -99,7 +136,7 @@ function loadViaTextureLoader(
       (event) => {
         const message = `Failed to load texture for material "${materialId}": ${url}`;
         console.warn(message, event);
-        const entry = sourceCache.get(url);
+        const entry = sourceCache.get(key);
         if (entry) entry.error = message;
         reject(new Error(message));
       }
@@ -108,6 +145,7 @@ function loadViaTextureLoader(
 }
 
 async function loadViaDefaultSourceLoader(
+  key: string,
   url: string,
   slot: MaterialTextureSlot,
   materialId: string
@@ -115,13 +153,35 @@ async function loadViaDefaultSourceLoader(
   try {
     const texture = await defaultSourceLoader!(url, slot);
     applySourceDefaults(texture, slot);
-    const entry = sourceCache.get(url);
+    const entry = sourceCache.get(key);
     if (entry) entry.texture = texture;
     return texture;
   } catch (event) {
     const message = `Failed to load texture for material "${materialId}": ${url}`;
     console.warn(message, event);
-    const entry = sourceCache.get(url);
+    const entry = sourceCache.get(key);
+    if (entry) entry.error = message;
+    throw new Error(message);
+  }
+}
+
+async function loadViaScopedLoader(
+  key: string,
+  url: string,
+  slot: MaterialTextureSlot,
+  materialId: string,
+  scoped: TextureSourceLoader
+): Promise<ThreeTexture> {
+  try {
+    const texture = await scoped(url, slot);
+    applySourceDefaults(texture, slot);
+    const entry = sourceCache.get(key);
+    if (entry) entry.texture = texture;
+    return texture;
+  } catch (event) {
+    const message = `Failed to load texture for material "${materialId}": ${url}`;
+    console.warn(message, event);
+    const entry = sourceCache.get(key);
     if (entry) entry.error = message;
     throw new Error(message);
   }
@@ -131,9 +191,12 @@ function variantKey(
   materialId: string,
   repeatX: number,
   repeatY: number,
-  rotation: number
+  rotation: number,
+  scope?: TextureLoadScope | null
 ): VariantKey {
-  return `${materialId}|${repeatX.toFixed(4)}|${repeatY.toFixed(4)}|${rotation.toFixed(4)}`;
+  const id = scopeIdOf(scope);
+  const base = `${materialId}|${repeatX.toFixed(4)}|${repeatY.toFixed(4)}|${rotation.toFixed(4)}`;
+  return id ? `${id}::${base}` : base;
 }
 
 function cloneMaps(
@@ -161,14 +224,16 @@ function cloneMaps(
 }
 
 export async function loadMaterialTextures(
-  definition: MaterialDefinition
+  definition: MaterialDefinition,
+  scope?: TextureLoadScope | null
 ): Promise<MaterialTexturesResult> {
   const textures = definition.textures;
   if (!textures || Object.keys(textures).length === 0) {
     return { status: 'failed', error: `Material "${definition.id}" has no texture paths` };
   }
 
-  const cached = materialLoadPromises.get(definition.id);
+  const promiseKey = materialPromiseKey(scope ?? null, definition.id);
+  const cached = materialLoadPromises.get(promiseKey);
   if (cached) return cached;
 
   const promise = (async (): Promise<MaterialTexturesResult> => {
@@ -178,7 +243,7 @@ export async function loadMaterialTextures(
     await Promise.all(
       (Object.entries(textures) as [MaterialTextureSlot, string][]).map(async ([slot, url]) => {
         try {
-          maps[slot] = await loadSource(url, slot, definition.id);
+          maps[slot] = await loadSource(url, slot, definition.id, scope ?? null);
         } catch (error) {
           errors.push(error instanceof Error ? error.message : String(error));
         }
@@ -198,7 +263,7 @@ export async function loadMaterialTextures(
     return { status: 'ready', maps };
   })();
 
-  materialLoadPromises.set(definition.id, promise);
+  materialLoadPromises.set(promiseKey, promise);
   return promise;
 }
 
@@ -207,9 +272,10 @@ export function acquireMaterialVariant(
   sourceMaps: LoadedTextureMaps,
   repeatX: number,
   repeatY: number,
-  rotation = 0
+  rotation = 0,
+  scope?: TextureLoadScope | null
 ): LoadedTextureMaps {
-  const key = variantKey(definition.id, repeatX, repeatY, rotation);
+  const key = variantKey(definition.id, repeatX, repeatY, rotation, scope ?? null);
   const existing = variantCache.get(key);
   if (existing) {
     existing.refCount += 1;
@@ -225,9 +291,10 @@ export function releaseMaterialVariant(
   materialId: string,
   repeatX: number,
   repeatY: number,
-  rotation = 0
+  rotation = 0,
+  scope?: TextureLoadScope | null
 ) {
-  const key = variantKey(materialId, repeatX, repeatY, rotation);
+  const key = variantKey(materialId, repeatX, repeatY, rotation, scope ?? null);
   const existing = variantCache.get(key);
   if (!existing) return;
 
@@ -268,13 +335,15 @@ export type EffectiveLoadResult =
  */
 export function loadSourceTexture(
   url: string,
-  slot: MaterialTextureSlot
+  slot: MaterialTextureSlot,
+  scope?: TextureLoadScope | null
 ): Promise<ThreeTexture> {
-  return loadSource(url, slot, 'effective');
+  return loadSource(url, slot, 'effective', scope ?? null);
 }
 
 export async function loadEffectiveTextures(
-  effective: EffectiveSceneMaterial
+  effective: EffectiveSceneMaterial,
+  scope?: TextureLoadScope | null
 ): Promise<EffectiveLoadResult> {
   const entries = Object.entries(effective.slotUris) as [MaterialTextureSlot, string][];
   if (entries.length === 0) {
@@ -287,7 +356,7 @@ export async function loadEffectiveTextures(
   await Promise.all(
     entries.map(async ([entrySlot, url]) => {
       try {
-        maps[entrySlot] = await loadSourceTexture(url, entrySlot);
+        maps[entrySlot] = await loadSourceTexture(url, entrySlot, scope ?? null);
       } catch (error) {
         failed.push(error instanceof Error ? error.message : String(error));
       }
@@ -309,18 +378,22 @@ function effectiveVariantKey(
   seed: string,
   rx: number,
   ry: number,
-  rot: number
+  rot: number,
+  scope?: TextureLoadScope | null
 ): VariantKey {
-  return `eff|${seed}|${rx.toFixed(4)}|${ry.toFixed(4)}|${rot.toFixed(4)}`;
+  const id = scopeIdOf(scope);
+  const base = `eff|${seed}|${rx.toFixed(4)}|${ry.toFixed(4)}|${rot.toFixed(4)}`;
+  return id ? `${id}::${base}` : base;
 }
 
 export function acquireEffectiveVariant(
   effective: EffectiveSceneMaterial,
   repeatX: number,
   repeatY: number,
-  rotation = 0
+  rotation = 0,
+  scope?: TextureLoadScope | null
 ): LoadedTextureMaps {
-  const key = effectiveVariantKey(effective.variantSeed, repeatX, repeatY, rotation);
+  const key = effectiveVariantKey(effective.variantSeed, repeatX, repeatY, rotation, scope ?? null);
   const existing = variantCache.get(key);
   if (existing) {
     existing.refCount += 1;
@@ -332,7 +405,7 @@ export function acquireEffectiveVariant(
     MaterialTextureSlot,
     string
   ][]) {
-    const cached = sourceCache.get(url);
+    const cached = sourceCache.get(sourceKey(scope ?? null, url));
     if (!cached?.texture) continue;
     const source = cached.texture;
     const clone = source.clone();
@@ -353,9 +426,10 @@ export function releaseEffectiveVariant(
   seed: string,
   repeatX: number,
   repeatY: number,
-  rotation = 0
+  rotation = 0,
+  scope?: TextureLoadScope | null
 ): void {
-  const key = effectiveVariantKey(seed, repeatX, repeatY, rotation);
+  const key = effectiveVariantKey(seed, repeatX, repeatY, rotation, scope ?? null);
   const existing = variantCache.get(key);
   if (!existing) return;
 

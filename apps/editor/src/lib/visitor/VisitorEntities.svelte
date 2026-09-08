@@ -14,6 +14,7 @@
 		modelEntityToPlacement
 	} from '$lib/content/scene';
 	import { resolveSceneMaterial } from '$lib/museum/materials/scene-instance-material';
+	import type { TextureLoadScope } from '$lib/museum/materials/texture-cache';
 	import type { LayoutRoomRegistry } from '$lib/project/project-layout-semantics';
 	import AssetModel from '$lib/museum/assets/AssetModel.svelte';
 	import EntityLight from '$lib/museum/entities/EntityLight.svelte';
@@ -21,10 +22,12 @@
 
 	let {
 		scene,
-		rooms
+		rooms,
+		textureScope = null
 	}: {
 		scene: RuntimeScene;
 		rooms: LayoutRoomRegistry;
+		textureScope?: TextureLoadScope | null;
 	} = $props();
 
 	const roomGroups = $derived.by(() => {
@@ -75,10 +78,11 @@
 					scale={entity.scale ?? 1}
 					fallback={entity.fallback}
 					effective={entity.materialInstanceId ? entityEffective(entity) : null}
+					scope={textureScope}
 				/>
 			{:else if isScenePrimitiveEntity(entity)}
 				<T.Group position={entity.position} rotation={entity.rotation} scale={entity.scale ?? 1}>
-					<EntityPrimitive {entity} effective={entityEffective(entity)} />
+					<EntityPrimitive {entity} effective={entityEffective(entity)} scope={textureScope} />
 				</T.Group>
 			{:else if isSceneLightEntity(entity)}
 				<T.Group position={entity.position} rotation={entity.rotation} scale={entity.scale ?? 1}>

@@ -10,6 +10,7 @@
 		createVisitorRuntimeState,
 		visitorStartNodeId
 	} from './visitor-runtime-state.svelte';
+	import type { TextureLoadScope } from '$lib/museum/materials/texture-cache';
 	import { neutralVisitorRoomPresentation } from './room-presentation';
 	import VisitorCameraDirector from './VisitorCameraDirector.svelte';
 	import VisitorEntities from './VisitorEntities.svelte';
@@ -21,6 +22,7 @@
 		rooms,
 		graph,
 		resolveTexture,
+		textureScope = null,
 		reducedMotion = false,
 		onExit
 	}: {
@@ -29,6 +31,7 @@
 		rooms: LayoutRoomRegistry;
 		graph: NavigationGraph;
 		resolveTexture: (uri: string) => string | null;
+		textureScope?: TextureLoadScope | null;
 		reducedMotion?: boolean;
 		onExit: () => void;
 	} = $props();
@@ -57,8 +60,9 @@
 
 	onMount(() => {
 		// Exercise the detached read-only resolver so preview-local URLs stay
-		// alive through the surface lifetime; 3D material loading reuses the
-		// retained BinaryTextureStore-first loader owned by the session.
+		// alive through the surface lifetime. When a release `textureScope`
+		// is supplied, 3D material loading uses that scoped resolver with
+		// scoped cache keys; otherwise it falls back to the session loader.
 		for (const texture of scene.textures) {
 			try {
 				void resolveTexture(texture.uri);
@@ -84,8 +88,8 @@
 			<T.AmbientLight intensity={0.2} />
 			<T.DirectionalLight position={[2, 8, 5]} color="#c9d1df" intensity={0.7} />
 			<VisitorCameraDirector graph={graph} visitor={visitorState} bounds={geometry.bounds ?? null} />
-			<VisitorLayoutShell {geometry} {presentation} />
-			<VisitorEntities scene={scene} {rooms} />
+			<VisitorLayoutShell {geometry} {presentation} textureScope={textureScope} />
+			<VisitorEntities scene={scene} {rooms} textureScope={textureScope} />
 		</Canvas>
 	</div>
 	<div class="visitor-pill" role="status">

@@ -92,6 +92,24 @@ describe('preview-surface-boundary validator', () => {
 		expect(result.ok).toBe(false);
 	});
 
+	it('rejects a two-hop indirect editor import through a generic leaf (P22.1)', () => {
+		const root = '/src/lib/visitor/VisitorPreviewSurface.svelte';
+		const mid = '/src/lib/visitor/visitor-cold-runtime.ts';
+		const leaf = '/src/lib/visitor/visitor-texture-scope.ts';
+		const forbidden = '/src/lib/editor/store/binary-texture-store.svelte';
+		const result = validatePreviewSurfaceGraph(
+			graphFrom(root, {
+				[root]: { imports: [mid] },
+				[mid]: { imports: [leaf] },
+				[leaf]: { imports: [forbidden] },
+				[forbidden]: { imports: [] }
+			})
+		);
+		expect(result.ok).toBe(false);
+		expect(result.forbidden).toHaveLength(1);
+		expect(result.forbidden[0]!.id).toBe(forbidden);
+	});
+
 	it('fails on a missing root', () => {
 		const result = validatePreviewSurfaceGraph(graphFrom('/missing.svelte', {}));
 		expect(result.ok).toBe(false);

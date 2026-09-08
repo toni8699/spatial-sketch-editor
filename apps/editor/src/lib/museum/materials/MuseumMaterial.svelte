@@ -12,7 +12,8 @@
     acquireMaterialVariant,
     loadMaterialTextures,
     releaseMaterialVariant,
-    type LoadedTextureMaps
+    type LoadedTextureMaps,
+    type TextureLoadScope
   } from './texture-cache';
 
   let {
@@ -23,6 +24,7 @@
     tint,
     repeat: repeatOverride,
     rotation = 0,
+    scope = null,
     status = $bindable<MaterialLoadStatus>('idle')
   }: {
     materialId: MaterialId;
@@ -32,6 +34,7 @@
     tint?: string;
     repeat?: Vec2;
     rotation?: number;
+    scope?: TextureLoadScope | null;
     status?: MaterialLoadStatus;
   } = $props();
 
@@ -49,6 +52,7 @@
     const [rx, ry] = computedRepeat;
     const rot = rotation;
     const mode = textures;
+    const activeScope = scope;
     let cancelled = false;
     let acquiredKey: { id: string; rx: number; ry: number; rot: number } | null = null;
 
@@ -63,7 +67,7 @@
 
     status = 'loading';
 
-    loadMaterialTextures(def).then((result) => {
+    loadMaterialTextures(def, activeScope).then((result) => {
       if (cancelled) return;
 
       if (result.status !== 'ready' || !result.maps.map) {
@@ -75,7 +79,7 @@
         return;
       }
 
-      maps = acquireMaterialVariant(def, result.maps, rx, ry, rot);
+      maps = acquireMaterialVariant(def, result.maps, rx, ry, rot, activeScope);
       acquiredKey = { id: def.id, rx, ry, rot };
       status = 'ready';
     });
@@ -84,7 +88,7 @@
       cancelled = true;
       maps = undefined;
       if (acquiredKey) {
-        releaseMaterialVariant(acquiredKey.id, acquiredKey.rx, acquiredKey.ry, acquiredKey.rot);
+        releaseMaterialVariant(acquiredKey.id, acquiredKey.rx, acquiredKey.ry, acquiredKey.rot, activeScope);
         acquiredKey = null;
       }
     };

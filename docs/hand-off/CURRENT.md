@@ -7,14 +7,14 @@ slice plus one next action only.
 
 - P21 shipped 2026-09-08 (closed at `7fece5e`); prior CURRENT dirty claim resolved — P21.6 + gate fix are committed, no source changes pending.
 - Uncommitted docs (P22 approval): tracker P22 → approved, P22 plan → approved with P22.1→P22.5 sequential, `model-assessment.md` P22.1–P22.5 rows (80/high, 78/high, 74/med, 68/med, 64/med).
-- HEAD `e7e39f4` (P23/P24 research-string docs only); no publication/release code yet — greenfield for P22.2.
+- P22.1 in progress (uncommitted): cold runtime + asset seam — `visitor-cold-runtime.ts` + `visitor-texture-scope.ts` + `shipped-static-registry.ts`, release-scoped `TextureLoadScope` through texture-cache/remap/visitor surfaces, `p22-1-cold-runtime.test.ts` (10 tests) + boundary two-hop fixture.
 - Owner rulings carry over: visitor-preview black first frame is unlit content, not a bug (lighting expands in P23/P24).
 
 - Immediate previous slice: **P21 closeout (2026-09-08).**
 
 ## Next action
 
-- Implement [P22.1](../plans/2026-09-07-P22-basic-publish-visitor-runtime.md) (Cold runtime + asset seam) per approved P22 — store-free preparation + release-scoped resolver + shipped-static registry; gate: P22.1 acceptance before P22.2; tracker is status authority.
+- Implement [P22.2](../plans/2026-09-07-P22-basic-publish-visitor-runtime.md) (Release persistence + API) per approved P22 — P22.1 acceptance met (cold runtime + asset seam green); tracker is status authority.
 
 ## Verification
 

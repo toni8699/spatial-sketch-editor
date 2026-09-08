@@ -25,12 +25,14 @@
     releaseModelMaterialRemap,
     type RemapKey
   } from './instance-material-remap';
+  import { loadEffectiveTextures, type TextureLoadScope } from '$lib/museum/materials/texture-cache';
 
   const ZERO: Vec3 = [0, 0, 0];
 
   let {
     assetId,
     effective = null as EffectiveSceneMaterial | null,
+    scope = null,
     position = ZERO,
     rotation = ZERO,
     scale = 1,
@@ -49,6 +51,8 @@
     assetId: AssetId;
     /** Phase 5.3 — resolved material to remap onto every GLTF mesh; null skips remap. */
     effective?: EffectiveSceneMaterial | null;
+    /** P22.1 — release scope for texture-override loads; null keeps the global loader. */
+    scope?: TextureLoadScope | null;
     position?: Vec3;
     rotation?: Vec3;
     scale?: number;
@@ -99,18 +103,37 @@
     const resource = loader.load(url);
     const unsubscribeModel = resource.subscribe((gltf) => {
       if (!gltf || cancelled) return;
+      const activeEffective = effective;
+      const activeScope = scope;
       ownedInstance = cloneModelScene(
         gltf.scene,
         shadows && asset.castShadow,
         shadows && asset.receiveShadow
       );
-      if (effective) {
+      if (activeEffective) {
         // Drop any prior remap before re-applying to the new instance.
         if (acquiredRemap) {
-          releaseModelMaterialRemap(acquiredRemap);
+          releaseModelMaterialRemap(acquiredRemap, activeScope);
           acquiredRemap = null;
         }
-        acquiredRemap = remapModelMaterials(ownedInstance, effective, [1, 1]).acquiredKey;
+        if (activeScope) {
+          // Warm the scoped source cache through the supplied release
+          // resolver so the override below reads release bytes, never
+          // editor-warmed globals. Fire-and-forget: the remap effect
+          // re-applies once the scoped load lands.
+          void loadEffectiveTextures(activeEffective, activeScope)
+            .then(() => {
+              if (cancelled || instance !== ownedInstance) return;
+              if (acquiredRemap) releaseModelMaterialRemap(acquiredRemap, activeScope);
+              if (ownedInstance) {
+                acquiredRemap = remapModelMaterials(ownedInstance, activeEffective, [1, 1], activeScope).acquiredKey;
+              }
+            })
+            .catch(() => {
+              // Load failure surfaces through material status; keep fallback.
+            });
+        }
+        acquiredRemap = remapModelMaterials(ownedInstance, activeEffective, [1, 1], activeScope).acquiredKey;
       }
       const inspection = inspectModel(
         ownedInstance,
@@ -139,7 +162,7 @@
       if (ownedInstance) disposeModelInstance(ownedInstance);
       if (instance === ownedInstance) instance = undefined;
       if (acquiredRemap) {
-        releaseModelMaterialRemap(acquiredRemap);
+        releaseModelMaterialRemap(acquiredRemap, scope);
         acquiredRemap = null;
       }
     };
@@ -197,16 +220,21 @@
   // instance has already loaded.
   $effect(() => {
     const seed = effective?.variantSeed;
-    if (!instance || !effective || seed === undefined) return;
-    if (acquiredRemap && acquiredRemap.seed === seed) return;
+    const activeEffective = effective;
+    const activeScope = scope;
+    if (!instance || !activeEffective || seed === undefined) return;
+    if (acquiredRemap && acquiredRemap.seed === seed && (acquiredRemap.scopeId ?? null) === (activeScope?.scopeId ?? null)) return;
     if (acquiredRemap) {
-      releaseModelMaterialRemap(acquiredRemap);
+      releaseModelMaterialRemap(acquiredRemap, activeScope);
       acquiredRemap = null;
     }
-    acquiredRemap = remapModelMaterials(instance, effective, [1, 1]).acquiredKey;
+    if (activeScope && activeEffective) {
+      void loadEffectiveTextures(activeEffective, activeScope).catch(() => {});
+    }
+    acquiredRemap = remapModelMaterials(instance, activeEffective, [1, 1], activeScope).acquiredKey;
     return () => {
       if (acquiredRemap) {
-        releaseModelMaterialRemap(acquiredRemap);
+        releaseModelMaterialRemap(acquiredRemap, activeScope);
         acquiredRemap = null;
       }
     };

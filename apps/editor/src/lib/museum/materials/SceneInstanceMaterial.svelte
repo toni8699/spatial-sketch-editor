@@ -7,7 +7,8 @@
 		acquireEffectiveVariant,
 		loadEffectiveTextures,
 		releaseEffectiveVariant,
-		type LoadedTextureMaps
+		type LoadedTextureMaps,
+		type TextureLoadScope
 	} from './texture-cache';
 	import type { EffectiveSceneMaterial } from './scene-instance-material';
 
@@ -16,12 +17,14 @@
 		surfaceSize,
 		rotation = 0,
 		receiveLighting = true,
+		scope = null,
 		status = $bindable<MaterialLoadStatus>('idle')
 	}: {
 		material: EffectiveSceneMaterial;
 		surfaceSize: Vec2;
 		rotation?: number;
 		receiveLighting?: boolean;
+		scope?: TextureLoadScope | null;
 		status?: MaterialLoadStatus;
 	} = $props();
 
@@ -36,11 +39,12 @@
 		const seed = material.variantSeed;
 		const [rx, ry] = repeat;
 		const rot = rotation;
+		const activeScope = scope;
 		maps = undefined;
 		status = 'loading';
 		let cancelled = false;
 
-		loadEffectiveTextures(material).then((result) => {
+		loadEffectiveTextures(material, activeScope).then((result) => {
 			if (cancelled) return;
 			if (result.status === 'fallback') {
 				status = 'fallback';
@@ -53,7 +57,7 @@
 				);
 				return;
 			}
-			maps = acquireEffectiveVariant(material, rx, ry, rot);
+			maps = acquireEffectiveVariant(material, rx, ry, rot, activeScope);
 			acquiredKey = { seed, rx, ry, rot };
 			status = result.status === 'partial' ? 'partial' : 'ready';
 		});
@@ -66,7 +70,8 @@
 					acquiredKey.seed,
 					acquiredKey.rx,
 					acquiredKey.ry,
-					acquiredKey.rot
+					acquiredKey.rot,
+					activeScope
 				);
 				acquiredKey = null;
 			}
