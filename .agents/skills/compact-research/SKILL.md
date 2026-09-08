@@ -94,6 +94,12 @@ Verify against inventory + original section-by-section:
 
 - Keep URLs, citations, repo/file/module paths attached to the claims they support. Keep multiple independent sources for one finding. Never invent citations.
 
+### Citation portability check
+
+- Preserve all source markers exactly as written (URLs, cite/filecite-style handles, internal doc refs).
+- If the source contains actual URLs, retain them verbatim (including query strings).
+- If it contains only platform-local/opaque citation handles with no resolvable URL, flag `NON-PORTABLE CITATIONS` in the loss audit naming the affected claims; do not invent URLs to replace them.
+
 ### Deduplication
 
 - Before deleting a repeat, check for a unique qualifier, number, example, source, caveat, detail, implication, edge case, or confidence delta. Merge all unique parts into one canonical statement.
