@@ -35,7 +35,9 @@
 		resolveProjectAssetBytes,
 		onReset,
 		onPreview,
-		previewDisabledReason = null
+		previewDisabledReason = null,
+		projectId = null,
+		surface = 'spatial'
 	}: {
 		store: EditorStore;
 		layoutPreview: LayoutPreviewState;
@@ -65,6 +67,8 @@
 		onReset?: () => void;
 		onPreview?: () => void | Promise<void>;
 		previewDisabledReason?: string | null;
+		projectId?: string | null;
+		surface?: 'spatial' | 'preview' | 'publish';
 	} = $props();
 
 	const presentation = $derived(projectPersistencePresentation({
@@ -87,6 +91,10 @@
 	// Static registry snapshot: THEMES never changes at runtime, so the menu
 	// picks up future themes automatically without reactive machinery.
 	const themeEntries = Object.entries(THEMES) as Array<[ThemeId, (typeof THEMES)[ThemeId]]>;
+	// P22.4 — same-session Spatial↔Publish navigation keeps the retained
+	// editor session (dirty guard exempts it); plain links suffice.
+	const spatialHref = $derived(projectId ? `/project/${encodeURIComponent(projectId)}/spatial` : '/projects');
+	const publishHref = $derived(projectId ? `/project/${encodeURIComponent(projectId)}/publish` : '/projects');
 
 	onMount(() => {
 		const closeThemeMenu = (event: PointerEvent) => {
@@ -149,7 +157,14 @@
 			bind:open={projectMenuOpen}
 		/>
 	</div>
-	<nav aria-label="Project modes"><span aria-current="page">Spatial</span></nav>
+	<nav aria-label="Project modes">
+		{#if projectId}
+			<a href={spatialHref} aria-current={surface === 'spatial' ? 'page' : undefined}>Spatial</a>
+			<a href={publishHref} aria-current={surface === 'publish' ? 'page' : undefined}>Publish</a>
+		{:else}
+			<span aria-current="page">Spatial</span>
+		{/if}
+	</nav>
 	<div class="actions">
 		<button type="button" aria-label="Undo" title="Undo" disabled={!store.canUndo} onclick={() => store.undo()}><Undo2 size={14} /></button>
 		<button type="button" aria-label="Redo" title="Redo" disabled={!store.canRedo} onclick={() => store.redo()}><Redo2 size={14} /></button>
@@ -205,8 +220,11 @@
 	.project-row { display:flex; align-items:center; gap:8px; padding:0 8px; height:var(--editor-project-row-height); box-sizing:border-box; background:var(--editor-bg-row-1); border-bottom:1px solid var(--editor-border-subtle); font:500 12px var(--editor-font); min-width:0; z-index:30; }
 	.project-row a { color:var(--editor-text-primary); text-decoration:none; display:flex; gap:6px; align-items:center; white-space:nowrap; }
 	.project-name { width:180px; max-width:240px; min-width:80px; font:600 13px var(--editor-font); }
-	button, input, .location, nav span { height:28px; box-sizing:border-box; border:1px solid var(--editor-border-subtle); border-radius:4px; background:transparent; color:var(--editor-text-primary); padding:0 8px; }
-	.location, nav span { display:flex; align-items:center; white-space:nowrap; }
+	button, input, .location, nav span, nav a { height:28px; box-sizing:border-box; border:1px solid var(--editor-border-subtle); border-radius:4px; background:transparent; color:var(--editor-text-primary); padding:0 8px; }
+	.location, nav span, nav a { display:flex; align-items:center; white-space:nowrap; }
+	nav a { text-decoration:none; }
+	nav { display:flex; gap:4px; margin-left:auto; margin-right:auto; }
+	nav span, nav a[aria-current="page"] { color:var(--editor-accent); background:var(--editor-bg-control); }
 	button { display:inline-flex; align-items:center; justify-content:center; gap:5px; font:inherit; white-space:nowrap; cursor:pointer; }
 	button:disabled { opacity:.5; cursor:default; }
 	nav { margin-left:auto; margin-right:auto; }

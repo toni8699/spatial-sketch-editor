@@ -65,6 +65,7 @@
 		setLayoutViewMode
 	} from '$lib/editor/layout/layout-interaction';
 	import ProjectRow from './ProjectRow.svelte';
+	import PublishSurface from './PublishSurface.svelte';
 	import WorkspaceRibbon from './WorkspaceRibbon.svelte';
 	import PlanWorkspace from './PlanWorkspace.svelte';
 	import Workspace3DView from './Workspace3DView.svelte';
@@ -131,7 +132,7 @@
 		loadOwnedProject?: boolean;
 		resumePendingSave?: boolean;
 		projectPersistence?: ProjectPersistenceConfig | null;
-		surface?: 'spatial' | 'preview';
+		surface?: 'spatial' | 'preview' | 'publish';
 	} = $props();
 	const configuredProjectPersistence = untrack(() => projectPersistence);
 	const initialProjectId = untrack(() => routeProjectId || 'project:untitled');
@@ -196,6 +197,7 @@
 	let takeoverObserverState = $state<TakeoverObserverState | null>(null);
 	const isPreviewTakeover = $derived(previewBundle !== null);
 	const isPreviewSurface = $derived(surface === 'preview');
+	const isPublishSurface = $derived(surface === 'publish');
 	const projectApiOrigin = configuredProjectPersistence?.apiOrigin ?? env.PUBLIC_API_ORIGIN;
 	const projectAuth =
 		configuredProjectPersistence?.auth ??
@@ -420,10 +422,12 @@
 		layoutPreview,
 		projectNameDirty: () => projectName !== savedProjectName,
 		// P21.4 — same-project Spatial↔Preview keeps the retained session;
+		// P22.4 — Publish joins the retained set: Spatial↔Publish preserves
+		// the draft, selection, history, view and camera pose.
 		// project changes, Hub and other destinations keep the dirty guard.
 		isRetainedSessionNavigation: (url) => {
 			const currentId = projectId ?? initialProjectId;
-			const match = url.pathname.match(/^\/project\/([^/]+)\/(spatial|preview)\/?$/);
+			const match = url.pathname.match(/^\/project\/([^/]+)\/(spatial|preview|publish)\/?$/);
 			if (!match) return false;
 			let decoded = '';
 			try {
@@ -1505,6 +1509,19 @@
 		return `/project/${encodeURIComponent(id)}/preview`;
 	}
 
+	// P22.4 — Publish owns no playback: entering the surface pauses an active
+	// camera preview through the existing transport. Returning to Spatial
+	// leaves it paused; the draft, selection, history and view are untouched.
+	$effect(() => {
+		if (!isPublishSurface) return;
+		if (store.cameraPreview?.transport !== 'playing') return;
+		try {
+			store.pauseCameraPreview();
+		} catch {
+			// A refusal simply leaves transport playing and frozen by the 3D
+			// unmount instead.
+		}
+	});
 	function previewEntryConditions() {
 		return {
 			interactionActive: store.isEditorInteractionActive,
@@ -1908,7 +1925,7 @@
 
 </script>
 
-<main class="page editor-page project-editor" class:previewing={store.isDocumentMutationBlocked} class:visitor-previewing={previewBundle !== null} class:panels-left-collapsed={store.leftSidePanelCollapsed} class:panels-right-collapsed={store.rightSidePanelCollapsed}>
+<main class="page editor-page project-editor" class:previewing={store.isDocumentMutationBlocked} class:visitor-previewing={previewBundle !== null} class:publish-surface-open={isPublishSurface && previewBundle === null} class:panels-left-collapsed={store.leftSidePanelCollapsed} class:panels-right-collapsed={store.rightSidePanelCollapsed}>
 	{#if previewBundle}
 		{@const bundle = previewBundle}
 		<div class="visitor-takeover">
@@ -1924,6 +1941,52 @@
 				onExit={() => void requestPreviewExit()}
 			/>
 		</div>
+	{:else if isPublishSurface}
+	<ProjectRow
+		{store}
+		{layoutPreview}
+		{currentProjectIsOwned}
+		{saveBlocker}
+		{confirmSceneReplacement}
+		{confirmLayoutReplacement}
+		{projectName}
+		projectIsDirty={projectIsDirty}
+		onProjectNameChange={(name) => (projectName = name)}
+		onSaveProject={saveProject}
+		onLoadProject={loadProject}
+		onRefreshProjects={() => void refreshOwnedProjects()}
+		onSignIn={projectAuth?.signIn ? signInToProjects : undefined}
+		onSignOut={projectAuth?.signOut ? signOutFromProjects : undefined}
+		{sessionStatus}
+		{ownedProjects}
+		{cloudStatus}
+		{cloudError}
+		{saveAuthGateOpen}
+		onContinueSaveAuth={continueSaveAuthentication}
+		onCancelSaveAuth={() => (saveAuthGateOpen = false)}
+		pendingSaveActive={pendingSaveActive}
+		onDiscardPendingSave={discardPendingSave}
+		resolveProjectAssetBytes={projectAssetsAvailable ? resolveProjectAssetBytes : undefined}
+		onReset={() => activeSelection.reset()}
+		onPreview={() => void requestPreviewEntry()}
+		previewDisabledReason={previewTransitioning ? 'Opening preview…' : null}
+		projectId={projectId}
+		surface={surface}
+	/>
+	<div class="publish-scroll">
+		<PublishSurface
+			projectId={projectId}
+			savedVersion={projectVersion}
+			isDirty={projectIsDirty}
+			{saveBlocker}
+			{sessionStatus}
+			isOwned={currentProjectIsOwned}
+			apiOrigin={projectApiOrigin}
+			onSaveProject={saveProject}
+			onSignIn={projectAuth?.signIn ? signInToProjects : undefined}
+		/>
+	</div>
+	<StatusBar {store} {layoutPreview} {layoutInteraction} {viewState} {activeSelection} transformSpace={interactionStore.space} />
 	{:else}
 	<ProjectRow
 		{store}
@@ -1953,6 +2016,8 @@
 		onReset={() => activeSelection.reset()}
 		onPreview={() => void requestPreviewEntry()}
 		previewDisabledReason={previewTransitioning ? 'Opening preview…' : null}
+		projectId={projectId}
+		surface={surface}
 	/>
 	<WorkspaceRibbon {store} {viewState} {layoutPreview} {layoutInteraction}
 		cameraPlan={cameraPlanState} gizmoCapabilities={activeGizmoCapabilities}
@@ -2105,6 +2170,23 @@
 		min-height: 0;
 		overflow: hidden;
 		background: #050508;
+	}
+	/* P22.4 — Publish surface: Row 1 chrome plus a centered scrolling
+	   author panel. The editor session (store, layout, selection, history,
+	   view) stays mounted in memory; only the Spatial workspaces unmount. */
+	.page.publish-surface-open {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: var(--editor-project-row-height) minmax(0, 1fr) var(--editor-status-height);
+		grid-template-areas:
+			'top'
+			'publish'
+			'status';
+	}
+	.publish-scroll {
+		grid-area: publish;
+		min-width: 0;
+		min-height: 0;
+		overflow: auto;
 	}
 	.preview-notice {
 		position: absolute;

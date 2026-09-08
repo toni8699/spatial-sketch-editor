@@ -13,12 +13,12 @@ slice plus one next action only.
 - Bundle-gate reference reconciled: `verify:visitor-bundle` lives in the museum workspace (`npm run verify:visitor-bundle -w @portfolio/museum`, green); the editor side is `scripts/verify-preview-surface.mjs` + `scripts/verify-public-surface.mjs` + both build-time boundary plugins (green). No root-level script; P22.5 gate should invoke both workspace paths.
 - Owner rulings carry over: visitor-preview black first frame is unlit content, not a bug (lighting expands in P23/P24).
 
-- P22.4 in progress (uncommitted): publish surface — owner client + revision-aware author UI at `/project/:projectId/publish` (same-session, explicit saved-version action).
+- P22.4 complete (uncommitted): publish surface — owner client (`publication-client.ts`: credentialed status/publish/unpublish, strict shape, 409-carries-revision, abort-preserving) + revision-aware author UI at `/project/:projectId/publish` (same-session Spatial↔Publish, explicit saved-version action, guest/unsaved/dirty/stale gates, same-origin copy/open, ABA/conflict refetch, project-switch abort guards); 17 new Vitest, full editor suite 2564 green, `check` clean, both boundary scripts green, editor `build` green with public chunk grep-clean of editor tokens, `/project/:id/publish` SSR 200 (guest gate).
 - Immediate previous slice: **P22.3 (public route).**
 
 ## Next action
 
-- Implement [P22.4](../plans/2026-09-07-P22-basic-publish-visitor-runtime.md) (Publish surface) — same-session author UI with explicit saved-version action + revision-aware status; tracker is status authority.
+- Implement [P22.5](../plans/2026-09-07-P22-basic-publish-visitor-runtime.md) (Hosted acceptance + closeout) — production-topology cold-browser loop, bundle gates, evidence, contract/tracker/handoff updates; tracker is status authority.
 
 ## Verification
 

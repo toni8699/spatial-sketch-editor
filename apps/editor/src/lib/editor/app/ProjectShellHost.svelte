@@ -11,10 +11,14 @@
 	const resumePendingSave = untrack(() => page.url.searchParams.get('resume-save') === '1');
 	// P21.4 — surface intent derived from the URL. Same-project Spatial↔Preview
 	// navigation reuses this owner (keyed by projectId); only the surface swaps.
+	// P22.4 — Publish joins the same retained session: Spatial↔Publish
+	// preserves draft, selection, history, view and camera pose.
 	const surface = $derived(
 		page.params.projectId === projectId && page.url.pathname.endsWith('/preview')
 			? ('preview' as const)
-			: ('spatial' as const)
+			: page.params.projectId === projectId && page.url.pathname.endsWith('/publish')
+				? ('publish' as const)
+				: ('spatial' as const)
 	);
 	afterNavigate(() => {
 		if (page.params.projectId !== projectId) return;
