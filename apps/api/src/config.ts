@@ -10,6 +10,13 @@ export type ApiConfig = {
 	r2Bucket: string;
 	r2AccessKeyId: string;
 	r2SecretAccessKey: string;
+	/**
+	 * Optional bearer secret enabling the test-only authentication seam.
+	 * Absent by default (fail closed). Never set this on production — it is
+	 * read here only so local/CI API instances can mint automation sessions
+	 * without the external OAuth ceremony. Never a PUBLIC_* variable.
+	 */
+	testAuthSecret?: string;
 };
 
 export class ConfigError extends Error {
@@ -100,6 +107,13 @@ function readR2Endpoint(value: string | undefined): string {
 	}
 }
 
+function readTestAuthSecret(value: string | undefined): string | undefined {
+	const secret = value?.trim();
+	if (!secret) return undefined;
+	if (secret.length < 16) throw new ConfigError('E2E_TEST_AUTH_SECRET must be at least 16 characters');
+	return secret;
+}
+
 function readSessionKey(value: string | undefined): Buffer {
 	const encoded = readRequired(value, 'SESSION_KEY');
 	const key = /^[0-9a-f]{64}$/i.test(encoded)
@@ -127,6 +141,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {
 		r2Endpoint: readR2Endpoint(env.R2_ENDPOINT),
 		r2Bucket: readRequired(env.R2_BUCKET, 'R2_BUCKET'),
 		r2AccessKeyId: readRequired(env.R2_ACCESS_KEY_ID, 'R2_ACCESS_KEY_ID'),
-		r2SecretAccessKey: readRequired(env.R2_SECRET_ACCESS_KEY, 'R2_SECRET_ACCESS_KEY')
+		r2SecretAccessKey: readRequired(env.R2_SECRET_ACCESS_KEY, 'R2_SECRET_ACCESS_KEY'),
+		testAuthSecret: readTestAuthSecret(env.E2E_TEST_AUTH_SECRET)
 	};
 }

@@ -150,18 +150,30 @@
 		mutationError = null;
 		conflictNotice = null;
 		copyNotice = null;
+		autoRefreshKey = null;
 		void fetchStatus('entry');
 	});
 
 	// A fresh save moves `savedVersion` past the last fetched
 	// `currentVersion`: re-read so publish actions unblock without a manual
 	// retry. Reads only — the effect never writes `savedVersion`.
+	//
+	// One-shot guard (P22.5 review): each distinct (project, saved version,
+	// fetched divergence) key triggers at most one automatic background
+	// refetch. A server that keeps reporting the older version (replica lag,
+	// bug) can no longer turn this effect into an unthrottled request loop;
+	// a new save or a re-entry starts a new key. Plain let: deliberately
+	// non-reactive so recording the attempt never re-fires this effect.
+	let autoRefreshKey: string | null = null;
 	$effect(() => {
 		const known = savedVersion;
 		const fetched = status?.currentVersion;
 		if (known === null || fetched === undefined) return;
 		if (fetched === known) return;
 		if (!canFetch(projectId)) return;
+		const key = `${projectId}|${known}|${fetched}`;
+		if (key === autoRefreshKey) return;
+		autoRefreshKey = key;
 		void fetchStatus('background');
 	});
 

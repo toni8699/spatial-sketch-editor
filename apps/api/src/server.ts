@@ -29,7 +29,8 @@ export async function startServer(options: StartServerOptions = {}): Promise<Fas
 		editorOrigin: config.editorOrigin,
 		oidc,
 		sessionKey: config.sessionKey,
-		objectStore: options.objectStore ?? createR2ObjectStore(config)
+		objectStore: options.objectStore ?? createR2ObjectStore(config),
+		...(config.testAuthSecret ? { testAuth: { secret: config.testAuthSecret } } : {})
 	});
 	const closeOnce = installShutdownHandlers(app, options.processLike);
 

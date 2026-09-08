@@ -49,6 +49,13 @@ import {
 	readPublicReleaseAsset,
 	unpublishVersion
 } from './publication-persistence.js';
+import {
+	isValidTestAuthSecret,
+	readTestAuthBearer,
+	readTestAuthTarget,
+	resolveTestAuthUserId,
+	type TestAuthOptions
+} from './test-auth.js';
 import { validateProject } from '@portfolio/project-model';
 
 export type ApiAppOptions = {
@@ -59,6 +66,14 @@ export type ApiAppOptions = {
 	sessionKey?: Buffer;
 	objectStore?: ObjectStore;
 	logger?: FastifyServerOptions['logger'];
+	/**
+	 * Test-only authentication issuer. When present (and sessions are
+	 * enabled) a single `POST /test-auth/session` route is registered that
+	 * mints the canonical session for an allowlisted automation identity.
+	 * Absent by default — production construction never sets it, so the
+	 * route does not exist there (Fastify answers 404).
+	 */
+	testAuth?: TestAuthOptions;
 };
 
 const BODY_LIMIT_BYTES = 2 * 1024 * 1024;
@@ -73,6 +88,7 @@ export function createApp({
 	oidc,
 	sessionKey,
 	objectStore,
+	testAuth,
 	logger = true
 }: ApiAppOptions): FastifyInstance {
 	const safeLogger =
@@ -291,6 +307,28 @@ export function createApp({
 		if (sessionsEnabled) appSession(request).delete();
 		return reply.code(204).send();
 	});
+
+	// Test-only authentication seam. Structural isolation: this route exists
+	// only when the server was constructed with a test-auth secret and real
+	// sessions. Otherwise POSTs fall through to Fastify's default 404, so
+	// production has no login path here at all.
+	if (testAuth && testAuth.secret.length > 0 && sessionsEnabled) {
+		const testAuthSecret = testAuth.secret;
+		app.post('/test-auth/session', async (request, reply) => {
+			const secret = readTestAuthBearer(request.headers.authorization);
+			if (!isValidTestAuthSecret(secret, testAuthSecret)) return unauthorized(reply);
+			const target = readTestAuthTarget(request.body);
+			if (!target) return reply.code(400).send(errorBody('invalid_body', 'Expected a test user body'));
+			const userId = resolveTestAuthUserId(target.user);
+			if (!userId) return reply.code(400).send(errorBody('unknown_test_user', 'Unknown test user'));
+			// The canonical session creation path — identical to the OAuth
+			// callback below the external ceremony. Everything downstream
+			// (ownership, permission checks, persistence) sees a normal user.
+			appSession(request).regenerate();
+			appSession(request).set('userId', userId);
+			return reply.code(201).send({ authenticated: true, user: { id: userId } });
+		});
+	}
 
 	app.get('/projects', async (request, reply) => {
 		const userId = sessionUserId(request, sessionsEnabled);

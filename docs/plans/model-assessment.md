@@ -67,7 +67,7 @@ success percentages.
 | **P22.2** | 78 | Sol high | shipped — release persistence + API; migration 003, revision OCC with ABA + idempotent no-ops, R2 stream-verify, owner/anon matrix; 10 real-Postgres tests, full API suite 33 green |
 | **P22.3** | 74 | Sol medium | approved — public route cold bootstrap + chrome + bundle closure; escalate to high on isolation failure |
 | **P22.4** | 68 | Sol medium | approved — publish surface; dirty/stale/revision gates, switch-safety, axe |
-| **P22.5** | 64 | Sol medium | approved — hosted acceptance + closeout; verification-heavy, deferred P20 topology smoke rides here |
+| **P22.5** | 64 | Sol medium | approved — hosted acceptance + closeout; verification-heavy, deferred P20 topology smoke + publish-surface axe/keyboard sweep evidence ride here (P22.4 review fold-in); refetch one-shot guard already landed |
 
 Pre-P20 numbers still proposed/unscheduled (P13 stop-at-node, branch-rejoin
 experiment) are assessed when scheduled — no standing rows. P23+ entries are
