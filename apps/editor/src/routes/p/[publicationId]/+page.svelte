@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onDestroy, onMount } from 'svelte';
+	import { onDestroy, onMount, untrack } from 'svelte';
 	import { page } from '$app/state';
 	import { env } from '$env/dynamic/public';
 	import VisitorPreviewSurface from '$lib/visitor/VisitorPreviewSurface.svelte';
@@ -95,7 +95,7 @@
 		const id = publicationId;
 		void retryToken;
 		activeController?.abort();
-		disposeBundle();
+		untrack(disposeBundle);
 		status = 'loading';
 		errorMessage = null;
 		const controller = new AbortController();

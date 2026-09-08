@@ -436,4 +436,13 @@ describe('P22.3 public closure', () => {
 		// in both preview and public mode (public adds no separate path).
 		expect(surface).toContain('visitorState.reducedMotion = reducedMotion');
 	});
+
+	it('does not track bundle disposal in the load effect', () => {
+		const testDir = dirname(fileURLToPath(import.meta.url));
+		const route = readFileSync(
+			resolve(testDir, '../../../src/routes/p/[publicationId]/+page.svelte'),
+			'utf8'
+		);
+		expect(route).toContain('untrack(disposeBundle)');
+	});
 });
