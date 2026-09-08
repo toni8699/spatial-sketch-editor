@@ -199,13 +199,12 @@ export async function fetchPublicReleaseBytes(input: {
 	const bytesByUri = new Map<string, { bytes: Uint8Array; mime: string }>();
 	// Few textures per release; parallel fetch keeps cold boot fast. The
 	// shared AbortSignal cancels the remainder on route switch/unmount.
-	const settled = await Promise.all(
+	await Promise.all(
 		assets.map(async (asset) => {
 			const bytes = await fetchOneAssetBytes(fetchImpl, origin, publicationId, version, asset, input.signal);
 			bytesByUri.set(`/project-assets/${asset.assetId}`, { bytes, mime: asset.mime });
 		})
 	);
-	void settled;
 	return bytesByUri;
 }
 

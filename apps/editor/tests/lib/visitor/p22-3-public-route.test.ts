@@ -14,6 +14,11 @@ import {
 	isForbiddenPreviewSurfaceModule,
 	validatePreviewSurfaceGraph
 } from '$lib/visitor/preview-surface-boundary';
+import {
+	createVisitorRuntimeState,
+	visitorMainFlowNodeIds,
+	visitorStartNodeId
+} from '$lib/visitor/visitor-runtime-state.svelte';
 
 const PUB_A = '11111111-1111-4111-8111-111111111111';
 const PUB_B = '22222222-2222-4222-8222-222222222222';
@@ -249,6 +254,114 @@ describe('P22.3 public release client', () => {
 		).rejects.toMatchObject({ code: 'asset-failed' });
 		expect(PublicVisitorError).toBeDefined();
 	});
+
+	it('loads a connected two-node Sequence tour through the public loader (fixture 4)', async () => {
+		const project = createEmptyProject({ id: 'project:public-tour', name: 'Tour Public' });
+		const document = {
+			...project,
+			layout: {
+				...project.layout,
+				floors: [
+					{
+						id: 'floor-ground',
+						name: 'Ground Floor',
+						elevation: 0,
+						height: 3,
+						rooms: [
+							{
+								id: 'room-a',
+								name: 'Room A',
+								frame: { origin: [0, 0] as [number, number], yaw: 0 },
+								boundary: {
+									closed: true as const,
+									segments: [
+										{ id: 'room-a:wall:0', kind: 'line' as const, start: [0, 0] as [number, number], end: [6, 0] as [number, number] },
+										{ id: 'room-a:wall:1', kind: 'line' as const, start: [6, 0] as [number, number], end: [6, 4] as [number, number] },
+										{ id: 'room-a:wall:2', kind: 'line' as const, start: [6, 4] as [number, number], end: [0, 4] as [number, number] },
+										{ id: 'room-a:wall:3', kind: 'line' as const, start: [0, 4] as [number, number], end: [0, 0] as [number, number] }
+									]
+								},
+								wallThickness: 0.16,
+								floorThickness: 0.1,
+								ceilingThickness: 0.1,
+								openings: []
+							}
+						]
+					}
+				]
+			},
+			scene: {
+				...project.scene,
+				navigationNodes: [
+					{
+						id: 'tour-a',
+						roomId: 'room-a',
+						label: 'Tour A',
+						position: [1, 1.65, 1],
+						cameraTarget: [1, 1.25, -2],
+						fov: 54,
+						connectedNodeIds: ['tour-b'],
+						nextNodeId: 'tour-b'
+					},
+					{
+						id: 'tour-b',
+						roomId: 'room-a',
+						label: 'Tour B',
+						position: [4, 1.65, 3],
+						cameraTarget: [4, 1.25, 0],
+						fov: 54,
+						connectedNodeIds: ['tour-a'],
+						previousNodeId: 'tour-a',
+						holdSeconds: 1.5
+					}
+				],
+				connections: [
+					{
+						id: 'tour-a-b',
+						fromNodeId: 'tour-a',
+						toNodeId: 'tour-b',
+						clearance: 0.35,
+						positionPath: { kind: 'auto-bezier', anchors: [] }
+					}
+				]
+			}
+		};
+		const fetchImpl = vi.fn(async () => jsonResponse(releasePayload(document)));
+		const { bundle } = await loadPublicReleaseBundle({
+			publicationId: PUB_A,
+			apiOrigin: 'https://api.test',
+			fetchImpl
+		});
+		try {
+			expect(bundle.graph.navigationNodes.map((node) => node.id)).toEqual(['tour-a', 'tour-b']);
+			expect(bundle.graph.connections.map((connection) => connection.id)).toEqual(['tour-a-b']);
+			// Sequence order survives the public loader; entry is the tour head.
+			expect(visitorMainFlowNodeIds(bundle.graph)).toEqual(['tour-a', 'tour-b']);
+			expect(visitorStartNodeId(bundle.graph)).toBe('tour-a');
+			// View key survives the public loader.
+			expect(bundle.graph.nodeById.get('tour-b')?.holdSeconds).toBe(1.5);
+		} finally {
+			bundle.dispose();
+		}
+	});
+
+	it('keeps reduced-motion behavior on the public runtime state', async () => {
+		const project = createEmptyProject({ id: 'project:public-rm', name: 'Reduced Motion' });
+		const fetchImpl = vi.fn(async () => jsonResponse(releasePayload(project)));
+		const { bundle } = await loadPublicReleaseBundle({
+			publicationId: PUB_A,
+			apiOrigin: 'https://api.test',
+			fetchImpl
+		});
+		try {
+			const visitor = createVisitorRuntimeState(bundle.graph, visitorStartNodeId(bundle.graph));
+			visitor.reducedMotion = true;
+			expect(visitor.reducedMotion).toBe(true);
+			expect(visitor.activeNodeId).toBe('');
+		} finally {
+			bundle.dispose();
+		}
+	});
 });
 
 describe('P22.3 public closure', () => {
@@ -303,5 +416,24 @@ describe('P22.3 public closure', () => {
 		expect(result.ok).toBe(false);
 		expect(result.forbidden).toHaveLength(1);
 		expect(result.forbidden[0]!.id).toBe(forbidden);
+	});
+
+	it('wires reduced motion from matchMedia to the public surface (no component harness in node env)', () => {
+		const testDir = dirname(fileURLToPath(import.meta.url));
+		const route = readFileSync(
+			resolve(testDir, '../../../src/routes/p/[publicationId]/+page.svelte'),
+			'utf8'
+		);
+		// Route observes the OS setting, forwards it, and narrates it.
+		expect(route).toContain('prefers-reduced-motion');
+		expect(route).toContain('{reducedMotion}');
+		expect(route).toContain('Reduced motion is on');
+		const surface = readFileSync(
+			resolve(testDir, '../../../src/lib/visitor/VisitorPreviewSurface.svelte'),
+			'utf8'
+		);
+		// The shared surface installs the flag on the visitor runtime state
+		// in both preview and public mode (public adds no separate path).
+		expect(surface).toContain('visitorState.reducedMotion = reducedMotion');
 	});
 });
