@@ -14,9 +14,11 @@ export, and renders through P22's published visitor runtime.
 
 P23 delivers the minimum Build vocabulary promised by the roadmap: numeric
 placement/dimensions, stronger snapping, alignment, better openings,
-duplicate/repeat and simple reusable architectural primitives. It is a bounded
-authoring slice, not the whole Layout Depth family. P24's minimum Stage set and
-then P25's narrow Experience foundation may proceed after this acceptance gate.
+duplicate/repeat, simple reusable architectural primitives, and a bounded
+architectural-drafting visual pass so the Plan surface clearly communicates the
+new precision. It is a bounded authoring slice, not the whole Layout Depth
+family. P24's minimum Stage set and then P25's narrow Experience foundation may
+proceed after this acceptance gate.
 
 Excluded: stairs/railings, curved-wall tooling expansion, profile/extrude,
 sweep/revolve, roof tools, a general constraint solver, mesh editing, linked
@@ -41,6 +43,7 @@ accepted behavior rather than rebuilding features already present.
 | `layout-preview-state.svelte.ts` | Existing validated mutators, derived bundle, install/commit and snapshots; no new parallel store |
 | `layout-mutation-runner.ts`, `layout-transaction.ts`, editor store | Existing begin/commit/cancel and one chronological tagged history stack |
 | `layout-interaction.ts`, `layout-plan-transform.ts`, `LayoutPlanViewport.svelte` | Plan gestures, snap toggles, active authority, selection reconciliation and cancellation |
+| `PlanSvg.svelte`, Plan render model/chrome | Existing SVG Plan presentation; P23 visual polish must stay derived/presentation-only |
 | `EditorInspector.svelte`, `LayoutDraftToolbar.svelte`, `app/PlanWorkspace.svelte` | Existing numeric object/opening controls and Layout authoring UI |
 | `lib/editor/gizmo/layout-gizmo-candidate.ts` | Existing 3D object candidate path; preserve semantic parity with numeric edits |
 | `layout-geometry-objects`, `layout-portals`, Plan render model | Rotation-aware bounds, existing opening/portal semantics and shared compiled output |
@@ -67,6 +70,7 @@ Highest-value precedents for this slice:
 | Whole-candidate wall edits | `openPlan3D` `wallEditing.ts` + tests | Study plan → validate → apply atomically and adversarial fixtures; do not adopt its renderer/store architecture |
 | Snap grammar / preview | LibreCAD `rs_snapper.cpp` + preview actions | Study endpoint/midpoint/intersection/orthogonal behavior and preview/commit UX; GPL study only |
 | Architectural wall/opening semantics | Sweet Home 3D Plan/Wall controllers + models | Study direct dimensions, wall-relative openings and grouped edits; GPL study only |
+| Architectural Plan visual language | LibreCAD, Sweet Home 3D and openPlan3D Plan surfaces | Study wall/opening/dimension/grid hierarchy and selection feedback; reproduce concepts through Museum's `PlanRenderModel` + SVG rather than importing their renderer architecture |
 | Wall joins | Blueprint3D wall/corner/half-edge model | Study join concepts; reject Three/render ownership coupling |
 | Human + future-agent semantic edits | KittyCAD/Zoo `modifyAst` + operations | Study typed semantic operations shared by UI/tests/agents; do not create a universal P23 command bus |
 | Robust geometry classification | `robust-predicates` | Permitted focused dependency only if P23 degeneracy/intersection fixtures prove current math insufficient |
@@ -274,6 +278,61 @@ Use existing native number inputs and toolbar/Inspector placement. No preset
 editor, library service, dependency or metadata schema is needed. Plan, 3D and
 the published runtime consume the exact same objects through the compiler.
 
+### P23.6 — Architectural drafting visual pass
+
+After the semantic CAD behaviors above are stable, make Scene → Plan → Layout
+read like a deliberate architectural drafting surface rather than a generic SVG
+editor. This increment is **presentation/interaction projection only**. It does
+not add durable Layout fields, a second Plan geometry model, a new selection
+system, or consumer-owned geometry. `PlanRenderModel`/compiled query data remain
+the source and `PlanSvg.svelte`/existing Plan chrome remain the renderer.
+
+The visual language should make authored hierarchy and current interaction state
+obvious at normal working zooms:
+
+- **Walls:** strengthen the authored wall/room boundary hierarchy; selected and
+  hovered walls become unmistakable without changing hit authority or geometry.
+  Avoid decorative centerlines that imply a second editable wall representation.
+- **Rooms:** use a restrained room fill/boundary hierarchy and the existing room
+  name where legible. Selected-room emphasis must not overpower wall/opening
+  editing. Room labels are derived presentation, never persisted layout text.
+- **Openings:** doors/windows read as intentional gaps/symbols in the wall, with
+  selected-only body/width handles matching P23.3. Do not invent door swing,
+  hinge or handedness graphics until those semantics exist in authored data.
+- **Dimensions:** selected straight-wall length and rectangular-room dimensions
+  use a consistent architectural dimension treatment: extension lines/ticks,
+  concise meter labels and edit affordance where the value is editable. Avoid a
+  persistent annotation/documentation system; nonselected dimensions may be
+  suppressed when density would obscure geometry.
+- **Snapping/guides:** endpoint, midpoint, intersection, nearest-span and
+  orthogonal winners receive distinct but compact markers/guide language. The
+  marker describes the semantic winner visually; it does not become selection.
+- **Objects:** Layout footprints keep clear authored/selected/hover hierarchy.
+  Passive Scene footprints visible in Layout remain quieter than Layout-owned
+  editable objects and never gain Layout hit authority.
+- **Grid:** preserve the configured metric step while improving major/minor
+  hierarchy and zoom readability. Visual density may adapt to zoom, but authored
+  snap step and world coordinates do not change with the drawing treatment.
+- **Invalid/preview states:** invalid wall/opening candidates, direct-manipulation
+  previews and snap/alignment previews must be visually distinguishable from
+  committed authored geometry without mutating documents.
+
+Reuse existing P21 theme tokens and Plan paper identity. Do not introduce a new
+CAD theme, hard-coded per-theme palettes, gradients/shadows for decoration, or a
+second visual system. Prefer structural hierarchy through stroke weight, opacity,
+pattern/dash and existing semantic tokens. Maintain keyboard focus visibility and
+contrast across all shipped editor themes.
+
+Keep label/dimension placement bounded: simple offset/collision avoidance is fine,
+but do not build a general annotation-layout solver in P23. If labels conflict in
+a dense drawing, selection/context priority wins and lower-priority presentation
+may hide rather than rewriting geometry or adding persistent annotation state.
+
+Research precedent: inspect LibreCAD, Sweet Home 3D and openPlan3D for drafting
+hierarchy, dimensions, opening readability and snap feedback. Reproduce only the
+useful visual grammar through Museum's existing SVG/render-model architecture;
+do not transplant their Canvas/controller/render ownership.
+
 ## UI, state and lifetime
 
 Keep Scene → Plan → Layout as the architectural authoring surface. Arrange and
@@ -283,10 +342,11 @@ selection/transform remains available, but direct wall/anchor 3D picking and ful
 3D drafting are not prerequisites for this Plan-led slice.
 
 New state is transient input drafts, snap step/winner, alignment reference,
-opening direct-manipulation preview and repeat/preset preview. No document schema
-change, saved constraint graph, new history store or backend dependency. All new
-durable results use existing fields. Both mounted Plan workspaces must retain
-their hidden/inert boundaries.
+opening direct-manipulation preview, repeat/preset preview and derived visual
+projection state. No document schema change, saved constraint graph, persistent
+dimension entity, new history store or backend dependency. All new durable
+results use existing fields. Both mounted Plan workspaces must retain their
+hidden/inert boundaries.
 
 Begin gestures from an immutable baseline. Escape, pointer cancellation, target
 deletion, project change and leaving the owning surface cancel pending edits and
@@ -315,10 +375,12 @@ bounded missing capability earns them.
 
 ## Acceptance and sequencing
 
-Implement P23.1 → P23.2 → P23.3 → P23.4 → P23.5, then P23.6 integration/closeout.
-For each capability, demonstrate a headless call over a plain document with
-explicit target IDs, then its UI adapter. Existing helpers count as headless
-operations; no transport or command registry is required.
+Implement P23.1 → P23.2 → P23.3 → P23.4 → P23.5 → P23.6, then P23.7
+integration/closeout. For each semantic capability, demonstrate a headless call
+over a plain document with explicit target IDs, then its UI adapter. Existing
+helpers count as headless operations; no transport or command registry is
+required. P23.6 is rendering/presentation acceptance and must prove it introduces
+no authored document or history changes.
 
 | Increment | Exact focused acceptance |
 |---|---|
@@ -327,25 +389,32 @@ operations; no transport or command registry is required.
 | P23.3 | Center and end-clearance yield exact offsets; straight-wall opening body drag and width handles preserve segment/height/sill/profile, commit once, and cancel cleanly; endpoint/overlap/vertical limits reject atomically; profile survives round-trip; explicit valid door relation survives codec/portal derivation; invalid target/window relation rejects; wall shrink cannot leave an invalid opening |
 | P23.4 | N copies have unique IDs, exact offsets and correct internal remaps; owned objects follow copied room; no Scene/camera records copied or modified; linked-door/profile restrictions explained; invalid final copy rolls back all; undo/redo restores IDs and entire batch |
 | P23.5 | Column/Platform/Plinth presets compile as their ordinary shapes; dimension edits and cancellation use existing paths; floor placement accounts for elevation and object center; export/import preserves editable values |
-| P23.6 | Degeneracy fixtures cover near-collinear intersections, nearly coincident endpoints, zero/tiny wall length, endpoint intersection, deterministic snap ties and opening-invalidating wall resize; end-to-end author/save/preview/publish checks, regression/bundle gates and contract updates pass |
+| P23.6 | Wall/room/opening/object hierarchy is readable across shipped themes and representative zooms; selected/hover/preview/invalid states are distinct; selected wall/room dimensions and snap markers remain legible without persistent annotation state; passive Scene footprints stay visually subordinate and non-authoritative; changing visual density/zoom does not change snap coordinates, compiled geometry, document JSON or history |
+| P23.7 | Degeneracy fixtures cover near-collinear intersections, nearly coincident endpoints, zero/tiny wall length, endpoint intersection, deterministic snap ties and opening-invalidating wall resize; end-to-end author/save/preview/publish checks, regression/bundle gates and contract updates pass |
 
 Tests belong in existing layout/editor suites. Cover candidate validation and
 the transaction adapter, including commit failure and stale selection; do not
 substitute duplicated UI math for the headless test. Use current geometry golden/
 parity fixtures to prove Plan bounds, 3D geometry and visitor compilation agree.
-Do not create a new test framework or broad benchmark project. Use a bounded
-50-copy fixture to catch nonfinite geometry, ID collisions and excessive repeated
-compilation; add performance machinery only on a demonstrated regression.
+Add focused render-model/component assertions for P23.6 where stable semantic
+classes/attributes are appropriate; do not snapshot raw SVG markup or pixels as
+the only correctness gate. Do not create a new test framework or broad benchmark
+project. Use a bounded 50-copy fixture to catch nonfinite geometry, ID collisions
+and excessive repeated compilation; add performance machinery only on a
+demonstrated regression.
 
 Manual integration fixture: create a rotated 6 m × 4 m room, set a 0.1 m grid,
 set one straight wall to an exact requested length, place a column and platform,
 align one object to bounds and another to a straight wall, add a centered 0.9 m
 door, drag it along the wall, resize it with a width handle, add a window with a
 sill, repeat three columns, duplicate the unlinked room, and edit one copy
-independently. Check Plan/3D, Undo/Redo, project switching and Preview return.
-Save/Load and portable export/import retain dimensions, IDs, ownership and
-opening relations. Publish through P22 and inspect in a fresh unauthenticated
-browser; later Layout edits leave the old publication unchanged until Update.
+independently. At 50%, 100% and 200% Plan zoom, inspect wall/room/opening hierarchy,
+dimensions, grid density, snap markers, selected/hover/preview states and passive
+Scene-footprint subordination. Check Plan/3D, Undo/Redo, project switching and
+Preview return. Save/Load and portable export/import retain dimensions, IDs,
+ownership and opening relations. Publish through P22 and inspect in a fresh
+unauthenticated browser; later Layout edits leave the old publication unchanged
+until Update.
 
 Final checks: focused suites, full `npm test -- --run`, `npm run check`, shared
 package checks, `npm run build`, existing visitor/preview/public-route bundle
@@ -385,22 +454,27 @@ Depth or P25's narrow Experience proof.
 
 Keep `LayoutDocument` → `compileLayoutGeometry()` → Plan + 3D + P22 runtime as
 the only geometry path. Snap/query helpers consume canonical compiled query
-records rather than rebuilding Plan geometry. No generated endpoints are
-persisted; no Layout helpers enter visitor chunks; frozen `/museum` remains
-`rooms.ts`/Chopin-owned under its existing gates. One camera graph/motion, no
-additional selection/history system.
+records rather than rebuilding Plan geometry. P23 visual drafting work consumes
+`PlanRenderModel`/compiled semantic data and may add derived presentation only;
+it must not reconstruct or persist a second geometric representation. No
+generated endpoints are persisted; no Layout helpers enter visitor chunks;
+frozen `/museum` remains `rooms.ts`/Chopin-owned under its existing gates. One
+camera graph/motion, no additional selection/history system.
 
 If straight-wall sizing, rectangle sizing, opening direct manipulation or
 duplication uncovers cross-domain mutation requirements, keep the operation
 bounded or reject that input with a reason; do not split a supposed atomic edit
 into separate Layout/Scene commits. If richer presets need new document kinds,
-ship the existing-shape presets and register that depth later. Partial increments
-can land independently, but P23 ships only when the minimum capabilities above
-pass. Optional depth tails never become a hidden P25 gate.
+ship the existing-shape presets and register that depth later. If the visual pass
+needs semantics that are not currently authored (for example door handedness or
+persistent dimension annotations), omit that visual affordance rather than
+smuggling new truth into presentation state. Partial increments can land
+independently, but P23 ships only when the minimum capabilities above pass.
+Optional depth tails never become a hidden P25 gate.
 
-Rollback removes the new UI/operation entry points while retaining canonical
-documents; ordinary shapes/openings need no reverse migration. On ship update
-`components/persistence.md`, relevant placement/shell contracts,
+Rollback removes the new UI/operation/presentation entry points while retaining
+canonical documents; ordinary shapes/openings need no reverse migration. On ship
+update `components/persistence.md`, relevant placement/shell contracts,
 `Design-specs/Shell-scene-workspaces.md` and ownership docs only where behavior
 changed. Archive this plan, collapse the tracker row, and advance CURRENT to the
 P24 minimum Scene/Staging Depth brief. Record measured limitations in that
