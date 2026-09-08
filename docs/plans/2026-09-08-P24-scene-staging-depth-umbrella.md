@@ -2,8 +2,7 @@
 
 **Created:** 2026-09-08 · **Status:** proposed (tracker authoritative)
 **Depends on:** P23 minimum useful Build set complete.
-**Detail status:** umbrella boundary only. P24A/P24B implementation briefs are TBD
-until the owner supplies the dedicated research results described below.
+**Detail status:** P24A Phase 2 research reviewed and detailed annex registered; P24B remains TBD until Phase 4 Scene / 3D-staging research is supplied and reviewed.
 
 ## Outcome
 
@@ -33,11 +32,13 @@ The two subtracks solve different product problems and are informed by different
 research:
 
 - **P24A** asks: *What reusable 3D content can enter the product safely and in a
-  normalized form?* It is primarily informed by the Phase 2 exact asset/pipeline
-  harvest.
+  normalized form?* Phase 2 now answers this with an exact acquisition manifest,
+  source ranking, materials/HDRIs, PlanProxy fixtures, pipeline references and
+  reject list. Its detailed contract is registered in
+  [the P24A annex](2026-09-08-P24A-asset-supply-canonical-ingest-annex.md).
 - **P24B** asks: *What semantic Scene operations and editor interactions make that
-  content genuinely easy to stage and revise?* It is primarily informed by the
-  Phase 4 Scene/3D-staging capability harvest.
+  content genuinely easy to stage and revise?* It remains primarily informed by
+  the future Phase 4 Scene/3D-staging capability harvest.
 
 The split is not a document-ownership split like P23 Layout vs P24 Scene. Both
 subtracks ultimately support one Stage vocabulary and must converge on the
@@ -46,47 +47,50 @@ render path and P22 visitor-safe publish boundary.
 
 ## P24A — Asset Supply + Canonical Ingest
 
-**Research input:** Phase 2 exact repository / asset harvest. Detailed scope TBD
-until that research is supplied and reviewed against the live repository.
+**Research reviewed:**
 
-P24A owns the **supply and normalization side** of staging. Directionally it may
-cover:
+- `docs/Deep-research/P24-3D-assets-staging/museum-editor-phase2-exact-asset-harvest-P24.md`
+- `docs/Deep-research/P24-3D-assets-staging/museum-editor-phase2-acquisition-manifest.json`
 
-- a bounded curated starter set of reusable 3D models;
-- reusable PBR material/texture assets;
-- a bounded HDRI/environment starter set;
-- source adapters/import paths where justified;
-- canonical asset records and immutable/revisioned asset identity where required;
-- normalized scale, pivot/orientation, dimensions and placement metadata;
-- thumbnails/previews and web-ready derivatives;
-- optimization/validation such as canonical GLB, Meshopt/KTX2 or equivalent only
-  where the research and current pipeline justify them;
-- provenance, creator, source, license and attribution metadata;
-- Plan representation/footprint metadata where an accepted Scene asset is Plan-
-  eligible;
-- one accepted path from built-in/upload/provider source into the same project
-  asset registry and placement flow.
+**Detailed contract:**
+[2026-09-08-P24A-asset-supply-canonical-ingest-annex.md](2026-09-08-P24A-asset-supply-canonical-ingest-annex.md)
 
-### P24A does not mean “build a giant asset store”
+P24A owns the **supply, normalization, provenance and canonical acceptance side**
+of staging. The accepted Phase 2 direction is:
 
-The first gate proves the ingest/normalization/reuse system with enough assets to
-stage representative projects. It does **not** wait for hundreds of models, a
-marketplace, community catalogue, user-wide My Assets, every provider adapter, or
-an exhaustive material/HDRI library.
+- Wave 1 acquisition source classes: Poly Haven, Kenney Furniture Kit and a small
+  attribution-aware Sweet Home 3D subset;
+- coherent Poly Haven + ambientCG material supply and bounded Poly Haven HDRIs;
+- deterministic glTF normalization using the existing glTF Transform seam first,
+  with validator/meshoptimizer/gltfpack work added only where measured useful;
+- PlanProxy generation/benchmarking that resolves into the existing
+  `AssetFootprint` contract rather than creating another Plan truth;
+- a **10–12 asset cross-source proof set** as the P24A minimum evidence, while the
+  research JSON's 32-object Wave 1 remains repeatable acquisition backlog;
+- explicit acquisition/provenance and rights gates before an asset can become
+  Approved;
+- an explicit canonical model registry/runtime path because P20/P22 do not yet
+  provide generic uploaded GLB ingestion;
+- one accepted asset-resolution model across Built-in / Upload / Online sources.
 
-A larger catalogue remains an evidence-led asset-library backlog after the P24
-minimum. Asset count is not itself a P24 acceptance criterion.
+P24A does **not** mean “build a giant asset store.” It does not wait for hundreds
+of models, marketplace/community catalogue, user-wide My Assets, every provider
+adapter or exhaustive material/HDRI coverage.
 
 ### P24A ownership boundary
 
-Assets belong to the project-level asset registry, not to a new Scene-only store.
-Once accepted, an asset is consumed through normal Scene operations regardless of
-whether it came from Built-in, Upload or Online. Provider/source identity may
-survive as provenance but never becomes a second Scene-object system.
+Assets belong to the project-level asset registry/catalogue boundary, not to a new
+Scene-only store. Once accepted, an asset is consumed through normal Scene
+operations regardless of source. Provider/source identity may survive as
+provenance but never becomes a second Scene-object system.
 
-P24A may supply materials, textures and HDRIs as reusable project assets, but it
-does not by itself define the complete user-facing material or lighting editor.
-Those authoring semantics belong to P24B.
+Acquisition candidates/revisions may carry source hashes, provider IDs, rights
+confidence, conversion recipes and review state. Those fields do not automatically
+belong in `SceneDocument`.
+
+P24A may supply material, texture and HDRI bytes plus reusable definitions, but it
+does not define the complete user-facing material or lighting editor. Those
+authoring semantics belong to P24B.
 
 ## P24B — Rich 3D Scene / Staging Editor
 
@@ -137,7 +141,7 @@ The split is intentionally:
 
 ```text
 P24A
-material / texture / HDRI bytes + metadata + normalized reusable asset
+material / texture / HDRI bytes + metadata + normalized reusable definition
         ↓
 P24B
 assign / edit / override / light / environment semantic Scene operations
@@ -151,21 +155,14 @@ P24A can therefore continue expanding the catalogue after P24B begins. P24B must
 not depend on harvesting the entire Phase 2 inventory before useful staging can
 ship.
 
-## Research gates before detailed briefs
+## Research gates
 
-### Before P24A detailed planning
+### P24A
 
-Review Phase 2 against at least:
-
-- the current P20 project asset registry/R2 contracts;
-- P22 published asset resolution and visitor-runtime boundaries;
-- current asset manifest/codec/placement seams;
-- Scene Plan footprint/PlanProxy behavior;
-- legal/provenance requirements for any bundled or provider-imported content.
-
-The detailed brief should select a **small Wave 1** starter inventory and the
-minimum ingest/normalization pipeline needed for it. Research recommendations are
-not dependencies until verified against current code and upstream licenses.
+**Broad research gate closed.** Phase 2 has been reviewed and the linked P24A
+annex is now the planning source. Implementation agents still verify live code
+seams, pinned upstream versions and license evidence before each increment; that
+is implementation due diligence, not another broad source-discovery pass.
 
 ### Before P24B detailed planning
 
@@ -189,13 +186,15 @@ command bus or a second transform/material/light state model.
 P25 Experience Foundation should wait for the **useful minimum from both P24A and
 P24B**, not their optional depth tails.
 
-Directionally that means enough P24A to supply/resolve representative reusable
-assets/materials/environments, and enough P24B to place/revise those assets,
-materially differentiate scenes, author core lighting/environment intent and
-publish the result through normal project truth.
+P24A's own minimum is now pinned in its annex: provenance/rights contract,
+repeatable normalization, the bounded cross-source proof set, canonical
+`AssetFootprint` output for eligible assets, model Scene/Save/Load/visitor
+resolution, and bounded material/HDRI supply. The remaining Wave 1 catalogue is
+not a P25 blocker.
 
-The exact acceptance gate is TBD after Phase 2 + Phase 4 review. It must be small
-enough that P24 does not become “finish Blender before Experience.”
+The combined P24 acceptance gate remains final-TBD until Phase 4/P24B review. It
+must stay small enough that P24 does not become “finish Blender before
+Experience.”
 
 Optional tails such as a much larger catalogue, marketplace/store workflows,
 advanced grouping/components, broad surface-placement tooling, shader graphs, UV
@@ -221,23 +220,25 @@ Both P24A and P24B must preserve:
 
 ## Planning / registration rule
 
-This umbrella is intentionally **not implementation-ready**. Do not turn the
-above directional bullets into tickets merely because they are listed here.
+P24 remains one registered roadmap tier. `P24A` and `P24B` remain internal scope
+labels rather than tracker numbers.
 
-After the owner supplies research:
+Current detail state:
 
-1. review Phase 2 and amend/register the detailed P24A contract inside this
-   umbrella or a linked annex;
-2. review Phase 4 and amend/register the detailed P24B contract inside this
-   umbrella or a linked annex;
+```text
+P24A — Phase 2 research reviewed; detailed annex registered; not implemented
+P24B — umbrella direction only; detailed contract awaits Phase 4 research
+```
+
+Next planning steps:
+
+1. when P24A becomes active, inspect the exact current asset/registry/runtime code
+   before turning annex increments into implementation tickets;
+2. review Phase 4 and register the detailed P24B contract;
 3. reconcile overlap, especially materials, HDRIs/environments, Plan footprints,
    asset replacement and semantic agent operations;
 4. pin whether P24A and P24B execute sequentially or partially in parallel based
-   on the actual implementation dependencies discovered;
+   on actual implementation dependencies;
 5. define the combined P24 minimum acceptance gate that unlocks P25;
-6. keep all optional catalogue/DCC depth as separately registered evidence-led
+6. keep optional catalogue/DCC depth as separately registered evidence-led
    follow-up work.
-
-Until those research reviews happen, the tracker owns only the P24 umbrella
-status and dependency. `P24A` / `P24B` are scope partitions, not claims that
-detailed implementation plans have been approved.
