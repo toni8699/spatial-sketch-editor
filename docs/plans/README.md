@@ -60,7 +60,8 @@ Policy rules:
 | P13 | Sequence stop-at-node playback | proposed — nice-to-have, unscheduled (owner 2026-08-27) | P12 | [2026-08-27-P13-stop-at-node-playback.md](2026-08-27-P13-stop-at-node-playback.md) |
 | P22 | Basic Publish + visitor runtime | approved — P21 complete, ready P22.1→P22.5 sequential (owner 2026-09-08) | P21 | [plan](2026-09-07-P22-basic-publish-visitor-runtime.md) |
 | P23 | Layout Depth — minimum useful Build set | proposed — brief written assuming P22 complete (owner 2026-09-07) | P22 | [plan](2026-09-07-P23-layout-depth-minimum-build.md) |
-| P24 | Scene / Staging Depth umbrella — P24A asset supply + P24B rich 3D staging | proposed — P24A Phase 2 reviewed + annex registered; P24B detailed contract TBD Phase 4 research (owner 2026-09-08) | P23 | [plan](2026-09-08-P24-scene-staging-depth-umbrella.md) |
+| P24 | Scene / Staging Depth umbrella — P24A asset supply + P24B rich 3D staging | proposed — umbrella/research reconciliation; P24A Phase 2 reviewed + annex registered; P24B Phase 4 compact reviewed directionally, deeper code/reference studies required (owner 2026-09-08) | P23 | [plan](2026-09-08-P24-scene-staging-depth-umbrella.md) |
+| P25 | Experience Foundation umbrella | proposed — Phase 5 external capability research reviewed directionally; E0–E6 reconciliation required before implementation brief (owner 2026-09-08) | P24 | [plan](2026-09-08-P25-experience-foundation-umbrella.md) |
 | — | Branch rejoin — experiment, no schedule | proposed | P8 conceptually | [2026-08-21-branch-rejoin-experiment.md](2026-08-21-branch-rejoin-experiment.md) |
 | … | future work re-registers here | | | |
 
@@ -101,8 +102,11 @@ gate) now lives in the archived docs, not here.
   agent/reuse proof follows the first complete visitor-authoring slice. P24
   umbrella registered 2026-09-08 with internal P24A asset-supply/canonical-
   ingest and P24B rich-3D-staging subtracks. Phase 2 was reviewed 2026-09-08
-  and the detailed P24A annex is registered; P24B still awaits Phase 4
-  research. See Long-term roadmap.
+  and the detailed P24A annex is registered; Phase 4 compact research is now
+  reviewed directionally for P24B, with deeper code/reference studies still
+  required before its minimum freezes. P25 umbrella registered 2026-09-08
+  after Phase 5 external capability review; it remains research/reconciliation
+  only until E0–E6 close. See Long-term roadmap.
 - Deferred / non-blocking: P3B.7b (incl. the P3.4/P3.5 acceptance tail).
 - Proposed / unscheduled: P13, branch rejoin.
 - Shipped baseline: P12 + core P3B gate 2026-08-28; P14–P18 extraction slice;
@@ -179,38 +183,37 @@ conditional infrastructure):
 - **P24 — Scene / Staging Depth umbrella (registered, staged).** The umbrella
   is registered above and split internally into **P24A — Asset Supply +
   Canonical Ingest** and **P24B — Rich 3D Scene / Staging Editor**. Phase 2
-  research is now reviewed and P24A has a linked detailed annex. Its minimum
+  research is reviewed and P24A has a linked detailed annex. Its minimum
   proves a rights/provenance gate, deterministic canonical ingest, a bounded
   10–12 asset cross-source proof set (Poly Haven + Kenney + Sweet Home 3D),
   PlanProxy output into the existing `AssetFootprint`, an explicit canonical
   model Scene/Save/Load/P22 visitor-resolution path, and bounded material/HDRI
   supply. The research JSON's 32-object Wave 1 remains acquisition backlog,
-  not a P24/P25 gate. P24B is still informed primarily by Phase 4 research and
-  owns the authoring side: asset place/replace, strong transforms, duplicate,
-  multi-select where justified, align/distribute, floor/wall/support-aware
-  placement, material assignment/editing, authored Scene lighting,
-  environment/HDRI authoring, one useful lighting/environment setup, and
-  bounded 3D-editor polish. P24B's exact minimum and combined P24 sequencing /
-  acceptance remain **TBD until Phase 4 review**. Material/texture/HDRI assets
-  originate in P24A while assignment/editing/light/environment operations
-  belong to P24B. Both preserve one project asset registry, `SceneDocument`
-  ownership, room-local transforms, canonical selection/history, existing
-  gizmo/transform authority, Threlte patterns and visitor/editor isolation.
-  P25 waits only for the accepted useful minimum from both subtracks, never
-  for catalogue/DCC depth tails. See [P24 umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md)
+  not a P24/P25 gate. P24B Phase 4 compact research is reviewed directionally
+  and now drives bounded B0–B6 maturity/reference studies rather than a copied
+  feature list. Its exact minimum and combined P24 sequencing/acceptance remain
+  **TBD until those current-code/reference studies close**. Material/texture/
+  HDRI assets originate in P24A while assignment/editing/light/environment
+  operations belong to P24B. Both preserve one project asset registry,
+  `SceneDocument` ownership, room-local transforms, canonical selection/history,
+  existing gizmo/transform authority, Threlte patterns and visitor/editor
+  isolation. P25 waits only for the accepted useful minimum from both subtracks,
+  never for catalogue/DCC depth tails. See [P24 umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md)
   and [P24A annex](2026-09-08-P24A-asset-supply-canonical-ingest-annex.md).
-- **P25 — Experience foundation (narrow, after P23/P24 minima).** Navigation
-  · Content · Interactions, referencing existing Spatial / camera / assets
-  work. Begins once the P23/P24 minimum useful slices exist, before their
-  optional depth tails: first prove one complete visitor journey
-  (destination + visitor navigation + contextual content + small semantic
-  trigger/action set, e.g. reach-camera → show info, click → show/hide,
-  click → link, nav item → spatial destination) with visitor-safe
-  motion/accessibility behavior — not a general app builder. Its `Event →
-  Target → Action` model composes existing project meaning rather than
-  compensating for missing Spatial capabilities. No schema now (see
-  Constraints). Direction only; the long-term Experience bullet below holds
-  the remaining detail.
+- **P25 — Experience Foundation umbrella (registered, research/reconciliation).**
+  Phase 5 external capability research is reviewed directionally. The leading
+  hypothesis is **Destination + reusable Content + bounded semantic Interaction**,
+  composed over existing Spatial/Camera/Assets meaning. The first guided journey
+  should preferentially reuse the existing Camera Sequence; the strongest minimum
+  event/action candidates are `Activate`, `DestinationReached`, `ShowContent`,
+  `NavigateTo` and `OpenUrl`. Exact persistence ownership, Destination target
+  semantics, repeated-Destination/occurrence behavior, Narration scope and schema
+  remain unfrozen. E0–E6 in the [P25 umbrella](2026-09-08-P25-experience-foundation-umbrella.md)
+  must reconcile live Camera/visitor behavior, Content/Interaction semantics,
+  accessibility, authoring UX, Preview/Publish and persistence/operations before
+  implementation tickets exist. P25 still begins after the accepted P23/P24
+  useful minima, before optional depth tails, and must prove one complete
+  visitor journey rather than a generic app-builder feature set.
 - **Bounded agent/reuse proof (after first complete visitor-authoring
   slice, before broad expansion).** Test whether a strong agent can inspect,
   semantically edit, stage, author camera/experience changes, validate,
@@ -259,38 +262,42 @@ conditional infrastructure):
   the visitor/editor isolation boundary), then minimum useful authoring
   slices split by document ownership (P23 Layout Depth minimum, P24 Scene /
   Staging minimum split internally into P24A asset supply/ingest + P24B rich
-  3D staging), the narrow Experience foundation (P25), a bounded agent/reuse
-  proof, then evidence-led depth tails and expansion (P26+). The design
-  track runs in parallel from Now. Auth UX/hardening and richer permissions
-  ride with the P26+ collaborative tier, not P19/P20.
+  3D staging), the registered P25 Experience research/reconciliation umbrella,
+  a bounded agent/reuse proof, then evidence-led depth tails and expansion
+  (P26+). The design track runs in parallel from Now. Auth UX/hardening and
+  richer permissions ride with the P26+ collaborative tier, not P19/P20.
 - **Medium-term product infrastructure** (possible direction, unscheduled):
   hosted project loading and published project versions ride with P22;
   portable project/export hardening, project asset management, and generic
   visitor/player extraction when genuinely needed.
 - **Long-term Experience work** (unscheduled beyond the P25 foundation):
-  Experience mode shell, `ExperienceDocument` design, visitor menu authoring,
-  destination bindings, contextual titles/info cards, visitor preferences,
-  reduced-motion behavior, the Experience asset picker, the developer runtime
-  SDK, headless runtime, and community/gallery surfaces. Experience is
-  composed of **Navigation · Content · Interactions**; Interactions are an
-  authoring lens within Experience (an `Event → Target → Action` semantic
+  Narration/transcripts, richer wayfinding, bounded first-visit state,
+  semantic hotspots where no existing Scene identity exists, attention/reveal
+  behaviors, deep-linked destinations, multiple tours/occurrence semantics,
+  derived visitor maps, reusable Experience templates/presets, localization,
+  analytics, richer visitor-state persistence, XR-specific behavior, developer
+  runtime SDK, headless runtime, and community/gallery surfaces. Experience
+  remains composed of **Navigation · Content · Interactions**; Interactions are
+  an authoring lens within Experience (an `Event → Target → Action` semantic
   model), never a separate mode — ratified 2026-08-31
   ([scope decision](../archive/plans/2026-08-31-scope-decision-experience-interaction-boundary.md)).
 
-Constraints: no Experience implementation tickets are created now, and
-Experience work must not displace persistence or Spatial completion.
-`ExperienceDocument` gets no codecs, migrations, or backend endpoints. P19 includes the first
-Google OIDC (Authorization Code + PKCE) + app-owned secure-session
-integration and single-user ownership required for Save/Load; broader auth
-UX/hardening and richer permissions remain later.
-P19 has no Experience schema and no R2.
+Constraints: no Experience implementation tickets are created merely by
+registering the P25 research umbrella, and Experience work must not displace
+persistence or Spatial completion. `ExperienceDocument` is now a P25
+architecture hypothesis to study, not a ratified schema: no codecs, migrations
+or backend endpoints exist until the E6 implementation-ready gate closes. P19
+includes the first Google OIDC (Authorization Code + PKCE) + app-owned
+secure-session integration and single-user ownership required for Save/Load;
+broader auth UX/hardening and richer permissions remain later. P19 has no
+Experience schema and no R2.
 
 P19–P22 stay raw parameterized SQL: the no-ORM pins in the P19/P20 plans are
 scope-limited to those tiers and are revisited only when code pressure on
 that surface justifies a typed layer — conditional infrastructure (owner
-decision 2026-09-05), never a numbered milestone. P21/P22 hold no
-Experience authoring or Experience schema; Experience schema remains
-unregistered until the P25 brief, and P25 may follow the accepted minimum
-P23/P24 slices without waiting for their optional depth tails. No
-Experience implementation tickets or codecs are created by roadmap direction
-alone.
+decision 2026-09-05), never a numbered milestone. P21/P22 hold no Experience
+authoring or Experience schema; P25 schema/persistence ownership remains
+unfrozen until the P25 E6 gate, and P25 may follow the accepted minimum P23/P24
+slices without waiting for their optional depth tails. No Experience
+implementation tickets or codecs are created by roadmap direction or external
+research alone.
