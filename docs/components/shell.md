@@ -1,7 +1,7 @@
 # Shell and workspaces
 
 **Read when:** app chrome, Scene/Camera switch, Layout mode, top bar, timeline frame, project menu.  
-**Last reviewed:** 2026-09-03 (P20.2 + P21+ shell doc reconciliation)
+**Last reviewed:** 2026-09-08 (P22 shipped — publish surface + public route below; pre-P21 map above retained until a P23 pass reconciles it)
 
 **Current implementation status:** the pre-P21 stacked Project Shell scaffold
 + `EditorAppBar` remains in the tree (2026-09-03).
@@ -121,3 +121,19 @@ project-level Visitor Preview
   rather than sharing one universal cross-workspace undo.
 - `Preview Scene → /museum` is a temporary pre-P21 behavior and is **not** the
   canonical target.
+
+## P22 deliverables (shipped 2026-09-08)
+
+- Author surface: `/project/:projectId/publish` in the existing project
+  session. Shows saved vs published version, revision-aware status, and one
+  clear action (Publish saved version / Update / Copy link / Open published
+  project / Unpublish). Dirty drafts block with Save-first; stale baselines
+  block with a cloud-changed explanation and never auto-replace local work.
+  Publish owns no selection and emits no scene/layout edits.
+- Public route: `/p/:publicationId`, outside the project layout (no
+  `ProjectShellHost`/`EditorApp`). Cold bootstrap keyed by public ID +
+  release version; loading / ready / not-found / failed states; public chrome
+  carries the released document `name`, zero-camera orbit help, keyboard
+  navigation and reduced-motion behavior; no draft banner, no Exit-to-editor.
+  Route load `$effect` disposes the prior bundle via `untrack` so assigning
+  the loaded bundle never retriggers itself (regression-pinned).

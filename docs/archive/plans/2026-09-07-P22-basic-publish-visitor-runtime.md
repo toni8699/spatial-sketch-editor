@@ -1,6 +1,6 @@
 # P22 — Basic Publish + visitor runtime
 
-**Created:** 2026-09-07 · **Status:** approved (tracker authoritative)
+**Created:** 2026-09-07 · **Status:** shipped 2026-09-08 (tracker authoritative)
 **Depends on:** P21 complete, including its final acceptance gate.
 **Dependency state:** P21 closed on `main` at `7fece5e` on 2026-09-08. P22
 approved 2026-09-08; implement P22.1→P22.5 sequentially.
@@ -330,3 +330,28 @@ route table. Record verification and the immediate next action in CURRENT;
 archive this plan and collapse its tracker row per the existing lifecycle.
 P23's minimum useful Layout Depth brief follows; P22 creates no Experience or
 agent implementation tickets.
+
+## Ship record (P22.5 closeout 2026-09-08)
+
+P22.1–P22.5 all shipped on `main`. P22.1 cold runtime + asset seam,
+P22.2 release persistence + API (migration 003, revision OCC), P22.3 public
+route, P22.4 publish surface, P22.5 hosted acceptance.
+
+Final gate on deployable SHA `f46e8f3` (public-route `untrack(disposeBundle)`
+fix — the load `$effect` tracked disposal's read of `bundle`, retriggering
+itself into a metadata/texture refetch + WebGL-context loop; pinned by
+`p22-3-public-route.test.ts`): Vitest 194 files / 2570 tests passed
+(1 skipped); real-Postgres API 23 core + 10 publication + 6 test-auth (39,
+zero skipped); editor + museum `svelte-check` 0/0; API/camera/layout/
+project-model `tsc` clean; root + API + Vercel builds green; preview
+(11 files) + public (2 files) boundary gates clean; visitor bundle
+(3 server + 9 client entries) green.
+
+Production proof (fresh anonymous session, deployed first-party `/api` proxy
+→ Render/Postgres/R2): `/p/b0f01de5…` settles on the version-3 titled canvas
+with exactly one metadata + one texture-content request, zero-camera orbit
+guidance, no console/WebGL errors; mobile 375×667 + reduced motion repeat
+green. Anonymous boundary: metadata 200, member asset 200 (76,488 bytes),
+random-asset 404, unknown-publication 404, `POST /test-auth/session` 404
+(with editor Origin; 403 CSRF guard without). Publication revision stayed 6;
+no owner-lifecycle rerun needed. P23 is the sole next action.

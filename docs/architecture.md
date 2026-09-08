@@ -38,11 +38,19 @@ packages). P20.2 has landed in Spatial for project texture upload/list/use; P20 
 shipped 2026-09-04 (local live smoke against real R2 completed; production
 topology smoke deferred). One `ProjectDocument` holds separately owned
 `LayoutDocument` and `SceneDocument` domains — Layout owns architecture,
-Scene owns entities/materials/lights/cameras; they are not merged. Richer auth
+Scene owns entities/materials/lights/cameras; they are not merged. **P22
+shipped basic Publish + visitor runtime** — `publications`/`releases` rows in
+Postgres, private-R2 bytes served only through release membership, cold
+public route `/p/:publicationId` on the editor deployment that stays
+visitor-safe (no editor/session/selection/history/gizmo code in its closure);
+`/museum` stays frozen. Richer auth
 UX/hardening, permissions/memberships, teams, and collaboration also remain
 later. Experience mode/schema remains outside P18/P19/P20. External identity
 proves who the user is; Fastify + Postgres own product authorization and
-project permissions.
+project permissions. A test-only issuer (`POST /test-auth/session`,
+allowlisted automation identities) may mint the same app-owned session for
+agent/E2E testing — it replaces only the external ceremony and is
+structurally absent unless explicitly configured, never in production.
 
 ## Project-level surfaces (future)
 
@@ -72,8 +80,9 @@ flattening the Spatial model:
   backend scope now.
 - **Assets** — one shared project asset registry serving Spatial and
   Experience; no independent per-mode asset stores.
-- **Publish** — visitor-safe runtime + Experience UI + project data/assets;
-  developer/export consumption levels are future direction (no runtime SDK
+- **Publish** — basic publish shipped (P22): visitor-safe runtime +
+  project data/assets through release manifests; Experience UI and
+  developer/export consumption levels remain future direction (no runtime SDK
   defined now).
 
 ## Ownership
@@ -89,6 +98,9 @@ flattening the Spatial model:
 | Plan presentation | `CompiledLayoutGeometry` → `PlanRenderModel` → `PlanSvg.svelte` |
 | 3D wall meshes | `wall-mesh-builder` → `wall-geometry-adapter` |
 | Camera route/motion | `@portfolio/camera-core` (`camera-route.ts` + `camera-motion.ts`) only |
+| Publication status, active version, revision | `publications` row (`apps/api`) |
+| Published snapshots + delivery manifests | immutable `releases` rows (`apps/api`); bytes resolved per-release at visitor boot |
+| Public visitor chrome | `/p/:publicationId` route (editor deployment, visitor-safe closure) |
 | Project-local GLB bytes | portable package manifest + editor asset store |
 | Selection, history, gizmo proxies, UI | editor session only |
 

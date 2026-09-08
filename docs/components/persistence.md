@@ -1,7 +1,7 @@
 # Persistence and schema
 
 **Read when:** scene/layout/project codecs, undo/history, import/export, dirty, fidelity.  
-**Last reviewed:** 2026-09-06 (P20 shipped 2026-09-04 — reconciliation only, no contract change)
+**Last reviewed:** 2026-09-08 (P22 shipped — publication/release records below)
 
 ---
 
@@ -18,6 +18,8 @@
 **Cloud persistence (P19 shipped 2026-09-03):** authenticated owned Save/Load wraps the same canonical `ProjectDocument` — `projects` row + `project_versions` versioned JSONB. Save validates the full document, locks the project row, appends a version, and bumps `latest_version`; Load reads the latest version and revalidates; the Hub lists owned projects with versions. Save takes no expected-base-version precondition today — row locking serializes writes but a stale full document can still save as a newer version; a stale-write/revision precondition is a future trigger before simultaneous human/agent writers, not current behavior.
 
 **Project asset durability (P20 shipped 2026-09-04):** registry metadata in Postgres, heavy texture bytes in private R2 through `apps/api` only. Session/package texture URIs cannot reach semantic JSONB Save (durability gate); package export resolves bytes and embeds them. Assets are not normalized into `ProjectDocument` — the registry/storage boundary stays separate.
+
+**Publish + releases (P22 shipped 2026-09-08):** one `publications` row per project (unique project ID, unique random public ID allocated only by first Publish, nullable active version, monotonic publication revision, timestamps) plus immutable `releases` keyed by `(project_id, version)` carrying the validated delivery manifest (saved `ProjectDocument` snapshot + pinned P20 asset key/SHA-256/MIME/size + shipped-static compatibility projection). Publish/Update/Unpublish run a short SQL transaction (row lock, ownership + expected-revision + saved-version recheck, release insert/reuse, active-pointer switch, revision bump); R2 verification (bounded streaming hash/size/MIME check) happens before the transaction, never inside it. First publish alone allocates the stable public ID; status GET never creates one. ABA (`N → unpublished → N`) still bumps revision, so stale writers get 409. Anonymous reads resolve the active release once per bootstrap (document + manifest share one version); unpublish disables all document/byte delivery for that public ID. `Cache-Control: no-store` on public metadata/bytes. Owner API: `GET/PUT/DELETE /projects/:id/publication`, anonymous: `GET /publications/:id` + version-qualified asset content.
 
 **Asset policy:** portable packages may embed user texture bytes through their manifest; scene model entities still reference shipped catalogue `assetId`s only. Project-local GLB import remains deferred. P20 cloud Save uses a separate durability gate: session/package texture URIs cannot reach semantic JSONB Save, while package export resolves bytes and embeds them.
 

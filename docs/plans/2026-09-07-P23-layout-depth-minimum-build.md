@@ -4,6 +4,10 @@
 **Depends on:** P22 complete, including hosted cold-visitor acceptance.
 **Planning assumption:** owner requested this plan assuming P22 is finished.
 This registers future work; it does not mark P22 or preceding work shipped.
+**Plan review:** 2026-09-08 ground-truth pass against the working tree — all
+named seams verified (centroid-pivot `transformLayoutRoomUnit`, meter-offset
+openings, codec-enforced door relations); path convention, P23.3 relation
+contract and fixture-first notes folded below.
 
 ## User outcome
 
@@ -30,8 +34,13 @@ need evidence and separately registered follow-up plans.
 
 ## Existing implementation to extend
 
-Paths are repository-relative. Recheck these seams after P22 closes; reuse
-accepted behavior rather than rebuilding features already present.
+Paths are repository-relative and abbreviated: `packages/layout-core/src/…`
+rows are the canonical layout package; `lib/editor/…` rows mean
+`apps/editor/src/lib/editor/…`; bare filenames are layout-owner modules in
+`apps/editor/src/lib/editor/layout/`, except `EditorInspector.svelte`, which
+sits at `apps/editor/src/lib/editor/`; an `app/…`, `gizmo/…` or `layout/…`
+prefix marks that editor subdirectory. Recheck these seams after P22 closes;
+reuse accepted behavior rather than rebuilding features already present.
 
 | Owner / seam | Existing behavior and intended reuse |
 |---|---|
@@ -42,11 +51,11 @@ accepted behavior rather than rebuilding features already present.
 | `layout-editing.ts`, `layout-room-transform.ts` | Boundary editing and rigid room-unit transform, including frame, curved anchors and owned objects |
 | `layout-preview-state.svelte.ts` | Existing validated mutators, derived bundle, install/commit and snapshots; no new parallel store |
 | `layout-mutation-runner.ts`, `layout-transaction.ts`, editor store | Existing begin/commit/cancel and one chronological tagged history stack |
-| `layout-interaction.ts`, `layout-plan-transform.ts`, `LayoutPlanViewport.svelte` | Plan gestures, snap toggles, active authority, selection reconciliation and cancellation |
-| `PlanSvg.svelte`, Plan render model/chrome | Existing SVG Plan presentation; P23 visual polish must stay derived/presentation-only |
-| `EditorInspector.svelte`, `LayoutDraftToolbar.svelte`, `app/PlanWorkspace.svelte` | Existing numeric object/opening controls and Layout authoring UI |
+| `layout-interaction.ts`, `layout-plan-transform.ts`, `layout/LayoutPlanViewport.svelte` | Plan gestures, snap toggles, active authority, selection reconciliation and cancellation |
+| `layout/PlanSvg.svelte`, Plan render model/chrome | Existing SVG Plan presentation; P23 visual polish must stay derived/presentation-only |
+| `EditorInspector.svelte`, `layout/LayoutDraftToolbar.svelte`, `app/PlanWorkspace.svelte` | Existing numeric object/opening controls and Layout authoring UI |
 | `lib/editor/gizmo/layout-gizmo-candidate.ts` | Existing 3D object candidate path; preserve semantic parity with numeric edits |
-| `layout-geometry-objects`, `layout-portals`, Plan render model | Rotation-aware bounds, existing opening/portal semantics and shared compiled output |
+| `packages/layout-core/src/layout-geometry-objects.ts`, `packages/layout-core/src/layout-portals.ts`, Plan render model | Rotation-aware bounds, existing opening/portal semantics and shared compiled output |
 
 Numeric object dimensions and opening fields already exist. P23 improves their
 coverage and validation and adds missing operations; it does not count replacing
@@ -256,7 +265,11 @@ segments with a stated reason.
 
 Expose the existing optional door `connectsRoomIds` relation through an explicit
 room choice, using current codec/portal semantics. Windows remain unpaired;
-unrelated/self/missing-room targets are rejected. Do not infer a relationship
+unrelated/self/missing-room targets are rejected. The codec already enforces the
+invariants this relies on — doors-only relations, existing room IDs on both
+members, and the owning room as the first relation member — so the picker offers
+only valid non-owner room choices instead of relying on post-hoc rejection. Do
+not infer a relationship
 because two walls look adjacent, create camera edges, or promise that a relation
 cuts a second wall automatically. Show the actual compiled result. Two physical
 wall openings, where required, remain explicit authored openings.
@@ -412,7 +425,9 @@ Implement P23.1 → P23.2 → P23.3 → P23.4 → P23.5 → P23.6, then P23.7
 integration/closeout. For each semantic capability, demonstrate a headless call
 over a plain document with explicit target IDs, then its UI adapter. Existing
 helpers count as headless operations; no transport or command registry is
-required. P23.6 is rendering/presentation acceptance and must prove it introduces
+required. For P23.1, author the straight-wall-length and rotated-rectangle
+acceptance fixtures before implementation; the wall-editing path is the
+highest-risk candidate in this set. P23.6 is rendering/presentation acceptance and must prove it introduces
 no authored document or history changes.
 
 | Increment | Exact focused acceptance |

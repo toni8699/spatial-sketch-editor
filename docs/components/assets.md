@@ -1,7 +1,7 @@
 # Assets
 
 **Read when:** Paris GLBs, licences, catalogue, import/replace models, project texture registry.  
-**Last reviewed:** 2026-09-06 (P20 shipped 2026-09-04 — reconciliation only; truths below reconfirmed)
+**Last reviewed:** 2026-09-08 (P22 shipped — release delivery below)
 **Full checklist:** [`../archive/ASSET_WORKFLOW.md`](../archive/ASSET_WORKFLOW.md)
 
 ---
@@ -37,6 +37,20 @@ before project replacement, verifies registry metadata plus MIME/size/SHA,
 then primes the existing binary store; failure leaves the current project
 unchanged. GLB import, provider search, and delete/GC remain deferred. Built-ins
 retain catalogue identity — do not invent registry behavior for them.
+
+## Published release delivery (P22 shipped 2026-09-08)
+
+A release manifest pins each referenced P20 texture to its verified object
+key + SHA-256/MIME/size and projects shipped-static dependencies through the
+checked-in compatibility registry (stable logical identity, never bundler
+hash URLs). Public bytes serve only while the publication is active and only
+through release membership (`GET /publications/:id/versions/:v/assets/:asset/content`,
+`no-store`, correct MIME/length, `nosniff`, no R2 redirects). The cold visitor
+loader verifies downloaded bytes before installing the runtime and threads a
+release-scoped `TextureLoadScope` through the real material consumers
+(including model-instance texture overrides); colliding logical URIs across
+projects/releases never share cache entries. P22 does not broaden P20 ingest
+(image textures only, no uploaded models).
 
 The catalogue rows below describe the built-in asset model; the project
 registry is separate and is served through the authenticated API (see

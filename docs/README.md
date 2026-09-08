@@ -1,10 +1,10 @@
 # Museum docs — context router
 
-**Audience:** agents + humans. **Last reviewed:** 2026-09-08 (P21 shipped — gate passed, P19/P20/P21 doc sets archived; docs pruned: tracker recent-5, model-assessment P20-onward, archive README fixed).
+**Audience:** agents + humans. **Last reviewed:** 2026-09-08 (P22 shipped — gate passed, P22 doc set archived; docs pruned: tracker recent-5, model-assessment P20-onward, archive README fixed).
 **Bootstrap (hard rules):** [`../AGENTS.md`](../AGENTS.md) ·
 **Plan status / what's next:** [`plans/README.md`](./plans/README.md) (tracker) ·
 **Live working-tree state:** [`hand-off/CURRENT.md`](./hand-off/CURRENT.md) ·
-**Roadmap gate:** P12, core P3B, P14, P15, P16, P17, P18, P19, P20, and P21 are shipped (P21 on 2026-09-08 — six-reference + axe/contrast acceptance gate passed; production-topology smoke deferred). P3B.7b remains deferred and non-blocking; P13 remains proposed/unscheduled.
+**Roadmap gate:** P12, core P3B, P14, P15, P16, P17, P18, P19, P20, P21, and P22 are shipped (P22 on 2026-09-08 — hosted cold-visitor acceptance incl. public-route untrack fix, deployed as `f46e8f3`). P3B.7b remains deferred and non-blocking; P13 remains proposed/unscheduled.
 
 ## Context discipline (progressive disclosure)
 
@@ -66,6 +66,8 @@ one-line `archived → <path>` stubs. No live doc explains what is archived.
 | `/editor` | Compatibility redirect → `/project/:id/spatial` |
 | `/projects` | Project Hub (owned cloud project list for authenticated creators) |
 | `/project/:id/spatial` | Spatial workspace (Scene · Camera × Plan · 3D) |
+| `/project/:id/publish` | Publish surface (owner-only status, publish/update/unpublish) |
+| `/p/:publicationId` | Public visitor route (cold release bootstrap, no auth) |
 | `/project/:id/preview` | Visitor Preview takeover (transient snapshot, no save required) |
 | `/museum` | Frozen Chopin visitor relic (checked-in `chopin-project.json`) |
 | `/museum/editor` | Frozen legacy editor relic (Scene · Camera, no Layout) |

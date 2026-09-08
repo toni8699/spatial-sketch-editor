@@ -58,7 +58,6 @@ Policy rules:
 | # | Plan | Status | Depends on | Doc |
 |---|------|--------|------------|-----|
 | P13 | Sequence stop-at-node playback | proposed — nice-to-have, unscheduled (owner 2026-08-27) | P12 | [2026-08-27-P13-stop-at-node-playback.md](2026-08-27-P13-stop-at-node-playback.md) |
-| P22 | Basic Publish + visitor runtime | approved — P21 complete, ready P22.1→P22.5 sequential (owner 2026-09-08) | P21 | [plan](2026-09-07-P22-basic-publish-visitor-runtime.md) |
 | P23 | Layout Depth — minimum useful Build set | proposed — brief written assuming P22 complete (owner 2026-09-07) | P22 | [plan](2026-09-07-P23-layout-depth-minimum-build.md) |
 | P24 | Scene / Staging Depth umbrella — P24A asset supply + P24B rich 3D staging | proposed — umbrella/research reconciliation; P24A Phase 2 reviewed + annex registered; P24B Phase 4 compact reviewed directionally, deeper code/reference studies required (owner 2026-09-08) | P23 | [plan](2026-09-08-P24-scene-staging-depth-umbrella.md) |
 | P25 | Experience Foundation umbrella | proposed — Phase 5 external capability research reviewed directionally; E0–E6 reconciliation required before implementation brief (owner 2026-09-08) | P24 | [plan](2026-09-08-P25-experience-foundation-umbrella.md) |
@@ -90,9 +89,11 @@ Policy rules:
 Ship narrative for P1–P21 (execution order, scope decisions, the P12/P3B hard
 gate) now lives in the archived docs, not here.
 
-- Next: P21 shipped 2026-09-08 (final acceptance gate passed — six-reference
-  visual comparison + axe/contrast sweep + Slice C focus/DPR rows, full Vitest
-  + `check` + `build` + bundle gates green); next is P22 implementation (approved 2026-09-08).
+- Next: P22 shipped 2026-09-08 (P22.1–P22.5 + hosted acceptance — production
+  cold-browser loop through deployed proxy/API/Postgres/R2, anonymous
+  release-membership boundary, shipped-static retention, full checks + route
+  bundle gates green; public-route `untrack` fix deployed as `f46e8f3`);
+  next is P23 Layout Depth minimum (brief registered, assumes P22 complete).
   P22 approved under the owner's P21-complete assumption; P22.1→P22.5 sequential.
 - Long-term tiers renumbered 2026-09-05 (owner): P23 Layout Depth, P24
   Scene/Staging Depth, P25 Experience Foundation, P26+ platform expansion;
@@ -115,11 +116,11 @@ gate) now lives in the archived docs, not here.
 
 ## Archived plans (recent 5 only)
 
+- `archived → [2026-09-07-P22-basic-publish-visitor-runtime.md](../archive/plans/2026-09-07-P22-basic-publish-visitor-runtime.md)` (shipped 2026-09-08 — P22.1–P22.5 + hosted acceptance incl. public-route untrack fix)
 - `archived → [2026-09-04-P21-unified-project-shell-spatial-reconciliation.md](../archive/plans/2026-09-04-P21-unified-project-shell-spatial-reconciliation.md)` (shipped 2026-09-08 — P21.1–P21.6 + final acceptance gate; set includes P21.4, P21.5, P21.6, slice-2B annex)
 - `archived → [2026-08-19-P20-Project-assets-registry-R2.md](../archive/plans/2026-08-19-P20-Project-assets-registry-R2.md)` (shipped 2026-09-04 — local live smoke vs real R2; set includes S2/S3/S4 briefs)
 - `archived → [2026-08-30-P19-project-persistence.md](../archive/plans/2026-08-30-P19-project-persistence.md)` (shipped 2026-09-03 — live smoke passed; set includes P19.4 annex)
 - `archived → [2026-09-06-scope-decision-roadmap-reconciliation.md](../archive/plans/2026-09-06-scope-decision-roadmap-reconciliation.md)` (scope decision — audit-review roadmap reconciliation: broad category, staged P23/P24, narrow P25 after minima, early bounded agent/reuse proof; ratified 2026-09-06)
-- `archived → [2026-08-31-scope-decision-experience-interaction-boundary.md](../archive/plans/2026-08-31-scope-decision-experience-interaction-boundary.md)` (scope decision — Experience/Interaction authoring boundary; ratified 2026-08-31)
 
 Older history — P14 and earlier, the letter-era A–H tracks, prior scope
 decisions — lives on disk under `docs/archive/plans/` (renewal era) and
@@ -257,9 +258,10 @@ conditional infrastructure):
   product shell + Project Hub + editor UX polish (P21, shipped 2026-09-08 —
   P21.1–P21.6 plus the P21.5 presentation-only polish pass, closed by the
   six-reference + axe/contrast acceptance gate), the basic
-  publish/visitor-runtime boundary (P22 — the first complete product loop:
-  author → preview → publish → visitor sees it, and an early stress test of
-  the visitor/editor isolation boundary), then minimum useful authoring
+  publish/visitor-runtime boundary (P22, shipped 2026-09-08 — the first
+  complete product loop: author → preview → publish → visitor sees it, closed
+  by hosted cold-boot acceptance through the deployed proxy/API/Postgres/R2),
+  then minimum useful authoring
   slices split by document ownership (P23 Layout Depth minimum, P24 Scene /
   Staging minimum split internally into P24A asset supply/ingest + P24B rich
   3D staging), the registered P25 Experience research/reconciliation umbrella,

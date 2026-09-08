@@ -41,3 +41,26 @@ imports back to `$lib`.
 npm test        # vitest run (include pattern: tests/**/*.{test,spec}.{js,ts})
 npm run check   # svelte-check — picks up tests/ via the generated tsconfig
 ```
+
+## Agent E2E (`tests/e2e/`)
+
+Browser-driven agent tests log in without the external OAuth ceremony through
+the API test-auth seam (`POST {PUBLIC_API_ORIGIN}/test-auth/session`,
+`apps/api/src/test-auth.ts`): bearer `E2E_TEST_AUTH_SECRET` + `{ user }` mints
+the canonical app session for an allowlisted automation identity
+(`agent-admin`, `agent-user-a`, `agent-user-b` → normal `google:e2e-*` user
+ids). Ownership and permission checks apply unchanged.
+
+- Helper: `tests/e2e/test-auth.ts` (`loginAs`, Node-side — browsers hide
+  `Set-Cookie`; install the returned pair in the browser context, then
+  navigate). Never imported by `src/`.
+- Its contract is pinned by `tests/e2e/test-auth.test.ts` (runs in the normal
+  `npm test` above).
+- API-side coverage lives in `apps/api/tests/test-auth.test.mjs` (seam
+  session, secret/identity rejection, structural absence without the option,
+  cross-ownership on real Postgres).
+- Enable locally with `E2E_TEST_AUTH_SECRET` in `.env` (ignored, local-only;
+  see `.env.example`). NEVER set it on production — without it the route does
+  not exist (404).
+- Non-browser POSTs need the `Origin` header matching the API's editor origin;
+  pass `origin` to `loginAs`.
