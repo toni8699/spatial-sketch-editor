@@ -47,7 +47,10 @@
 	} from './editor-camera-view';
 	import {
 		createEditorCameraFramingGeometry,
-		createEditorCameraFrustumLinePoints
+		createEditorCameraFrustumLinePoints,
+		isFramingSelectionEligible,
+		resolveCameraPreviewFramingOwner,
+		setEditorCameraFramingOrientation
 	} from './editor-camera-framing';
 	import { SCENE_PALETTE } from '../styles/scene-palette';
 	import {
@@ -161,20 +164,53 @@
 	}
 
 	/**
-	 * The moving playhead frustum renders for the whole Director preview
-	 * session — playing or paused/scrubbing, selection-independent — so
-	 * scrubbing previews where the camera path is. The selected camera's
-	 * static framing frustum hides over the same span
-	 * (EditorCameraFramingHelpers.framingPose), keeping exactly one frustum
-	 * on screen during any Director preview.
+	 * P21.6 review (A/B P1) — paused-preview visual ownership, second pass.
+	 * Three outcomes from the shared resolver: playback → playhead owns the
+	 * preview frustum; paused + editable node/view-keyframe selection →
+	 * selection owns the filled helper (this preview helper hides); paused
+	 * with no editable selection → `none` (both hide — deselection leaves a
+	 * clean viewport). Frame off suppresses both; an ineligible selection
+	 * helper (wrong workspace / pending placement) cannot suppress the
+	 * playhead. Timeline scope, transport, and playhead are untouched: no
+	 * stop, no seek.
 	 */
+	function selectionOwnsFraming(): boolean {
+		const selection = store.navigationSelection;
+		return (
+			(selection?.kind === 'node' && !!store.selectedNavigationNode) ||
+			(selection?.kind === 'view-keyframe' && !!store.selectedViewKeyframe)
+		);
+	}
+
+	function selectionFramingEligible(): boolean {
+		return isFramingSelectionEligible({
+			workspace: store.currentWorkspace,
+			hasPendingPlacement: !!(
+				store.pendingPlacementAssetId ||
+				store.pendingPlacementPrimitiveKind ||
+				store.pendingPlacementLightKind
+			)
+		});
+	}
+
 	function showDirectorPreviewFrustum(preview: ActiveCameraPreview) {
-		return preview.mode === 'director';
+		if (preview.mode !== 'director') return false;
+		return (
+			resolveCameraPreviewFramingOwner({
+				hasDirectorPreview: true,
+				previewPlaying: preview.transport === 'playing',
+				hasEditableSelection: selectionOwnsFraming(),
+				framingVisible: store.viewportShowFraming,
+				selectionEligible: selectionFramingEligible()
+			}) === 'playhead'
+		);
 	}
 
 	function applyPreviewPose(currentCamera: PerspectiveCamera) {
 		currentCamera.position.copy(previewPosition);
-		currentCamera.lookAt(previewTarget);
+		// P21.6 review (A/B P2-7) — orient from the shared framing basis
+		// (never an independent lookAt, which disagrees near vertical).
+		setEditorCameraFramingOrientation(currentCamera, previewPosition, previewTarget);
 		if (Math.abs(currentCamera.fov - previewSample.fov) > CAMERA_FOV_UPDATE_EPSILON) {
 			currentCamera.fov = previewSample.fov;
 			currentCamera.updateProjectionMatrix();
@@ -205,6 +241,10 @@
 		virtualCameraFrustum.geometry.setFromPoints(
 			createEditorCameraFrustumLinePoints(previewPosition, geometry)
 		);
+		// P21.6 review (A/B P2-8) — `setFromPoints` leaves a stale bounding
+		// sphere once rendered (the selected helper recomputes; the preview
+		// did not), so extended FOVs / moved targets vanished under orbit.
+		virtualCameraFrustum.geometry.computeBoundingSphere();
 	}
 
 	function syncDirectorObserver(currentCamera: PerspectiveCamera, controls: ThreeOrbitControls) {
@@ -552,7 +592,16 @@
 				{ fovDegrees: currentCamera.fov, aspect: currentCamera.aspect }
 			);
 		} else if (store.cameraFocusKind === 'navigation-node' && store.cameraFocusNodeId) {
-			const node = getNode(store.cameraFocusNodeId, graph);
+			const focusNodeId = store.cameraFocusNodeId;
+			if (!graph.nodeById.has(focusNodeId)) {
+				// P21.6 review (A/B P1) — stale focus (a delete/undo raced this
+				// frame past the store reconciler): drop the request instead
+				// of throwing out of strict getNode(). The effect reruns on
+				// the kind change and exits cleanly.
+				store.clearCameraFocusRequest();
+				return;
+			}
+			const node = getNode(focusNodeId, graph);
 			framedNodePosition.set(...node.position);
 			framedNodeTarget.set(...node.cameraTarget);
 			frame = createEditorNodeCameraFrame(

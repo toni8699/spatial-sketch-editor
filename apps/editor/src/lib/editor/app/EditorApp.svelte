@@ -388,6 +388,7 @@
 	}
 
 	let outlinerElement = $state<HTMLElement | null>(null);
+	let inspectorElement = $state<HTMLElement | null>(null);
 	let viewportElement = $state<HTMLElement | null>(null);
 	let clusterNameInput = $state<HTMLInputElement>();
 	let selectedAsset = $state<Asset>();
@@ -1856,6 +1857,32 @@
 		};
 	});
 
+	// P21.6 Slice C — focus restore: collapsing the panel that holds
+	// keyboard focus moves focus to the viewport (a zero-width track alone
+	// does not remove focus; collapsed panels are inert).
+	$effect(() => {
+		const leftCollapsed = store.leftSidePanelCollapsed;
+		const rightCollapsed = store.rightSidePanelCollapsed;
+		if (typeof document === 'undefined') return;
+		const active = document.activeElement;
+		if (!active || active === document.body) return;
+		const trapped =
+			(leftCollapsed && outlinerElement?.contains(active)) ||
+			(rightCollapsed && inspectorElement?.contains(active));
+		if (trapped) viewportElement?.focus();
+	});
+
+	onMount(() => {
+		const onWindowResize = () => {
+			// P21.6 Slice C — browser-driven resizes cannot be deferred:
+			// cancel the active gesture cleanly instead of rebasing
+			// world-space drag math under it.
+			store.cancelActiveGestureForExternalResize();
+		};
+		window.addEventListener('resize', onWindowResize);
+		return () => window.removeEventListener('resize', onWindowResize);
+	});
+
 	onMount(() =>
 		registerEditorShortcuts(
 			store,
@@ -1881,7 +1908,7 @@
 
 </script>
 
-<main class="page editor-page project-editor" class:previewing={store.isDocumentMutationBlocked} class:visitor-previewing={previewBundle !== null}>
+<main class="page editor-page project-editor" class:previewing={store.isDocumentMutationBlocked} class:visitor-previewing={previewBundle !== null} class:panels-left-collapsed={store.leftSidePanelCollapsed} class:panels-right-collapsed={store.rightSidePanelCollapsed}>
 	{#if previewBundle}
 		{@const bundle = previewBundle}
 		<div class="visitor-takeover">
@@ -1949,6 +1976,7 @@
 		onConvertProjectTexture={projectAssetsAvailable ? convertProjectTexture : undefined}
 		onProjectTextureFileSelected={onProjectTextureFileSelected}
 		bind:outlinerElement
+		collapsed={store.leftSidePanelCollapsed}
 		onAssetSelection={(asset) => (selectedAsset = asset)}
 		// Explicit Models-tab click: detach the active scene selection so the
 		// asset panel (details + Place) shows immediately — browsing/filtering
@@ -2014,6 +2042,8 @@
 		viewMode={viewState.activeView}
 		{viewState}
 		bind:clusterNameInput
+		bind:inspectorElement
+		collapsed={store.rightSidePanelCollapsed}
 	/>
 	<!-- P1.1 (design-spec §2/§18) — persistent status bar in every workspace. -->
 	<StatusBar {store} {layoutPreview} {layoutInteraction} {viewState} {activeSelection} transformSpace={interactionStore.space} />
@@ -2033,7 +2063,14 @@
 	:global(body) { margin: 0; }
 	.page {
 		display: grid;
-		grid-template-columns: minmax(15rem, var(--editor-left-width)) minmax(0, 1fr) minmax(17.5rem, var(--editor-right-width));
+		/* P21.6 Slice C — focus mode collapses side tracks toward 0 1fr 0
+		   through these variables (CSS only — the canvas is never unmounted).
+		   Higher-specificity collapsed classes below win over the narrow
+		   media queries, so collapse holds at every viewport width. */
+		--editor-side-left: minmax(15rem, var(--editor-left-width));
+		--editor-side-right: minmax(17.5rem, var(--editor-right-width));
+		--editor-center: minmax(0, 1fr);
+		grid-template-columns: var(--editor-side-left) var(--editor-center) var(--editor-side-right);
 		grid-template-rows: var(--editor-project-row-height) var(--editor-ribbon-height) minmax(0, 1fr) var(--editor-status-height);
 		grid-template-areas:
 			'top top top'
@@ -2049,6 +2086,10 @@
 	}
 	.center { position: relative; min-width: 0; min-height: 0; overflow: hidden; outline: none; }
 	.center:focus-visible { box-shadow: inset 0 0 0 1px var(--editor-accent); }
+	/* P21.6 Slice C — no animated resizing (grid transitions would
+	   repeatedly reallocate the drawing buffer and multiply pixel work). */
+	.page.panels-left-collapsed { --editor-side-left: 0; }
+	.page.panels-right-collapsed { --editor-side-right: 0; }
 
 	/* P21.4 — layout-owned takeover: full-bleed visitor canvas replaces all
 	   Spatial chrome; pill-only overlay lives in the preview surface. */
@@ -2096,10 +2137,10 @@
 	}
 
 	@media (max-width: 78rem) {
-		.page { grid-template-columns: minmax(14rem, 22vw) minmax(0, 1fr) minmax(14rem, 24vw); }
+		.page { --editor-side-left: minmax(14rem, 22vw); --editor-side-right: minmax(14rem, 24vw); }
 	}
 
 	@media (max-width: 62rem) {
-		.page { grid-template-columns: 200px minmax(240px, 1fr) 240px; overflow:auto; }
+		.page { --editor-side-left: 200px; --editor-center: minmax(240px, 1fr); --editor-side-right: 240px; overflow:auto; }
 	}
 </style>

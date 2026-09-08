@@ -44,7 +44,8 @@
 		canConvertProjectTexture,
 		onConvertProjectTexture,
 		onProjectTextureFileSelected,
-		contextMenu = null
+		contextMenu = null,
+		collapsed = false
 	}: {
 		store: EditorStore;
 		layoutPreview: LayoutPreviewState;
@@ -65,6 +66,8 @@
 		onConvertProjectTexture?: (textureId: string) => Promise<string | null>;
 		onProjectTextureFileSelected?: () => void;
 		contextMenu?: EditorContextMenuStore | null;
+		/** P21.6 Slice C — collapsed panels clip + go inert (CSS grid only). */
+		collapsed?: boolean;
 	} = $props();
 
 	const domain = $derived(viewState.domain);
@@ -98,8 +101,10 @@
 <aside
 	bind:this={outlinerElement}
 	class="panel outliner"
+	class:collapsed
 	aria-label="Editor sidebar"
 	style="grid-area: left;"
+	inert={collapsed}
 >
 	<div class="sidebar-content" inert={store.isVisitorCameraPreview}>
 	{#if showHeaderStrip}
@@ -188,6 +193,14 @@
 		border-right: 1px solid var(--editor-border-subtle);
 		overflow: auto;
 		background: var(--editor-bg-panel);
+	}
+	/* P21.6 Slice C — collapsed panels clip to the zero-width grid track
+	   (the track carries the collapse; this only clips contents). Combined
+	   with `inert`; zero-width alone never removes keyboard focus. */
+	.panel.collapsed {
+		overflow: hidden;
+		visibility: hidden;
+		min-width: 0;
 	}
 	.sidebar-content { display: flex; min-width: 0; min-height: 0; flex: 1; flex-direction: column; gap: 1rem; }
 	.header-strip { display: flex; flex-direction: column; gap: 0.45rem; }

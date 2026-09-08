@@ -293,8 +293,7 @@
 	}
 
 	function choosePreviewMode(mode: 'director' | 'visitor') {
-		if (preview) store.setCameraPreviewMode(mode);
-		else if (mode === 'visitor') store.enterSequenceScope('visitor');
+		store.chooseCameraPreviewMode(mode);
 	}
 
 	function stepNode(direction: -1 | 1) {

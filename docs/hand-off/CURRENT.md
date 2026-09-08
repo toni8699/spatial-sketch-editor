@@ -5,126 +5,55 @@ slice plus one next action only.
 
 ## Working tree
 
-- P21.1 shared shell + P21.2 Scene reconciliation + P21.3 Camera reconciliation + P21.4 Preview + project flows + P21.5 Slices 1–5 (surface-step/buttons, canvas de-clutter + §2.6 gizmo detach + 2B node colors, Inspector density + selection isolation, typography grammar + theme sweep, timeline density) implemented; registered in the tracker. Owner eye-tests passed 2026-09-07 (§2.6 gizmo detach + Slice 2B camera node colors) — P21.5 closed.
-- P21.6 closeout slice (3D camera visualization + viewport focus mode) approved for implementation 2026-09-07 — Slice A implemented in tree (camera palette tokens, wireframe-box retire → dark apex nub, path tokenization, Rig retoken); Slice B (cinematic frustum + node unification) + Slice C (focus mode) pending.
-- Owner delta 2026-09-07: `+ View Key` renders live-dock-wide (Edge + Sequence, Plan + 3D; disabled gates eligibility, relic keeps its Ruler button) — P12.3/P12.4/Slice-5 pins updated to the new contract.
-- Reviewer delta 2026-09-07: timing pill re-inked to invariant draft ink (sapphire selected / white unselected, never the chrome accent) — Slice 2.5 + `camera-tour.md` + P12 pins updated; contrast pinned ≥ 4.5 by `plan-timing-pill.test.ts`.
+- P21 shipped 2026-09-08 — P21.1–P21.6 + final acceptance gate passed (browser evidence below); tracker collapsed, P19/P20/P21 doc sets archived per Rule 4.
+- Uncommitted P21.6 implementation (source + `p21.6-slice-b/c` suites + `camera-tour.md`/`shell.md` contract pins) remains in the tree: 3D camera viz (palette tokens, nub retire, cinematic frustum, node/path unification) + focus mode (session L/R booleans, grid collapse, Zone C + View-menu + `\` + hint, inert + focus restore, drag-deferral, observer-relative aspect).
+- Gate fix (uncommitted, 1 char): `editor-store.svelte.ts` carried a duplicated `}` closing the class early (stray from the scrub-clear edit) — esbuild refused the module and the app could not load. Removed; parse + full battery green after.
+- Owner rulings recorded: visitor-preview black first frame is unlit content, not a bug (lighting expands in P23/P24); all other gate findings minor.
 
-- Planning delta: **Roadmap revised 2026-09-05 (owner), reconciled 2026-09-06:**
-  P21.5 stays strictly presentation-only (no authoring-depth expansion —
-  lighting, staging, layout objects, CAD features belong to Build/Stage
-  tiers, not polish) and P21 closes clean before P22. Long-term tiers —
-  **P22** Basic Publish + visitor runtime (first complete
-  author → preview → publish → visitor loop; stress-tests visitor/editor
-  isolation early), **P23** Layout Depth family (minimum useful Build set
-  first; optional depth tail later), **P24** Scene/Staging Depth family
-  (minimum useful Stage set first; optional depth tail later), **P25**
-  narrow Experience foundation after the P23/P24 minima (before the tails),
-  then a bounded agent/reuse proof before broad expansion. P23/P24 stay
-  separate ownership domains. The former "P23 Typed DB layer"
-  is demoted to **conditional infrastructure** — adopt only on demonstrated
-  SQL-surface pain, as a slice inside/before a later tier, never a numbered
-  milestone; P19/P20 no-ORM pins unchanged. Tracker Long-term roadmap +
-  `Design-Plan(P21+).md` Experience-Workspace cell updated.
-- Planning delta: **P20 shipped 2026-09-04 — S0–S4 verified by local live
-  smoke against real R2 (`biskiq-assets-test`) + local Postgres.** P20.1 API
-  15/15 (register → upload → list/read → byte-fetch, user-2 `404`s, bad-magic
-  `415`, oversized `413`); P20.2 browser Cloud-file → ready → Use flow; P20.3
-  browser local-import → Save-block → `Save to project` → Save v11 → undo/redo
-  loop; P20.4 browser Save v9 → refresh (blank boot) → Load (hydrated `blob:`
-  render, clean, no history) → re-Save v10 with no re-upload → package export
-  (byte-identical embed, no R2/API-URL leakage). Drag-onto-entity and
-  project-switch-during-upload were not browser-exercised (unit-covered only).
-  Production Render/Neon-topology smoke is deferred, not a close item.
-- Code delta (uncommitted): **`apps/api/src/asset-persistence.ts` —
-  `returningColumns()` takes a table prefix; the two `UPDATE … FROM projects`
-  sites pass `'a.'`, the INSERT stays unqualified.** The smoke exposed Postgres
-  `42702` (ambiguous `RETURNING` — no upload could reach `ready`); the stubbed
-  API suite never caught it. `check:api` + `test:api` (23 passed) green after.
-- Auth diagnostics delta (uncommitted): `apps/api/src/app.ts` now logs bounded
-  OIDC login/callback stages and session presence without OAuth values, tokens,
-  cookie contents, or user IDs; the API suite checks exchange errors stay
-  redacted. This exposes the documented cross-site Vercel → Render cookie trap.
-- Deployment proxy delta: the Vercel build injects an external `/api/*` edge
-  route into the adapter-generated Build Output config (a top-level rewrite
-  was discarded); the API accepts that public base path when constructing the
-  Google callback. Production `API_ORIGIN` and `PUBLIC_API_ORIGIN` must both
-  use the editor's `/api` URL so `SameSite=Lax` stays first-party.
-- Smoke residue (local only, not shipped state): `project:smoke-p20s1` v11 +
-  ~20 asset rows in local Postgres + test objects in the `biskiq-assets-test`
-  R2 bucket. No production secret, migration, or live deployment was touched.
-- Immediate previous slice: **P20 smoke + `RETURNING` fix, 2026-09-04.**
-  P19 (Google OIDC/live deployment smoke, 2026-09-03) is the prior baseline.
-  The local Fastify/Postgres boundary and API-only Render Blueprint are in the
-  tree; resource provisioning remains owner-run.
+- Immediate previous slice: **P21.6 Slices A+B+C implementation + review rounds
+  (2026-09-07).** P20 smoke + `RETURNING` fix (2026-09-04) is the prior baseline.
 
 ## Next action
 
-- Implement [P21.6](../plans/2026-09-05-P21.6-3D-camera-UI-polish.md) Slices B (cinematic 3D rework) + C (focus mode) — Slice A is code-complete — then run the P21 final acceptance gate (six-reference visual comparison + axe/contrast sweep) and close the tracker — P21.5 Slices 1–5 are code-complete and eye-test-passed.
+- Implement [P22](../plans/2026-09-07-P22-basic-publish-visitor-runtime.md) (Basic Publish + visitor runtime) — brief registered under the P21-complete assumption; tracker pointer is the status authority.
 
 ## Verification
 
-- Full Vitest: 187 files passed, 1 skipped; 2,444 tests passed, 1 skipped.
-- `npm run check`: 0 errors / 0 warnings.
-- `npm run check:camera-core`, `npm run check:layout-core`, and
-  `npm run check:project-model`: passed.
-- API: `check:api`, `test:api` (23 passed), and `build:api` passed. Migration
-  idempotency holds; the asset registry/R2 seam was additionally proven by the
-  2026-09-04 local live smoke (15/15 API checks + browser S2/S3/S4 flows +
-  package fidelity) against local Postgres + real R2. P19's live/ready
-  authenticated smoke passed 2026-09-03 (owner-run, including the real Neon
-  migration).
-- P21.4: preview coordinator/blocker/bundle, visitor runtime/Sequence, closure
-  validator fixtures, and project-flow contracts green within the full suite;
-  `vite build` enforces the new preview-surface boundary plugin.
-- `npm run build`: passed for Editor and Museum with the current
-  `adapter-vercel` configuration. Known unused-import and chunk-size warnings
-  remain.
-- `verify:visitor-bundle`: passed; standalone `/museum` reached 3 server and
-  9 client entries with no editor entry.
-- `verify-preview-surface`: passed; 7 visitor files, root + plugin wired, no static leaks.
-- Local browser QA passed editor entry → new Spatial project, Project Hub →
-  new project, `/editor` compatibility redirect, explicit `load=1` cleanup,
-  and the authenticated-projects root trampoline. Existing standalone
-  `/museum` Entrance → Poland navigation and `/museum/editor` mounting remain
-  covered by the prior smoke. The 2026-09-04 P20 browser smoke (Cloud-file
-  import, local→durable conversion + undo/redo, Save → refresh → Load →
-  render → re-Save, package export) passed on the same local stack.
+- Final acceptance gate 2026-09-08 (agent-browser vs local dev, 24 evidence PNGs): six-reference composition match (Layout / Arrange / Scene 3D / Camera Plan / Camera 3D / Preview takeover); authored room + 2-node flow exercised place → connect → sequence → paused preview; focus under paused preview + at DPR 2 aligned; `\` both ways; Theme porcelain keeps identical camera viz; scrub seeks; preview exit restores chrome; guest project survives reload; Tab order trap-free; reduced-motion boots clean.
+- Axe sweep (CDN axe-core 4.10): 5 groups, all pre-existing/deferred — tree `ul[role=tree]` bare-`li` pair, generic-`div` aria-label on viewport, status-hint contrast (known P3B-excluded bucket), missing h1.
+- Full Vitest: 189 files passed, 1 skipped; 2,514 tests passed, 1 skipped.
+- `npm run check`: 0 errors / 0 warnings (editor + museum). Camera-core / layout-core / project-model checks unchanged.
+- `npm run build`: passed for Editor and Museum (`adapter-vercel`). Known unused-import and chunk-size warnings remain.
+- `verify-preview-surface`: passed (7 visitor files, no static leaks). `verify:visitor-bundle`: passed (3 server, 9 client entries).
+- Mid-drag `\` deferral was inconclusive in-browser (CDP held-button blocks the channel; grabs unverifiable) — covered headless by the 19-test Slice C suite instead.
 
 ## Known bugs / deferred
 
+- Visitor preview with unlit content renders near-black (not a bug — the scene
+  has no lighting and the lighting system is lackluster by design at this
+  tier; orbit + lit geometry verified working). Lighting expands in P23/P24.
+- Camera-connections `ul[role=tree]` holds a bare `li.unused-row` (axe critical + serious pair). Minor; suggested P22 ride-along.
 - P3.4/P3.5 remain undone/not accepted and low-priority deferred.
 - Direct 3D wall/interior-anchor picks remain deferred.
 - Layout hover feed and anchor-helper octahedra remain disconnected.
-- Drafted-room `focusRoom` retains a latent Paris-default path outside the
-  fixed editor flow.
-- Runtime logs retain known Svelte `ownership_invalid_mutation` warnings for
-  `cameraPlan` and `layoutInteraction`; static checking is clean.
-- A browser axe audit still reports generic editor color-contrast review items
-  in empty/status text and SVG labels; these are outside the closed P3B gate.
-- Deployed Render/Neon-topology smoke is deferred to the publish tier or an
-  owner-scheduled pass (local P19/P20 smokes passed 2026-09-03/04).
+- Drafted-room `focusRoom` retains a latent Paris-default path outside the fixed editor flow.
+- Runtime logs retain known Svelte `ownership_invalid_mutation` warnings for `cameraPlan` and `layoutInteraction`; static checking is clean.
+- A browser axe audit still reports generic editor color-contrast review items in empty/status text and SVG labels; these are outside the closed P3B gate.
+- Deployed Render/Neon-topology smoke is deferred to the publish tier or an owner-scheduled pass (local P19/P20 smokes passed 2026-09-03/04).
 
 ## Traps
 
 - Track-vs-raised fills measure 1.05–1.12 (borders carry the edge); Slice 4 holds the Slice 1.1 calibration by decision — no new track hexes without owner eye-test.
-- Both Plan workspaces stay mounted. Hidden cells retain `inert` and
-  `plan-cell--hidden`; shared `view` remains one Plan|3D axis.
-- Camera 3D rig unmount during a main-editor Camera Plan switch must preserve
-  the paused preview session. Leaving the Camera workspace stops it through
-  `setWorkspace`; the relic retains stop-on-unmount/stop-on-Escape behavior.
-- P12 ordinary selection never enters Camera/Edge scope. Only explicit preview
-  actions do; sequenced-node selection in Sequence seeks + pauses.
-- Camera timeline edge keys include direction; preview-route memo keys on
-  `preview.runId`, never cloned route identity.
+- Both Plan workspaces stay mounted. Hidden cells retain `inert` and `plan-cell--hidden`; shared `view` remains one Plan|3D axis.
+- Camera 3D rig unmount during a main-editor Camera Plan switch must preserve the paused preview session. Leaving the Camera workspace stops it through `setWorkspace`; the relic retains stop-on-unmount/stop-on-Escape behavior.
+- P12 ordinary selection never enters Camera/Edge scope. Only explicit preview actions do; sequenced-node selection in Sequence seeks + pauses.
+- Camera timeline edge keys include direction; preview-route memo keys on `preview.runId`, never cloned route identity.
 - Camera means guided PerspectiveCamera navigation, never webcam.
+- agent-browser `press` keys land unreliably unless the target holds focus; window-dispatched `KeyboardEvent` via `eval` exercises the same handler path deterministically. Never hold CDP mouse-down across shell calls — it blocks the channel until `up`.
 
 ## Non-negotiables
 
-- `/museum` is visitor-only and its chunks contain no editor/layout code.
-  Editor ships at `/`, `/editor`, and frozen relic `/museum/editor`.
+- `/museum` is visitor-only and its chunks contain no editor/layout code. Editor ships at `/`, `/editor`, and frozen relic `/museum/editor`.
 - No commits unless the user asks.
-- One nav + one motion: `@portfolio/camera-core` owns `camera-route.ts` +
-  `camera-motion.ts` only.
-- Svelte 5 runes / Threlte; no second selection, history, graph, motion,
-  geometry, or transform system.
+- One nav + one motion: `@portfolio/camera-core` owns `camera-route.ts` + `camera-motion.ts` only.
+- Svelte 5 runes / Threlte; no second selection, history, graph, motion, geometry, or transform system.

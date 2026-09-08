@@ -36,6 +36,16 @@ both domains; a domain switch never snaps the view (boot: Scene → Plan).
 Domain changes are attention-only (not document/history/world); view changes
 never change domain. Camera owns the same timeline state in Plan and 3D.
 
+Viewport focus mode (P21.6 Slice C): independent left/right session booleans
+plus a derived focus flag collapse the shell grid toward `0 1fr 0` — CSS
+only, the canvas is never unmounted. Collapsed panels clip and go `inert`
+with focus restored to the viewport; Row 2 Zone C, the View menu
+(`Focus 3D (\)`), and the `\` shortcut drive it (relic excluded). Collapse
+requests during a pointer-down gesture defer to one coalesced pending config
+applied after commit/cancel + capture release; external resizes cancel the
+gesture instead. Framing stays observer-relative: vertical FOV authored,
+far-plane width derives from live viewport aspect.
+
 Camera mounts the four-section `CameraSidebar` (Environment · Sequence
 Inspector · Unsequenced · Connections). Environment is read-only. Per-camera
 chevrons expose a component-local flat accordion of directly connected

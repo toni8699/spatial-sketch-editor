@@ -58,9 +58,8 @@ Policy rules:
 | # | Plan | Status | Depends on | Doc |
 |---|------|--------|------------|-----|
 | P13 | Sequence stop-at-node playback | proposed — nice-to-have, unscheduled (owner 2026-08-27) | P12 | [2026-08-27-P13-stop-at-node-playback.md](2026-08-27-P13-stop-at-node-playback.md) |
-| P19 | First project persistence | shipped 2026-09-03 — live smoke passed; doc archival pending | P18 | [umbrella](2026-08-30-P19-project-persistence.md) · [P19.4 annex](2026-09-02-P19.4-editor-shell.md) |
-| P20 | Project Asset Registry + R2 | shipped 2026-09-04 — local smoke vs real R2; prod-topology smoke deferred; doc archival pending | P19 | [umbrella](2026-08-19-P20-Project-assets-registry-R2.md) · [S2](2026-09-03-P20.2-spatial-registry-integration.md) · [S3](2026-09-03-P20.3-texture-durable-conversion.md) · [S4](2026-09-03-P20.4-load-runtime-resolution.md) |
-| P21 | Unified Project Shell + Spatial UI reconciliation | in-progress — P21.1–P21.5 complete (eye tests passed 2026-09-07); P21.6 approved for implementation 2026-09-07; final acceptance gate pending | P20 | [umbrella](2026-09-04-P21-unified-project-shell-spatial-reconciliation.md) · [P21.4](2026-09-05-P21.4-preview-project-flows.md) · [P21.5](2026-09-05-P21.5-ui-polish-pass.md) · [P21.6](2026-09-05-P21.6-3D-camera-UI-polish.md) |
+| P22 | Basic Publish + visitor runtime | proposed — brief written assuming P21 complete (owner 2026-09-07) | P21 | [plan](2026-09-07-P22-basic-publish-visitor-runtime.md) |
+| P23 | Layout Depth — minimum useful Build set | proposed — brief written assuming P22 complete (owner 2026-09-07) | P22 | [plan](2026-09-07-P23-layout-depth-minimum-build.md) |
 | — | Branch rejoin — experiment, no schedule | proposed | P8 conceptually | [2026-08-21-branch-rejoin-experiment.md](2026-08-21-branch-rejoin-experiment.md) |
 | … | future work re-registers here | | | |
 
@@ -79,15 +78,20 @@ Policy rules:
 - Done 2026-09-05: superseded `Design-specs/Camera-plan-objects-brief.md`
   moved to `docs/archive/plans/`, stub left behind pointing at frozen
   `Camera-layout-design.md`.
-- P19/P20 umbrellas + briefs stay live until P21 closeout, then archive per Rule 4.
+- Done 2026-09-08: P19 umbrella + P19.4 annex, P20 umbrella + S2/S3/S4 briefs,
+  and the P21 set (umbrella + P21.4 + P21.5 + P21.6 + slice-2B annex) moved to
+  `docs/archive/plans/` as sets at P21 closeout (cross-links survive — each
+  set's relative links stay inside the set, same as the P7 precedent).
 
 ## Gate status
 
-Ship narrative for P1–P20 (execution order, scope decisions, the P12/P3B hard
+Ship narrative for P1–P21 (execution order, scope decisions, the P12/P3B hard
 gate) now lives in the archived docs, not here.
 
-- Next: P21.6 closeout → final acceptance gate (full Vitest + `check` + `build`
-  + bundle gates + six-PNG comparison + axe sweep), then the P22 brief.
+- Next: P21 shipped 2026-09-08 (final acceptance gate passed — six-reference
+  visual comparison + axe/contrast sweep + Slice C focus/DPR rows, full Vitest
+  + `check` + `build` + bundle gates green); next is P22 implementation.
+  P22 brief is registered under the owner's P21-complete planning assumption.
 - Long-term tiers renumbered 2026-09-05 (owner): P23 Layout Depth, P24
   Scene/Staging Depth, P25 Experience Foundation, P26+ platform expansion;
   typed DB is conditional infrastructure, not a tier. Owner reconciliation
@@ -99,15 +103,15 @@ gate) now lives in the archived docs, not here.
 - Proposed / unscheduled: P13, branch rejoin.
 - Shipped baseline: P12 + core P3B gate 2026-08-28; P14–P18 extraction slice;
   P19 live smoke 2026-09-03; P20 local-vs-R2 smoke 2026-09-04
-  (production-topology smoke deferred).
+  (production-topology smoke deferred); P21 acceptance gate 2026-09-08.
 
 ## Archived plans (recent 5 only)
 
+- `archived → [2026-09-04-P21-unified-project-shell-spatial-reconciliation.md](../archive/plans/2026-09-04-P21-unified-project-shell-spatial-reconciliation.md)` (shipped 2026-09-08 — P21.1–P21.6 + final acceptance gate; set includes P21.4, P21.5, P21.6, slice-2B annex)
+- `archived → [2026-08-19-P20-Project-assets-registry-R2.md](../archive/plans/2026-08-19-P20-Project-assets-registry-R2.md)` (shipped 2026-09-04 — local smoke vs real R2; set includes S2/S3/S4 briefs)
+- `archived → [2026-08-30-P19-project-persistence.md](../archive/plans/2026-08-30-P19-project-persistence.md)` (shipped 2026-09-03 — live smoke passed; set includes P19.4 annex)
 - `archived → [2026-09-06-scope-decision-roadmap-reconciliation.md](../archive/plans/2026-09-06-scope-decision-roadmap-reconciliation.md)` (scope decision — audit-review roadmap reconciliation: broad category, staged P23/P24, narrow P25 after minima, early bounded agent/reuse proof; ratified 2026-09-06)
 - `archived → [2026-08-31-scope-decision-experience-interaction-boundary.md](../archive/plans/2026-08-31-scope-decision-experience-interaction-boundary.md)` (scope decision — Experience/Interaction authoring boundary; ratified 2026-08-31)
-- `archived → [2026-08-30-P18-backend-provisioning.md](../archive/plans/2026-08-30-P18-backend-provisioning.md)` (shipped 2026-08-30)
-- `archived → [2026-08-30-P17-app-split.md](../archive/plans/2026-08-30-P17-app-split.md)` (shipped 2026-08-30)
-- `archived → [2026-08-30-P16-project-model-layout-core-extraction.md](../archive/plans/2026-08-30-P16-project-model-layout-core-extraction.md)` (shipped 2026-08-30)
 
 Older history — P14 and earlier, the letter-era A–H tracks, prior scope
 decisions — lives on disk under `docs/archive/plans/` (renewal era) and
@@ -115,15 +119,15 @@ decisions — lives on disk under `docs/archive/plans/` (renewal era) and
 2026-09-05. When a plan ships, its stub enters this list and the oldest stub
 drops off (Rule 4).
 
-## Long-term roadmap (direction only — not registered)
+## Long-term roadmap (registered plans above; future tiers are direction only)
 
 Ratified 2026-08-31 with the north-star amendment: the project shell has two
 primary creative modes — **Spatial** (the current editor) and **Experience**
 (future) — plus project-level **Assets** and **Publish** surfaces, all
 operating on one portable project truth. Direction lives in
 [`../north-star.md`](../north-star.md) and its final conceptual hierarchy;
-this section records only the sequencing tiers. Nothing here is a registered
-P-number; the numbered tiers below are next-free-number reservations
+this section records the sequencing tiers. The Active table owns registered
+P-numbers; future numbered tiers below are next-free-number reservations
 (direction only) that become registered only when their plan docs are filed
 (owner roadmap revised 2026-09-03; tiers renumbered 2026-09-05 — authoring
 depth owns the P23/P24 slots, Experience moved to P25, typed DB demoted to
@@ -136,12 +140,12 @@ conditional infrastructure):
   until its plan doc is filed.
 - **P20 — Project Asset Registry + R2.** Shipped 2026-09-04 (local live smoke
   vs real R2 passed; production-topology smoke deferred).
-- **P21 — Product shell + Project Hub + core editor UX polish.** In progress —
-  see the Active table (P21.1–P21.5 complete, eye tests passed; P21.6 + final gate pending).
-- **P22 — Basic Publish + visitor runtime.** Publish an owned project, resolve
+- **P21 — Product shell + Project Hub + core editor UX polish.** Shipped
+  2026-09-08 (P21.1–P21.6 + final acceptance gate; see the archive).
+- **P22 — Basic Publish + visitor runtime.** Registered above. Publish an owned project, resolve
   project assets, hosted visitor-safe output, and basic preview/publish
-  status. Direction only; its brief is written once P21 closes — after the
-  P21.5 UI polish pass, not before. Strategic rationale: P22 establishes the
+  status. Brief written assuming P21 complete (owner 2026-09-07); implementation
+  depends on P21 closeout. Strategic rationale: P22 establishes the
   reusable execution target for every human- or agent-authored project
   (canonical project → deterministic asset resolution → cold visitor-safe
   runtime → published version → URL) while protecting visitor/editor
@@ -149,7 +153,8 @@ conditional infrastructure):
   `EditorApp`, editor stores, selection, history, gizmos, or editor-only
   asset setup. No Experience authoring, no agent API, no general Assets
   workspace, no collaboration, no generic SDK.
-- **P23 — Layout Depth family (staged).** First the minimum useful Build
+- **P23 — Layout Depth family (staged).** Minimum useful Build plan registered
+  above assuming P22 complete (owner 2026-09-07). First the minimum useful Build
   set: numeric placement/dimensions, stronger snapping, alignment, better
   openings/doors/windows, duplicate/repeat of supported structure, simple
   reusable architectural primitives. Optional depth tail (stairs, railings,
@@ -231,8 +236,9 @@ conditional infrastructure):
   passed), then the numbered tier sequence above:
   R2-backed project assets with Spatial integration (P20, shipped 2026-09-04 —
   local live smoke vs real R2; production-topology smoke deferred), the
-  product shell + Project Hub + editor UX polish (P21, including the P21.5
-  UI polish pass — strictly presentation-only — before P22), the basic
+  product shell + Project Hub + editor UX polish (P21, shipped 2026-09-08 —
+  P21.1–P21.6 plus the P21.5 presentation-only polish pass, closed by the
+  six-reference + axe/contrast acceptance gate), the basic
   publish/visitor-runtime boundary (P22 — the first complete product loop:
   author → preview → publish → visitor sees it, and an early stress test of
   the visitor/editor isolation boundary), then minimum useful authoring

@@ -1,7 +1,7 @@
 # Camera and tour
 
 **Read when:** nodes, connections, paths, guided order, timeline, framing, sequence preview.  
-**Last reviewed:** 2026-08-30 (P16 closeout)
+**Last reviewed:** 2026-09-07 (P21.6 Slice B closeout)
 **Deep dump (rare):** [`../archive/CAMERA_AND_LAYOUT.md`](../archive/CAMERA_AND_LAYOUT.md)
 
 ---
@@ -91,6 +91,34 @@ Plan ↔ 3D; a persisted view-keyframe selection gets only a passive
   fill, a solid emerald ring, and the same halo. Selection uses halos + size,
   never fill inversion, and picking uses its own screen-px hit radius — the
   24→28px growth is presentation-only.
+- **3D camera visualization (P21.6 Slices A/B):** 3D nodes/paths/frustums are
+  authored spatial truth, invariant in every theme (`SCENE_PALETTE` camera
+  tokens, never chrome accent). Sequenced 3D cores fill `#2F8CFF` with an
+  HTML numbered badge (blue disc, 1.5px white keyline, white tabular numeral);
+  unsequenced cores are transparent emerald with an emerald perimeter ring
+  (billboarded); selection adds a concentric `#1976DF` ring, never fill
+  inversion. Paths run `#2F8CFF` (selected `#55A1FF`); retained edges keep the
+  gray dashed language. The selected camera shows a translucent `#2F8CFF`
+  frustum fill (9%, scene-occluded) with a 1px blue perimeter, a dark apex
+  nub at the eye, compact blue FOV handles, a dashed slate look-at ray to a
+  target reticle, and off-white anchor dots for the selected connection only.
+  Picking rides invisible shells (`colorWrite:false + depthWrite:false +
+  opacity:1`) clamped to a 24px minimum projected diameter; same-class
+  overlaps arbitrate by closest projected center under the existing
+  nodes > view-keyframes > anchors > connections priority. FOV drags freeze
+  their basis at pointer-down (signed top/bottom identity, true grab offset)
+  with a vertical-slider fallback below 0.15 alignment — one undoable
+  gesture, invalid intersections hold the last valid FOV. Paused Director
+  preview yields the frustum to an editable node/view-keyframe selection;
+  paused with no editable selection owns `none` (clean viewport, never a
+  resurrected wireframe); playback keeps the playhead owner. Frame off
+  suppresses both frustum implementations; an ineligible selection helper
+  (wrong workspace / pending placement) cannot suppress the playhead — no
+  stop/seek side effects. Arbitration covers camera handles only
+  (placements/architecture keep distance order) with winning-class-first +
+  CSS-pixel order shared by hover/click/drag-entry; per-move FOV alignment
+  rechecks hold grazing blowups; hidden helpers never pick; nub + preview
+  orient from the shared framing basis.
 - **Anchors:** interior anchors render only for the selected connection;
   dragging an edge with no anchor inserts one at the nearest curve progress
   (shared `getCameraPathInsertionIndex` / `insertConnectionAnchorAtWorldPoint`

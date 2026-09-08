@@ -165,12 +165,12 @@
 	// P21.3 — Camera 3D ribbon exposes the Path/Frame helper toggles and the
 	// Observer/POV preview-mode switch through the existing session/preview
 	// commands (no new state; the View menu keeps the full helper list).
+	// Idle clicks enter a preview (solo node, else Sequence scope) via the
+	// shared chooser — never a dead click.
 	const previewMode = $derived(store.cameraPreview?.mode ?? 'director');
 
 	function choosePreviewMode(mode: 'director' | 'visitor') {
-		const preview = store.cameraPreview;
-		if (preview) store.setCameraPreviewMode(mode);
-		else if (mode === 'visitor') store.enterSequenceScope('visitor');
+		store.chooseCameraPreviewMode(mode);
 	}
 
 	function toggleViewMenu() {
@@ -439,6 +439,40 @@
 						<span class="check" aria-hidden="true">{store.viewportShowRetained ? '✓' : '○'}</span>
 						<span>Retained paths</span>
 					</button>
+					{/if}
+					{#if !store.isRelic}
+						<div class="view-separator" role="separator" aria-orientation="horizontal"></div>
+						<div class="view-section-label" aria-hidden="true">Panels</div>
+						<button
+							type="button"
+							role="menuitemcheckbox"
+							aria-checked={!store.leftSidePanelCollapsed}
+							class="toggle-row"
+							onclick={() => store.toggleLeftSidePanel()}
+						>
+							<span class="check" aria-hidden="true">{store.leftSidePanelCollapsed ? '○' : '✓'}</span>
+							<span>Left sidebar</span>
+						</button>
+						<button
+							type="button"
+							role="menuitemcheckbox"
+							aria-checked={!store.rightSidePanelCollapsed}
+							class="toggle-row"
+							onclick={() => store.toggleRightSidePanel()}
+						>
+							<span class="check" aria-hidden="true">{store.rightSidePanelCollapsed ? '○' : '✓'}</span>
+							<span>Right inspector</span>
+						</button>
+						<button
+							type="button"
+							role="menuitemcheckbox"
+							aria-checked={store.focusMode}
+							class="toggle-row"
+							onclick={() => store.toggleFocusMode()}
+						>
+							<span class="check" aria-hidden="true">{store.focusMode ? '✓' : '○'}</span>
+							<span>Focus 3D ( \ )</span>
+						</button>
 					{/if}
 					{#if showCeilingRow}
 						<button

@@ -5,7 +5,9 @@
 		Group,
 		Mesh,
 		MeshBasicMaterial,
-		SphereGeometry
+		SphereGeometry,
+		Vector3,
+		type PerspectiveCamera
 	} from 'three';
 	import { Line2 } from 'three/addons/lines/Line2.js';
 	import { LineGeometry } from 'three/addons/lines/LineGeometry.js';
@@ -15,6 +17,7 @@
 		getCameraPathVisualSampleCount,
 		getScenePathAnchorWorldPosition
 	} from './editor-camera-path';
+	import { pickShellScale } from './editor-camera-framing';
 	import { SCENE_PALETTE } from '../styles/scene-palette';
 	import type {
 		EditorCameraAnchorUserData,
@@ -24,7 +27,7 @@
 
 	let { store }: { store: EditorStore } = $props();
 
-	const { scene, canvas, invalidate } = useThrelte();
+	const { scene, camera, canvas, invalidate } = useThrelte();
 
 	type ConnectionHelper = {
 		visual: Line2;
@@ -38,8 +41,11 @@
 	type AnchorHelper = {
 		root: Group;
 		marker: Mesh;
-		geometry: SphereGeometry;
-		material: MeshBasicMaterial;
+		dotGeometry: SphereGeometry;
+		dotMaterial: MeshBasicMaterial;
+		shell: Mesh;
+		shellGeometry: SphereGeometry;
+		shellMaterial: MeshBasicMaterial;
 		connectionId: string;
 		anchorId: string;
 	};
@@ -75,7 +81,8 @@
 			opacity: 0.45,
 			depthTest: false,
 			depthWrite: false,
-			worldUnits: false
+			worldUnits: false,
+			toneMapped: false
 		});
 		const visual = new Line2(visualGeometry, visualMaterial);
 		visual.name = `EditorCameraPath:${connectionId}`;
@@ -128,13 +135,31 @@
 
 	function createAnchorHelper(connectionId: string, anchorId: string): AnchorHelper {
 		const root = new Group();
-		const geometry = new SphereGeometry(0.14, 14, 10);
-		const material = new MeshBasicMaterial({
-			color: 0xffe29a,
+		// P21.6 Slice B §4.2 — delicate spline control points: the visible dot
+		// shrinks 0.14 → 0.07 and re-inks to the invariant anchor token. The
+		// invisible shell keeps today's 0.14 grab-feel (colorWrite off — never
+		// opacity 0: mesh hits below NEAR_INVISIBLE_OPACITY are filtered —
+		// depthWrite off so it never becomes an invisible occluder). The
+		// decorative dot never raycasts: no duplicate/competing hits. Hover
+		// scales the dot only, never the shared root.
+		const dotGeometry = new SphereGeometry(0.07, 14, 10);
+		const dotMaterial = new MeshBasicMaterial({
+			color: SCENE_PALETTE.cameraAnchor,
 			depthTest: false,
-			depthWrite: false
+			depthWrite: false,
+			toneMapped: false
 		});
-		const marker = new Mesh(geometry, material);
+		const marker = new Mesh(dotGeometry, dotMaterial);
+		marker.raycast = () => undefined as never;
+		const shellGeometry = new SphereGeometry(0.14, 10, 8);
+		const shellMaterial = new MeshBasicMaterial({
+			transparent: true,
+			opacity: 1,
+			depthWrite: false,
+			toneMapped: false
+		});
+		shellMaterial.colorWrite = false;
+		const shell = new Mesh(shellGeometry, shellMaterial);
 		root.name = `EditorCameraAnchor:${connectionId}:${anchorId}`;
 		root.userData = {
 			editorEntity: 'camera-anchor',
@@ -142,10 +167,20 @@
 			anchorId
 		} satisfies EditorCameraAnchorUserData;
 		marker.renderOrder = 1002;
-		root.add(marker);
+		root.add(marker, shell);
 		scene.add(root);
 		store.registerAnchorHelperRoot(connectionId, anchorId, root);
-		return { root, marker, geometry, material, connectionId, anchorId };
+		return {
+			root,
+			marker,
+			dotGeometry,
+			dotMaterial,
+			shell,
+			shellGeometry,
+			shellMaterial,
+			connectionId,
+			anchorId
+		};
 	}
 
 	function disposeAnchorHelper(helper: AnchorHelper) {
@@ -155,8 +190,10 @@
 			helper.root
 		);
 		helper.root.removeFromParent();
-		helper.geometry.dispose();
-		helper.material.dispose();
+		helper.dotGeometry.dispose();
+		helper.dotMaterial.dispose();
+		helper.shellGeometry.dispose();
+		helper.shellMaterial.dispose();
 	}
 
 	function disposeAll() {
@@ -287,8 +324,10 @@
 					selection?.kind === 'anchor' && selection.anchorId === anchor.id;
 				const hovered =
 					hoveredConnectionId === selectedConnection.id && hoveredAnchorId === anchor.id;
-				helper.material.color.set(selected ? 0xffffff : hovered ? 0xffefbd : 0xffd36b);
-				helper.marker.scale.setScalar(selected ? 1.25 : hovered ? 1.12 : 1);
+				helper.dotMaterial.color.setHex(
+					selected || hovered ? 0xffffff : SCENE_PALETTE.cameraAnchor
+				);
+				helper.marker.scale.setScalar(selected ? 1.25 : hovered ? 0.1 / 0.07 : 1);
 			}
 		}
 
@@ -296,7 +335,34 @@
 		invalidate();
 	});
 
+	const scratchVector = new Vector3();
+
 	useTask(updateResolution);
+
+	useTask(() => {
+		// P21.6 Slice B §3.4 — anchor shells keep a 24px minimum projected
+		// diameter; the visible dot never scales with the shell.
+		if (anchorHelpers.size === 0) return;
+		const observer = camera.current as PerspectiveCamera | undefined;
+		const viewportHeight = Math.max(0, canvas.clientHeight || 0);
+		if (!observer || viewportHeight <= 0) return;
+		const effectiveFov =
+			typeof observer.getEffectiveFOV === 'function'
+				? observer.getEffectiveFOV()
+				: observer.fov;
+		let changed = false;
+		for (const helper of anchorHelpers.values()) {
+			scratchVector.setFromMatrixPosition(helper.root.matrixWorld);
+			scratchVector.applyMatrix4(observer.matrixWorldInverse);
+			const scale = pickShellScale(-scratchVector.z, effectiveFov, viewportHeight, 0.14);
+			if (Math.abs(scale - helper.shell.scale.x) > 1e-3) {
+				helper.shell.scale.setScalar(scale);
+				changed = true;
+			}
+		}
+		if (changed) invalidate();
+	});
+
 
 	onDestroy(disposeAll);
 </script>

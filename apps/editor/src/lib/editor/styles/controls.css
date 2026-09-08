@@ -119,6 +119,13 @@
 	cursor: default;
 }
 
+/* P21.6 Slice C — Zone C toggle-on tier mirrors the tool-group grammar. */
+.project-editor .workspace-ribbon .ribbon-btn.active {
+	background-color: var(--editor-accent-soft);
+	border-color: var(--editor-accent-border);
+	color: var(--editor-text-primary);
+}
+
 /* Enclosed segmented switches: [Scene|Camera], [Plan|3D], [Layout|Arrange]. */
 .project-editor .workspace-ribbon .segmented {
 	display: inline-flex;

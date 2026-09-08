@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { Object3D, type Intersection } from 'three';
+import {
+	Group,
+	Mesh,
+	MeshBasicMaterial,
+	Object3D,
+	PerspectiveCamera,
+	Raycaster,
+	SphereGeometry,
+	Vector3,
+	type Intersection
+} from 'three';
 import {
 	findCameraSelectionFromObject,
 	findCameraFovHandleFromObject,
@@ -12,11 +22,13 @@ import {
 	isEditorCameraHandleUserData,
 	isEditorCameraFovHandleUserData,
 	isEditorCameraViewKeyframeUserData,
+	navigationArbitrationClass,
 	NEAR_INVISIBLE_OPACITY,
 	nextPlacementCycleId,
 	resolveNormalSelection,
 	resolveNormalSelectionWithHit,
 	selectionHitFromIntersection,
+	sortIntersectionsBySameClassProjectedCenter,
 	uniquePlacementIdsInOrder,
 	type SelectionHitInfo
 } from '$lib/editor/editor-selection';
@@ -469,5 +481,195 @@ describe('resolveNormalSelectionWithHit', () => {
 		expect(
 			selectionHitFromIntersection({ object: markerGeometry, distance: 4.2 } as Intersection)
 		).toMatchObject({ opacity: 1, placementId: null, distance: 4.2 });
+	});
+});
+
+describe('P21.6 Slice B — same-class projected-center arbitration', () => {
+	function observer() {
+		const observerCamera = new PerspectiveCamera(90, 1, 0.1, 100);
+		observerCamera.position.set(0, 0, 5);
+		observerCamera.lookAt(0, 0, 0);
+		observerCamera.updateMatrixWorld();
+		return observerCamera;
+	}
+
+	function anchorAt(x: number, y: number, z: number, anchorId: string) {
+		const root = new Object3D();
+		root.position.set(x, y, z);
+		root.userData = { editorEntity: 'camera-anchor', connectionId: 'c1', anchorId };
+		return root;
+	}
+
+	function asHits(objects: Object3D[]): Intersection[] {
+		return objects.map((object) => ({ object, distance: 1 }) as Intersection);
+	}
+
+	it('orders same-class overlaps by closest projected center', () => {
+		const camera = observer();
+		const far = anchorAt(2, 0, 0, 'far');
+		const near = anchorAt(0.1, 0, 0, 'near');
+		const pointer = { x: 0, y: 0 };
+		// Incident order puts the off-pointer anchor first; arbitration
+		// promotes the on-pointer one.
+		const ordered = sortIntersectionsBySameClassProjectedCenter(
+			asHits([far, near]),
+			camera,
+			pointer
+		);
+		expect(ordered[0]!.object).toBe(near);
+		expect(ordered[1]!.object).toBe(far);
+	});
+
+	it('preserves cross-class order for the resolver priority', () => {
+		const camera = observer();
+		const anchor = anchorAt(0.05, 0, 0, 'a1');
+		const node = new Object3D();
+		node.position.set(3, 0, 0);
+		node.userData = { editorEntity: 'camera-handle', nodeId: 'n1', cameraHandle: 'position' };
+		const pointer = { x: 0, y: 0 };
+		// Review A/B P2-6 — total order: the winning semantic class leads
+		// (nodes outrank anchors per resolver priority) regardless of
+		// incident order, so an unrelated hit can never block arbitration.
+		const ordered = sortIntersectionsBySameClassProjectedCenter(
+			asHits([anchor, node]),
+			camera,
+			pointer
+		);
+		expect(ordered.map((hit) => navigationArbitrationClass(hit.object))).toEqual([
+			'navigation:node',
+			'navigation:anchor'
+		]);
+	});
+
+	it('sinks helpers behind the observer within their class', () => {
+		const camera = observer();
+		const behind = anchorAt(0, 0, 10, 'behind');
+		const front = anchorAt(2, 0, 0, 'front');
+		const ordered = sortIntersectionsBySameClassProjectedCenter(
+			asHits([behind, front]),
+			camera,
+			{ x: 0, y: 0 }
+		);
+		expect(ordered[0]!.object).toBe(front);
+	});
+});
+
+describe('P21.6 review (A/B P1-3 + P1-5 + P2-6) — arbitration scope + units', () => {
+	function observer() {
+		const observerCamera = new PerspectiveCamera(90, 1, 0.1, 100);
+		observerCamera.position.set(0, 0, 5);
+		observerCamera.lookAt(0, 0, 0);
+		observerCamera.updateMatrixWorld();
+		return observerCamera;
+	}
+
+	function placementAt(x: number, depth: number, id: string) {
+		const root = new Object3D();
+		root.position.set(x, 0, -5);
+		root.updateMatrixWorld();
+		root.userData = { editorEntity: 'placement', placementId: id };
+		return { object: root, distance: depth, point: new Vector3() } as Intersection;
+	}
+
+	function anchorAt(x: number, depth: number, anchorId: string) {
+		const root = new Object3D();
+		root.position.set(x, 0, -5);
+		root.updateMatrixWorld();
+		root.userData = { editorEntity: 'camera-anchor', connectionId: 'c', anchorId };
+		return { object: root, distance: depth, point: new Vector3() } as Intersection;
+	}
+
+	it('preserves distance order for ordinary scene placements', () => {
+		const camera = observer();
+		// Farther object centered under the cursor must not outrank the
+		// nearer intersected object (review probe shape).
+		const near = placementAt(1, 1, 'near');
+		const far = placementAt(0, 2, 'far');
+		expect(
+			sortIntersectionsBySameClassProjectedCenter([near, far], camera, { x: 0, y: 0 })[0]
+		).toBe(near);
+		expect(
+			sortIntersectionsBySameClassProjectedCenter([far, near], camera, { x: 0, y: 0 })[0]
+		).toBe(near);
+	});
+
+	it('sorts anchors even with an unrelated hit between them', () => {
+		const camera = observer();
+		const a = anchorAt(1, 1, 'a');
+		const b = anchorAt(0, 3, 'b');
+		const other = placementAt(0, 2, 'other');
+		const result = sortIntersectionsBySameClassProjectedCenter(
+			[a, other, b],
+			camera,
+			{ x: 0, y: 0 }
+		);
+		expect(result.filter((entry) => entry === a || entry === b)[0]).toBe(b);
+	});
+
+	it('compares camera handles in CSS pixels on rectangular viewports', () => {
+		const camera = observer();
+		// NDC: A(0.09, 0) beats B(0, 0.1) on a square viewport…
+		const a = anchorAt(0.45, 1, 'a');
+		const b = anchorAt(0, 1, 'b');
+		b.object.position.set(0, 0.5, -5);
+		b.object.updateMatrixWorld();
+		const square = sortIntersectionsBySameClassProjectedCenter(
+			[b, a],
+			camera,
+			{ x: 0, y: 0 }
+		);
+		expect(square[0]).toBe(a);
+		// …but on an 800×200 viewport A=36px loses to B=10px.
+		const wide = sortIntersectionsBySameClassProjectedCenter(
+			[b, a],
+			camera,
+			{ x: 0, y: 0 },
+			{ width: 800, height: 200 }
+		);
+		expect(wide[0]).toBe(b);
+	});
+
+	it('gives FOV handles an explicit class with deterministic order', () => {
+		const root = new Object3D();
+		root.userData = {
+			editorEntity: 'camera-fov-handle',
+			owner: 'node',
+			nodeId: 'n1',
+			side: 'top'
+		};
+		expect(navigationArbitrationClass(root)).toBe('camera-fov-handle');
+	});
+
+	it('excludes hidden FOV roots from tag lookup (review probe shape)', () => {
+		const root = new Group();
+		root.visible = false;
+		root.position.set(0, 0, -5);
+		root.userData = {
+			editorEntity: 'camera-fov-handle',
+			owner: 'node',
+			nodeId: 'n',
+			side: 'top'
+		};
+		const shell = new Mesh(
+			new SphereGeometry(0.14),
+			new MeshBasicMaterial({ colorWrite: false, depthWrite: false, opacity: 1 })
+		);
+		root.add(shell);
+		root.updateMatrixWorld(true);
+		const caster = new Raycaster(new Vector3(0.01, 0.01, 0), new Vector3(0, 0, -1));
+		const hits = caster.intersectObject(root, true);
+		expect(hits.length).toBeGreaterThan(0);
+		expect(hits.map((entry) => findCameraFovHandleFromObject(entry.object)).filter(Boolean)).toHaveLength(
+			0
+		);
+		// Visible shells with colorWrite off stay pickable.
+		root.visible = true;
+		root.updateMatrixWorld(true);
+		const visibleHits = caster.intersectObject(root, true);
+		expect(
+			visibleHits.map((entry) => findCameraFovHandleFromObject(entry.object)).filter(Boolean)
+		).not.toHaveLength(0);
+		shell.geometry.dispose();
+		(shell.material as MeshBasicMaterial).dispose();
 	});
 });

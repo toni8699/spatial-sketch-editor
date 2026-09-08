@@ -54,11 +54,26 @@
 			<EditorViewportGridControls {store} />
 		{/if}
 	</div>
+	<!-- P21.6 Slice C — Zone C: panel visibility (shell chrome, all views).
+	     Collapse is CSS-grid only; the canvas is never unmounted. Requests
+	     during an active gesture defer to gesture end (store-owned). -->
+	<div class="zone-c" role="group" aria-label="Panel visibility">
+		<button type="button" class="ribbon-btn" class:active={store.leftSidePanelCollapsed} aria-pressed={store.leftSidePanelCollapsed}
+			title={store.leftSidePanelCollapsed ? 'Expand left panel' : 'Collapse left panel'}
+			onclick={() => store.toggleLeftSidePanel()}>Left</button>
+		<button type="button" class="ribbon-btn" class:active={store.rightSidePanelCollapsed} aria-pressed={store.rightSidePanelCollapsed}
+			title={store.rightSidePanelCollapsed ? 'Expand right panel' : 'Collapse right panel'}
+			onclick={() => store.toggleRightSidePanel()}>Right</button>
+		<button type="button" class="ribbon-btn" class:active={store.focusMode} aria-pressed={store.focusMode}
+			title="Focus 3D — collapse both panels ( \ )"
+			onclick={() => store.toggleFocusMode()}>Focus</button>
+	</div>
 </div>
 
 <style>
 	.workspace-ribbon { display:flex; height:var(--editor-ribbon-height); min-width:0; box-sizing:border-box; background:var(--editor-bg-row-2); border-bottom:1px solid var(--editor-border-subtle); z-index:20; }
 	.zone-a { display:flex; align-items:center; gap:8px; flex:0 0 240px; box-sizing:border-box; padding:0 8px; border-right:1px solid var(--editor-border-subtle); }
+	.zone-c { display:flex; align-items:center; gap:6px; flex:0 0 auto; box-sizing:border-box; margin-left:auto; padding:0 8px; border-left:1px solid var(--editor-border-subtle); }
 	/* Row 2 control surfaces (tracks / segmented switches / ribbon-btn) are
 	   owned by the P21.5 grammar in styles/controls.css; only shell layout
 	   stays here. */

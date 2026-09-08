@@ -1,46 +1,68 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
-	import { useThrelte } from '@threlte/core';
+	import { useTask, useThrelte } from '@threlte/core';
 	import {
+		BufferAttribute,
 		BufferGeometry,
+		DoubleSide,
 		Group,
 		Line,
-		LineBasicMaterial,
+		LineDashedMaterial,
 		Mesh,
 		MeshBasicMaterial,
+		OctahedronGeometry,
+		RingGeometry,
 		SphereGeometry,
-		Vector3
+		Vector3,
+		type Material,
+		type PerspectiveCamera
 	} from 'three';
 	import {
 		getSceneCameraViewKeyframeWorldPosition,
 		getSceneCameraViewKeyframeWorldTarget
 	} from './editor-camera-view';
+	import { pickShellScale } from './editor-camera-framing';
+	import { SCENE_PALETTE } from '../styles/scene-palette';
 	import type { EditorCameraViewKeyframeUserData } from '../editor-selection';
 	import type { EditorStore } from '../editor-store.svelte';
 
 	let { store }: { store: EditorStore } = $props();
-	const { scene, invalidate } = useThrelte();
+	const { scene, camera, canvas, invalidate } = useThrelte();
 
 	type ViewMarkerHelper = {
 		root: Group;
 		marker: Mesh;
-		geometry: SphereGeometry;
+		geometry: OctahedronGeometry;
 		material: MeshBasicMaterial;
 		connectionId: string;
 		direction: 'forward' | 'reverse';
 		keyframeId: string;
 	};
 
-	type ViewTargetHelper = ViewMarkerHelper & {
+	type ViewTargetHelper = {
+		root: Group;
+		ring: Mesh;
+		ringGeometry: RingGeometry;
+		dot: Mesh;
+		dotGeometry: SphereGeometry;
+		shell: Mesh;
+		shellGeometry: SphereGeometry;
+		material: MeshBasicMaterial;
 		connector: Line;
 		connectorGeometry: BufferGeometry;
-		connectorMaterial: LineBasicMaterial;
+		connectorMaterial: LineDashedMaterial;
+		connectorPositions: Float32Array;
+		connectorDistances: Float32Array;
+		connectionId: string;
+		direction: 'forward' | 'reverse';
+		keyframeId: string;
 	};
 
 	const markers = new Map<string, ViewMarkerHelper>();
 	let targetHelper: ViewTargetHelper | null = null;
 	const cameraPosition = new Vector3();
 	const targetPosition = new Vector3();
+	const observerScratch = new Vector3();
 
 	function helperKey(
 		connectionId: string,
@@ -81,11 +103,13 @@
 			'position',
 			`EditorCameraViewKeyframe:${connectionId}:${direction}:${keyframeId}`
 		);
-		const geometry = new SphereGeometry(0.13, 14, 10);
+		// P21.6 Slice B §4.3 — view-key diamonds in the selected-path blue.
+		const geometry = new OctahedronGeometry(0.13);
 		const material = new MeshBasicMaterial({
-			color: 0x79d8ff,
+			color: SCENE_PALETTE.cameraPathSelected,
 			depthTest: false,
-			depthWrite: false
+			depthWrite: false,
+			toneMapped: false
 		});
 		const marker = new Mesh(geometry, material);
 		marker.renderOrder = 1003;
@@ -120,27 +144,63 @@
 			'target',
 			`EditorCameraViewTarget:${connectionId}:${direction}:${keyframeId}`
 		);
-		const geometry = new SphereGeometry(0.16, 14, 10);
+		// P21.6 Slice B §4.3 — target crosshair in the canonical target blue:
+		// billboarded ring + center dot (decorative only) with an invisible
+		// 24px-clamped shell owning the pick (same contract as §4.2 anchors).
+		const ringGeometry = new RingGeometry(0.12, 0.15, 40);
 		const material = new MeshBasicMaterial({
-			color: 0xff9ed2,
-			depthTest: false,
-			depthWrite: false
-		});
-		const marker = new Mesh(geometry, material);
-		marker.renderOrder = 1004;
-		root.add(marker);
-
-		const connectorGeometry = new BufferGeometry();
-		const connectorMaterial = new LineBasicMaterial({
-			color: 0xff9ed2,
+			color: SCENE_PALETTE.cameraTarget,
 			transparent: true,
-			opacity: 0.7,
+			opacity: 0.95,
 			depthTest: false,
-			depthWrite: false
+			depthWrite: false,
+			side: DoubleSide,
+			toneMapped: false
+		});
+		const ring = new Mesh(ringGeometry, material);
+		ring.renderOrder = 1004;
+		ring.raycast = () => undefined as never;
+		const dotGeometry = new SphereGeometry(0.045, 12, 8);
+		const dot = new Mesh(dotGeometry, material);
+		dot.renderOrder = 1004;
+		dot.raycast = () => undefined as never;
+		const shellGeometry = new SphereGeometry(0.14, 10, 8);
+		const shellMaterial = new MeshBasicMaterial({
+			transparent: true,
+			opacity: 1,
+			depthWrite: false,
+			toneMapped: false
+		});
+		shellMaterial.colorWrite = false;
+		const shell = new Mesh(shellGeometry, shellMaterial);
+		shell.renderOrder = 1004;
+		root.add(ring, dot, shell);
+
+		const connectorPositions = new Float32Array(6);
+		const connectorDistances = new Float32Array(2);
+		const connectorGeometry = new BufferGeometry();
+		connectorGeometry.setAttribute(
+			'position',
+			new BufferAttribute(connectorPositions, 3)
+		);
+		connectorGeometry.setAttribute(
+			'lineDistance',
+			new BufferAttribute(connectorDistances, 1)
+		);
+		const connectorMaterial = new LineDashedMaterial({
+			color: SCENE_PALETTE.cameraLookAtRay,
+			dashSize: 0.25,
+			gapSize: 0.15,
+			transparent: true,
+			opacity: 0.45,
+			depthTest: true,
+			depthWrite: false,
+			toneMapped: false
 		});
 		const connector = new Line(connectorGeometry, connectorMaterial);
 		connector.name = `EditorCameraViewConnector:${connectionId}:${direction}:${keyframeId}`;
 		connector.renderOrder = 1002;
+		connector.frustumCulled = false;
 		connector.raycast = () => undefined as never;
 		scene.add(root, connector);
 		store.registerViewKeyframeTargetHelperRoot(
@@ -151,12 +211,18 @@
 		);
 		return {
 			root,
-			marker,
-			geometry,
+			ring,
+			ringGeometry,
+			dot,
+			dotGeometry,
+			shell,
+			shellGeometry,
 			material,
 			connector,
 			connectorGeometry,
 			connectorMaterial,
+			connectorPositions,
+			connectorDistances,
 			connectionId,
 			direction,
 			keyframeId
@@ -170,10 +236,15 @@
 			helper.keyframeId,
 			helper.root
 		);
+		helper.root.removeFromParent();
 		helper.connector.removeFromParent();
+		helper.ringGeometry.dispose();
+		helper.dotGeometry.dispose();
+		helper.shellGeometry.dispose();
+		(helper.shell.material as Material).dispose();
 		helper.connectorGeometry.dispose();
 		helper.connectorMaterial.dispose();
-		disposeMarker(helper);
+		helper.material.dispose();
 	}
 
 	function disposeAll() {
@@ -228,7 +299,9 @@
 				selection.connectionId === connection.id &&
 				selection.direction === direction &&
 				selection.keyframeId === keyframe.id;
-			helper.material.color.set(selected ? 0xffffff : 0x79d8ff);
+			helper.material.color.setHex(
+				selected ? 0xffffff : SCENE_PALETTE.cameraPathSelected
+			);
 			helper.marker.scale.setScalar(selected ? 1.28 : 1);
 		}
 
@@ -271,16 +344,56 @@
 				...getSceneCameraViewKeyframeWorldTarget(selectedKeyframe, store.rooms)
 			);
 			targetHelper.root.position.copy(targetPosition);
-			targetHelper.connectorGeometry.setFromPoints([
-				cameraPosition,
-				targetPosition
-			]);
+			// In-place connector update over the fixed 2-point layout (the
+			// allocating from-points call is never used on this path).
+			targetHelper.connectorPositions[0] = cameraPosition.x;
+			targetHelper.connectorPositions[1] = cameraPosition.y;
+			targetHelper.connectorPositions[2] = cameraPosition.z;
+			targetHelper.connectorPositions[3] = targetPosition.x;
+			targetHelper.connectorPositions[4] = targetPosition.y;
+			targetHelper.connectorPositions[5] = targetPosition.z;
+			(targetHelper.connectorGeometry.getAttribute('position') as BufferAttribute).needsUpdate =
+				true;
+			targetHelper.connectorDistances[0] = 0;
+			targetHelper.connectorDistances[1] = cameraPosition.distanceTo(targetPosition);
+			(targetHelper.connectorGeometry.getAttribute('lineDistance') as BufferAttribute).needsUpdate =
+				true;
+			targetHelper.connectorGeometry.computeBoundingSphere();
 		} else if (targetHelper) {
 			disposeTarget(targetHelper);
 			targetHelper = null;
 		}
 		invalidate();
 	});
+
+	useTask(() => {
+		if (!targetHelper) return;
+		// Billboard the crosshair ring; clamp the pick shell to 24px.
+		const observer = camera.current as PerspectiveCamera | undefined;
+		if (!observer) return;
+		targetHelper.ring.quaternion.copy(observer.quaternion);
+		const viewportHeight = Math.max(0, canvas.clientHeight || 0);
+		if (viewportHeight <= 0) return;
+		targetHelper.root.updateWorldMatrix(true, false);
+		observerScratch
+			.setFromMatrixPosition(targetHelper.root.matrixWorld)
+			.applyMatrix4(observer.matrixWorldInverse);
+		const effectiveFov =
+			typeof observer.getEffectiveFOV === 'function'
+				? observer.getEffectiveFOV()
+				: observer.fov;
+		const scale = pickShellScale(
+			-observerScratch.z,
+			effectiveFov,
+			viewportHeight,
+			0.14
+		);
+		if (Math.abs(scale - targetHelper.shell.scale.x) > 1e-3) {
+			targetHelper.shell.scale.setScalar(scale);
+			invalidate();
+		}
+	});
+
 
 	onDestroy(disposeAll);
 </script>

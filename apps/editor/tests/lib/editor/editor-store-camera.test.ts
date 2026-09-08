@@ -3905,3 +3905,144 @@ describe('EditorStore P1.9 — empty-chain promotion (manual Start Sequence)', (
 		expect(timeline).not.toBeNull();
 	});
 });
+
+describe('P21.6 review (A/B P1) — focused-camera deletion lifecycle', () => {
+	it('focus → delete → undo → redo leaves no stale focus request', () => {
+		const store = createFixtureEditorStore();
+		expect(store.beginCameraPlacement()).toBe(true);
+		const nodeId = store.createPendingNavigationNodeAt(
+			'workshop',
+			roomPoint('workshop', [1, 0, 1]),
+			[0, 0, -1]
+		)!;
+		expect(store.focusNavigationNode(nodeId)).toBe(true);
+		expect(store.cameraFocusNodeId).toBe(nodeId);
+
+		expect(store.deleteNavigationNode(nodeId)).toBe(true);
+		expect(store.cameraFocusKind).toBeNull();
+		expect(store.cameraFocusNodeId).toBeNull();
+
+		expect(store.undo()).toBe(true);
+		expect(
+			store.document.navigationNodes.some((node) => node.id === nodeId)
+		).toBe(true);
+		expect(store.cameraFocusKind).toBeNull();
+
+		expect(store.redo()).toBe(true);
+		expect(
+			store.document.navigationNodes.some((node) => node.id === nodeId)
+		).toBe(false);
+		expect(store.cameraFocusKind).toBeNull();
+		expect(store.cameraFocusNodeId).toBeNull();
+	});
+
+	it('deleting focused nodes never leaves a request for a missing node', () => {
+		const store = createFixtureEditorStore();
+		for (const id of store.document.navigationNodes.map((node) => node.id)) {
+			if (!store.document.navigationNodes.some((node) => node.id === id)) continue;
+			store.focusNavigationNode(id);
+			store.deleteNavigationNode(id);
+			const focusId = store.cameraFocusNodeId;
+			expect(
+				focusId === null ||
+					store.document.navigationNodes.some((node) => node.id === focusId)
+			).toBe(true);
+		}
+		const focusId = store.cameraFocusNodeId;
+		expect(
+			focusId === null ||
+				store.document.navigationNodes.some((node) => node.id === focusId)
+		).toBe(true);
+	});
+});
+
+describe('idle Observer/POV entry (chooseCameraPreviewMode)', () => {
+	function createFlowlessStore() {
+		const document = cloneFixtureDocument();
+		for (const node of document.navigationNodes) {
+			delete node.nextNodeId;
+			delete node.previousNodeId;
+			delete node.detourOfNodeId;
+		}
+		return createEditorStore({ document, rooms: chopinRuntime.rooms });
+	}
+
+	function createSoloStore() {
+		const document = cloneFixtureDocument();
+		const template = document.navigationNodes.find((node) => node.id === 'tour-paris')!;
+		document.navigationNodes.push({
+			...structuredClone(template),
+			id: 'tour-solo',
+			nextNodeId: undefined,
+			previousNodeId: undefined,
+			detourOfNodeId: undefined,
+			connectedNodeIds: []
+		});
+		const store = createEditorStore({ document, rooms: chopinRuntime.rooms });
+		// Solo preview covers unsequenced nodes only (flow nodes inspect
+		// from Sequence scope); tour-solo carries no order links.
+		expect(store.selectionActions.selectNavigationNode('tour-solo')).toBe(true);
+		return store;
+	}
+
+	it('POV with a selected solo node starts its preview (no Preview Camera click needed)', () => {
+		const store = createSoloStore();
+		expect(store.cameraPreview).toBeNull();
+		expect(store.chooseCameraPreviewMode('visitor')).toBe(true);
+		expect(store.cameraPreview).toMatchObject({
+			kind: 'camera',
+			nodeId: 'tour-solo',
+			mode: 'visitor',
+			transport: 'paused'
+		});
+	});
+
+	it('Observer with a selected solo node starts its preview in director mode', () => {
+		const store = createSoloStore();
+		expect(store.chooseCameraPreviewMode('director')).toBe(true);
+		expect(store.cameraPreview).toMatchObject({
+			kind: 'camera',
+			nodeId: 'tour-solo',
+			mode: 'director',
+			transport: 'paused'
+		});
+	});
+
+	it('switches mode on a live single-node preview', () => {
+		const store = createSoloStore();
+		expect(store.chooseCameraPreviewMode('visitor')).toBe(true);
+		expect(store.chooseCameraPreviewMode('director')).toBe(true);
+		expect(store.cameraPreview).toMatchObject({
+			kind: 'camera',
+			nodeId: 'tour-solo',
+			mode: 'director'
+		});
+		expect(store.chooseCameraPreviewMode('visitor')).toBe(true);
+		expect(store.cameraPreview).toMatchObject({
+			kind: 'camera',
+			nodeId: 'tour-solo',
+			mode: 'visitor'
+		});
+	});
+
+	it('POV with a sequenced node falls back to its Sequence scope', () => {
+		const store = createFixtureEditorStore();
+		expect(store.selectionActions.selectNavigationNode('tour-a')).toBe(true);
+		expect(store.chooseCameraPreviewMode('visitor')).toBe(true);
+		expect(store.cameraPreview).toMatchObject({ kind: 'sequence', mode: 'visitor' });
+	});
+
+	it('POV with nothing selected and no sequence messages instead of dead-clicking', () => {
+		const store = createFlowlessStore();
+		expect(store.cameraPreview).toBeNull();
+		expect(store.chooseCameraPreviewMode('visitor')).toBe(false);
+		expect(store.cameraPreview).toBeNull();
+		expect(store.statusMessage).toContain('Select a camera node to preview');
+	});
+
+	it('Observer with nothing selected and no sequence stays a silent no-op', () => {
+		const store = createFlowlessStore();
+		expect(store.chooseCameraPreviewMode('director')).toBe(false);
+		expect(store.cameraPreview).toBeNull();
+	});
+});

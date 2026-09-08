@@ -818,6 +818,33 @@ export class EditorCameraPreviewCommands {
 	// FSM commands
 	// =========================================================================
 
+	/**
+	 * Idle Observer/POV entry shared by the ribbon + timeline mode
+	 * switches. With a preview, plain mode switch. Without: a selected
+	 * camera node previews solo in the chosen mode (sequenced nodes fall
+	 * back to their Sequence scope for POV); otherwise POV enters the
+	 * Sequence scope or messages, and director is a silent no-op (the idle
+	 * viewport already observes). Neither switch is ever clickable-but-dead.
+	 */
+	chooseCameraPreviewMode(mode: EditorCameraPreviewMode): boolean {
+		const host = this.host;
+		if (host.cameraPreview) return this.setCameraPreviewMode(mode);
+		if (host.isEditorInteractionActive || host.isDocumentTransactionActive) {
+			return false;
+		}
+		if (host.cameraSelection?.nodeId) {
+			if (this.previewSelectedNode(mode)) return true;
+			if (mode === 'visitor' && this.enterSequenceScope('visitor')) return true;
+			return false;
+		}
+		if (mode === 'visitor') {
+			if (this.enterSequenceScope('visitor')) return true;
+			host.setStatusMessage('Select a camera node to preview');
+			return false;
+		}
+		return false;
+	}
+
 	setCameraPreviewMode(mode: EditorCameraPreviewMode) {
 		const host = this.host;
 		const preview = host.cameraPreview;

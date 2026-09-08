@@ -124,6 +124,10 @@
 		const target = event.currentTarget as HTMLElement;
 		scrubDrag = { pointerId: event.pointerId, target, edge };
 		target.setPointerCapture(event.pointerId);
+		// P21.6 Slice C — lane scrub is a pointer-down gesture: panel
+		// collapse requests defer until scrub end (idempotent seeks need no
+		// other protection).
+		store.setTimelineScrubActive(true);
 		const progress = scrubProgress(event, scrubTrackElement, edge ? edgePlayhead : playhead);
 		seekTimeline(progress, edge);
 		event.preventDefault();
@@ -142,12 +146,16 @@
 		if (!scrubDrag || event.pointerId !== scrubDrag.pointerId) return;
 		const active = scrubDrag;
 		scrubDrag = null;
+		// P21.6 Slice C — scrub teardown flushes a deferred panel config.
+		store.setTimelineScrubActive(false);
 		if (active.target.hasPointerCapture(event.pointerId)) active.target.releasePointerCapture(event.pointerId);
 	}
 
 	function cancelTimelineScrub() {
 		if (!scrubDrag) return;
 		scrubDrag = null;
+		// P21.6 Slice C — capture-loss teardown flushes a deferred panel config.
+		store.setTimelineScrubActive(false);
 	}
 
 	function handlePlayheadKeydown(event: KeyboardEvent, edge: boolean) {

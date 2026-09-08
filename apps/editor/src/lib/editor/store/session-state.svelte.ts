@@ -126,6 +126,107 @@ export class EditorSessionState {
 	}
 
 	// ============================================================
+	// Viewport focus mode — P21.6 Slice C (session-only, never
+	// ProjectDocument/history/visitor JSON; a localStorage preference later
+	// is optional, not this slice).
+	// ============================================================
+
+	/** Independent left (sidebar) collapse. Grid track → 0 via CSS only. */
+	leftSideCollapsed = $state(false);
+	/** Independent right (inspector) collapse. Grid track → 0 via CSS only. */
+	rightSideCollapsed = $state(false);
+	/**
+	 * Independent configuration remembered on combined-focus entry so
+	 * exiting focus restores it. Written only at apply time (never while
+	 * deferred): a mid-gesture overwrite drops the entry op with its
+	 * snapshot, so no stale snapshot can survive. Non-null only while
+	 * focus is engaged or a focus entry is pending.
+	 */
+	preFocusSideState: { left: boolean; right: boolean } | null = $state(null);
+	/**
+	 * Drag discipline (deferral): while a pointer-down gesture is active,
+	 * requests stash ONE coalesced desired configuration here instead of
+	 * resizing the viewport mid-drag. Applied after commit/cancel + capture
+	 * release + controls restore (see facade `flushPendingSidePanels`).
+	 * A stashed focus entry carries its snapshot (`snapshotPreFocus`,
+	 * effective state at request time — panels cannot change under a
+	 * gesture, so it equals apply-time state); any overwrite drops it.
+	 */
+	pendingSidePanels: {
+		left: boolean;
+		right: boolean;
+		snapshotPreFocus?: { left: boolean; right: boolean };
+	} | null = $state(null);
+	/** Timeline scrub gesture (lane scrub, pointer-captured, idempotent seeks). */
+	timelineScrubActive = $state(false);
+
+	get focusMode() {
+		return this.leftSideCollapsed && this.rightSideCollapsed;
+	}
+
+	/**
+	 * Immediate apply (facade gates gestures first); clears any pending.
+	 * Enforces the snapshot invariant: leaving focus clears the entry
+	 * snapshot (a later entry re-snapshots fresh).
+	 */
+	applySidePanels(left: boolean, right: boolean) {
+		this.leftSideCollapsed = left;
+		this.rightSideCollapsed = right;
+		this.pendingSidePanels = null;
+		if (!(left && right)) this.preFocusSideState = null;
+	}
+
+	/** Combined-focus entry: snapshot current, collapse both. */
+	applyFocusEntry() {
+		this.preFocusSideState = {
+			left: this.leftSideCollapsed,
+			right: this.rightSideCollapsed
+		};
+		this.leftSideCollapsed = true;
+		this.rightSideCollapsed = true;
+		this.pendingSidePanels = null;
+	}
+
+	/** Combined-focus exit: restore the entry snapshot (or expand both). */
+	applyFocusExit() {
+		const restore = this.preFocusSideState ?? { left: false, right: false };
+		this.preFocusSideState = null;
+		this.leftSideCollapsed = restore.left;
+		this.rightSideCollapsed = restore.right;
+		this.pendingSidePanels = null;
+	}
+
+	/** Stash one coalesced desired configuration (repeats overwrite). */
+	stashPendingSidePanels(config: {
+		left: boolean;
+		right: boolean;
+		snapshotPreFocus?: { left: boolean; right: boolean };
+	}) {
+		this.pendingSidePanels = {
+			left: config.left,
+			right: config.right,
+			...(config.snapshotPreFocus !== undefined
+				? { snapshotPreFocus: { ...config.snapshotPreFocus } }
+				: {})
+		};
+	}
+
+	/** Take + clear the stashed configuration, if any. */
+	consumePendingSidePanels(): {
+		left: boolean;
+		right: boolean;
+		snapshotPreFocus?: { left: boolean; right: boolean };
+	} | null {
+		const pending = this.pendingSidePanels;
+		this.pendingSidePanels = null;
+		return pending;
+	}
+
+	setTimelineScrubActive(active: boolean) {
+		this.timelineScrubActive = active;
+	}
+
+	// ============================================================
 	// Transform controls (audit §3.C).
 	// ============================================================
 

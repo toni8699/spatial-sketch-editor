@@ -507,6 +507,10 @@ export class EditorStore {
 		// pre-slice gap where #reconcileSelection() only ran via the explicit
 		// #replaceDocument() callers — now fires on every document swap.
 		this.documentStore.addAfterReplaceListener(() => this.#reconcileSelection());
+		// P21.6 review (A/B P1) — stale camera-focus requests clear on the
+		// same swap (delete/undo/redo/import) so the rig never frames a
+		// missing node through strict getNode().
+		this.documentStore.addAfterReplaceListener(() => this.#reconcileCameraFocus());
 		// Preview after-replace listeners (Slice 3.5). Order: reconcile first
 		// (lowest-latency selection coherence), then preview refresh/prune/graph.
 		// refreshPausedDirector keeps preview on route failure (pre-slice) and
@@ -1787,12 +1791,18 @@ export class EditorStore {
 
 	/** Commit a successful drag as exactly one history entry. */
 	commitViewKeyframeProgressDrag() {
-		return this.viewKeyframeController.commitViewKeyframeProgressDrag();
+		const result = this.viewKeyframeController.commitViewKeyframeProgressDrag();
+		// P21.6 Slice C — gesture teardown flushes a deferred panel config.
+		this.flushPendingSidePanels();
+		return result;
 	}
 
 	/** Restore the original progress/playhead and create no history entry. */
 	cancelViewKeyframeProgressDrag() {
-		return this.viewKeyframeController.cancelViewKeyframeProgressDrag();
+		const result = this.viewKeyframeController.cancelViewKeyframeProgressDrag();
+		// P21.6 Slice C — gesture teardown flushes a deferred panel config.
+		this.flushPendingSidePanels();
+		return result;
 	}
 
 	deleteSelectedViewKeyframe() {
@@ -1935,6 +1945,11 @@ export class EditorStore {
 
 	setCameraPreviewMode(mode: EditorCameraPreviewMode) {
 		return this.cameraPreviewCommands.setCameraPreviewMode(mode);
+	}
+
+	/** Idle Observer/POV entry for the ribbon + timeline switches (never dead-clicks). */
+	chooseCameraPreviewMode(mode: EditorCameraPreviewMode) {
+		return this.cameraPreviewCommands.chooseCameraPreviewMode(mode);
 	}
 
 	playCameraPreview() {
@@ -2123,6 +2138,10 @@ export class EditorStore {
 			this.stopCameraPreview();
 		}
 		this.currentWorkspace = workspace;
+		// P21.6 Slice C — workspace-exit terminal: a gesture that survived
+		// until the switch (workspace changes refuse while interaction is
+		// active, so teardown ran first) releases any deferred panels.
+		this.flushPendingSidePanels();
 		// P1.7 follow-up (owner): the Camera timeline never auto-expands on a
 		// domain switch — the panel keeps whatever expanded state the user last
 		// set, across every workspace change.
@@ -2163,6 +2182,176 @@ export class EditorStore {
 		if (this.isEditorInteractionActive) return false;
 		this.timelineExpanded = !this.timelineExpanded;
 		return true;
+	}
+
+	// ============================================================
+	// Viewport focus mode — P21.6 Slice C (session-only chrome state).
+	// ============================================================
+
+	get leftSidePanelCollapsed() {
+		return this.session.leftSideCollapsed;
+	}
+
+	get rightSidePanelCollapsed() {
+		return this.session.rightSideCollapsed;
+	}
+
+	/** Derived combined flag: both sides collapsed. */
+	get focusMode() {
+		return this.session.focusMode;
+	}
+
+	get hasPendingSidePanels() {
+		return this.session.pendingSidePanels !== null;
+	}
+
+	/** Deferral gate: any pointer-down gesture (3D drags + lane scrub). */
+	get isSidePanelChangeDeferred() {
+		return this.isEditorInteractionActive || this.session.timelineScrubActive;
+	}
+
+	/**
+	 * Request an exact side-panel configuration. Applies immediately when
+	 * idle; while a gesture is active stashes ONE coalesced config applied
+	 * after commit/cancel + capture release + controls restore. Never
+	 * history, never document — session chrome only.
+	 */
+	setSidePanelsCollapsed(config: { left: boolean; right: boolean }): 'applied' | 'deferred' {
+		if (this.isSidePanelChangeDeferred) {
+			this.session.stashPendingSidePanels(config);
+			return 'deferred';
+		}
+		this.session.applySidePanels(config.left, config.right);
+		return 'applied';
+	}
+
+	toggleLeftSidePanel(): 'applied' | 'deferred' {
+		const effective = this.effectiveSideState();
+		return this.setSidePanelsCollapsed({
+			left: !effective.left,
+			right: effective.right
+		});
+	}
+
+	toggleRightSidePanel(): 'applied' | 'deferred' {
+		const effective = this.effectiveSideState();
+		return this.setSidePanelsCollapsed({
+			left: effective.left,
+			right: !effective.right
+		});
+	}
+
+	/**
+	 * Combined focus toggle, computed from the effective state
+	 * (pending-wins-current mid-gesture, so repeated toggles under one
+	 * gesture behave). Entry snapshots at apply time via the stashed
+	 * config; exit restores it (or expands both with no snapshot).
+	 */
+	toggleFocusMode(): 'applied' | 'deferred' {
+		const effective = this.effectiveSideState();
+		if (effective.left && effective.right) {
+			if (this.isSidePanelChangeDeferred) {
+				this.session.stashPendingSidePanels({
+					...(this.session.preFocusSideState ?? { left: false, right: false })
+				});
+				return 'deferred';
+			}
+			this.session.applyFocusExit();
+			return 'applied';
+		}
+		if (this.isSidePanelChangeDeferred) {
+			this.session.stashPendingSidePanels({
+				left: true,
+				right: true,
+				snapshotPreFocus: { ...effective }
+			});
+			return 'deferred';
+		}
+		this.session.applyFocusEntry();
+		return 'applied';
+	}
+
+	/**
+	 * Effective configuration: the stashed request while deferred,
+	 * otherwise live state. Mid-gesture toggles derive from this so a
+	 * second press inverts the first instead of recomputing from stale.
+	 */
+	private effectiveSideState(): { left: boolean; right: boolean } {
+		return (
+			this.session.pendingSidePanels ?? {
+				left: this.session.leftSideCollapsed,
+				right: this.session.rightSideCollapsed
+			}
+		);
+	}
+
+	/**
+	 * Apply the stashed configuration once no gesture is active. Called
+	 * from every gesture-flag teardown (commit/cancel paths), the scrub
+	 * flag, and workspace switches — covering pointerup, pointercancel,
+	 * capture loss, and workspace exit. Escape needs no special case: it
+	 * cancels the gesture first, which flushes here.
+	 */
+	flushPendingSidePanels(): boolean {
+		const pending = this.session.pendingSidePanels;
+		if (!pending || this.isSidePanelChangeDeferred) return false;
+		this.session.applySidePanels(pending.left, pending.right);
+		// Stashed focus-entry snapshot installs with its config (entry
+		// state is focus, so the invariant clear above never touches it).
+		if (pending.snapshotPreFocus !== undefined) {
+			this.session.preFocusSideState = { ...pending.snapshotPreFocus };
+		}
+		return true;
+	}
+
+	setTimelineScrubActive(active: boolean) {
+		this.session.setTimelineScrubActive(active);
+		if (!active) this.flushPendingSidePanels();
+	}
+
+	/**
+	 * External browser resizes cannot be deferred: cancel the active
+	 * gesture cleanly (rollback via each owner's canceler) instead of
+	 * resizing the viewport under it. Best-effort, guarded per canceler.
+	 */
+	cancelActiveGestureForExternalResize() {
+		if (
+			!this.isEditorInteractionActive &&
+			this.viewKeyframeProgressDrag === null &&
+			!this.session.timelineScrubActive
+		) {
+			return;
+		}
+		try {
+			this.cancelTransform();
+		} catch {
+			// Best effort; one refusing canceler never blocks the rest.
+		}
+		try {
+			this.cancelDirectPathDrag();
+		} catch {
+			// Best effort (covers framing/path/view-keyframe pointer sessions).
+		}
+		try {
+			this.cancelDirectFramingDragOrFail();
+		} catch {
+			// Best effort.
+		}
+		if (this.viewKeyframeProgressDrag !== null) {
+			try {
+				this.cancelViewKeyframeProgressDrag();
+			} catch {
+				// Best effort.
+			}
+		}
+		// Lane scrub holds no transaction (idempotent seeks), so there is
+		// no canceler — but the flag must clear or a mid-scrub resize keeps
+		// deferring panel requests against stale track bounds. Clearing
+		// flushes: the resize already landed, nothing is left to protect.
+		// The Dots component re-syncs its capture/flag on the next events.
+		if (this.session.timelineScrubActive) {
+			this.setTimelineScrubActive(false);
+		}
 	}
 
 	/** Phase 1.1 — toggle a room card's expansion in the sidebar tree. */
@@ -2217,14 +2406,20 @@ export class EditorStore {
 	) {
 		this.transformInteractionActive = active;
 		this.transformInteractionKind = active ? kind : null;
+		// P21.6 Slice C — gesture teardown flushes a deferred panel config.
+		if (!active) this.flushPendingSidePanels();
 	}
 
 	setDirectPathInteractionActive(active: boolean) {
 		this.directPathInteractionActive = active;
+		// P21.6 Slice C — gesture teardown flushes a deferred panel config.
+		if (!active) this.flushPendingSidePanels();
 	}
 
 	setDirectFramingInteractionActive(active: boolean) {
 		this.directFramingInteractionActive = active;
+		// P21.6 Slice C — gesture teardown flushes a deferred panel config.
+		if (!active) this.flushPendingSidePanels();
 	}
 
 	setNavigationHover(connectionId: string | null, anchorId: string | null = null) {
@@ -2763,6 +2958,25 @@ export class EditorStore {
 	// Sub-store replace is owned by EditorDocumentStore / HistoryController
 	// (Slice 3.4–3.6). Composition-root callers go through history or
 	// documentStore.replace directly; the private #replaceDocument shim is gone.
+
+	/**
+	 * P21.6 review (A/B P1) — camera-focus IDs are session requests, not
+	 * document truth. A focused node deleted (or undone/redone/imported
+	 * away) must clear the request on the document swap; otherwise the
+	 * rig's strict getNode() throws on the stale ID. Placement/room focus
+	 * needs no clearing (the rig guards placement roots; rooms are static).
+	 */
+	#reconcileCameraFocus() {
+		if (
+			this.session.cameraFocusKind === 'navigation-node' &&
+			this.session.cameraFocusNodeId !== null &&
+			!this.document.navigationNodes.some(
+				(node) => node.id === this.session.cameraFocusNodeId
+			)
+		) {
+			this.session.clearCameraFocusRequest();
+		}
+	}
 
 	#reconcileSelection() {
 		const navigationSelection = this.navigationSelection;

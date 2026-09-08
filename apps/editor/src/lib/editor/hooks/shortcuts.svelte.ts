@@ -220,6 +220,13 @@ export function createEditorShortcutHandler(
 		} else if (!modifier && !event.altKey && key === 'f' && sceneMayMutate) {
 			event.preventDefault();
 			store.focusSelection();
+		} else if (!modifier && !event.altKey && !event.shiftKey && event.key === '\\' && !store.isRelic) {
+			// P21.6 Slice C — viewport focus mode (both panels collapse /
+			// restore). Paused preview stays interactive; playing preview
+			// blocks via the mutation guard above. Relic chrome stays frozen.
+			event.preventDefault();
+			event.stopPropagation();
+			store.toggleFocusMode();
 		} else if (interactionStore && !modifier && !event.altKey && !event.shiftKey) {
 			// Phase 6.1 section 3 — Unity-style gizmo mode keybinds. W = translate,
 		// E = rotate, R = scale, T = translate alias, X = toggle Space.

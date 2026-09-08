@@ -690,8 +690,11 @@ describe('P21.3 camera reconciliation', () => {
 		expect(toolbar).toContain('aria-label="Camera preview mode"');
 		expect(toolbar).toContain('>Observer</button>');
 		expect(toolbar).toContain('>POV</button>');
-		expect(toolbar).toContain('store.setCameraPreviewMode(mode)');
-		expect(toolbar).toContain("store.enterSequenceScope('visitor')");
+		// Both switches share one idle-capable chooser (solo node, else
+		// Sequence scope) — never a dead click, no new state.
+		expect(toolbar).toContain('store.chooseCameraPreviewMode(mode)');
+		const timelineFrame = readLibSource('editor/camera/EditorCameraTimelineFrame.svelte');
+		expect(timelineFrame).toContain('store.chooseCameraPreviewMode(mode)');
 		// Ribbon-only: the relic mount (no context) keeps its legacy menu.
 		expect(toolbar).toContain('{#if ribbon && isCameraContext}');
 	});
@@ -2045,19 +2048,31 @@ describe('camera context contracts', () => {
 			expect(source).toContain('.preview-shield.non-blocking {');
 			expect(source).toContain('pointer-events: none;');
 		}
-		// The static framing frustum yields to the Director playhead frustum for
-		// the whole preview session; a playing visitor keeps it hidden and a
-		// paused visitor still shows it (paused framing stays editable).
+		// P21.6 review (A/B P1, second pass) — three-state ownership: playback
+		// keeps the playhead owner; a paused Director preview yields the
+		// filled helper to an editable selection, and paused with no
+		// editable selection owns `none` (deselect never resurrects the
+		// wireframe). Frame off suppresses both implementations. A playing
+		// visitor keeps framing hidden and a paused visitor still shows it
+		// (paused framing stays editable).
 		const framingHelpers = readLibSource('editor/camera/EditorCameraFramingHelpers.svelte');
-		expect(framingHelpers).toContain('store.isDirectorCameraPreview ||');
+		expect(framingHelpers).toContain('resolveCameraPreviewFramingOwner');
+		expect(framingHelpers).toContain('isFramingSelectionEligible');
+		expect(framingHelpers).toContain('setEditorCameraFramingOrientation');
 		expect(framingHelpers).toContain(
 			'(store.isVisitorCameraPreview && store.isCameraPreviewPlaying)'
 		);
+		expect(framingHelpers).not.toContain('store.isDirectorCameraPreview ||');
 		expect(framingHelpers).not.toContain('store.isCameraPreviewPlaying ||');
-		// The moving playhead frustum renders for the whole Director session —
-		// transport- and selection-independent (scrub follows the path).
+		// The playhead frustum renders for Director playback; a paused
+		// editable selection hides the competing preview helper; paused
+		// with no editable selection hides both — timeline scope,
+		// transport, and playhead are untouched.
 		const cameraRig = readLibSource('editor/camera/EditorCameraRig.svelte');
-		expect(cameraRig).toContain("preview.mode === 'director';");
+		expect(cameraRig).toContain("preview.mode !== 'director'");
+		expect(cameraRig).toContain('resolveCameraPreviewFramingOwner');
+		expect(cameraRig).toContain('setEditorCameraFramingOrientation');
+		expect(cameraRig).toContain('computeBoundingSphere()');
 		expect(cameraRig).not.toContain("preview.transport === 'playing' || !selectedFraming");
 		// Room selection is AA (drop the broad mutation gate).
 		const sceneTree = readLibSource('editor/EditorSceneTree.svelte');

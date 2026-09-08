@@ -16,8 +16,12 @@
  * The frustum-gating store inputs are pinned below. 2026-08-28: the gating
  * fix landed — the moving playhead frustum now renders for the WHOLE Director
  * session (paused/scrubbing included) and the selected camera's static
- * framing frustum hides under any Director preview. The assertions below pin
- * the store inputs that drive both components' new predicates.
+ * framing frustum hides under any Director preview. P21.6 review (A/B P1)
+ * revises the paused case: a paused Director preview yields to an editable
+ * node/view-keyframe selection (which owns the filled helper + handles)
+ * while playback and non-editable selections keep the playhead owner. The
+ * assertions below pin the store inputs that drive both components' new
+ * predicates.
  *
  * Delete this file after assessment.
  */
@@ -25,6 +29,7 @@
 import { describe, expect, it } from 'vitest';
 import { Object3D, Vector3 } from 'three';
 import type { Vec3 } from '$lib/types/scene';
+import { resolveCameraPreviewFramingOwner } from '$lib/editor/camera/editor-camera-framing';
 import { createCameraGizmoAdapter } from '$lib/editor/gizmo/camera-gizmo-adapter.svelte';
 import { createFixtureEditorStore } from './editor-test-utils';
 import type { EditorStore } from '$lib/editor/editor-store.svelte';
@@ -98,7 +103,7 @@ describe('TMP — reviewer finding falsification (camera-node gizmo frame)', () 
 });
 
 describe('TMP — frustum gating inputs (post-fix behavior) — CONFIRMED', () => {
-	it('paused Director + selected node: moving frustum ON, static framing OFF (scrub previews the path)', () => {
+	it('paused Director + selected node: static framing ON, moving frustum OFF (selection owns the fill)', () => {
 		const store = createFixtureEditorStore();
 		const node = store.document.navigationNodes.find((n) => n.id === 'tour-a')!;
 		expect(store.selectionActions.selectNavigationNode(node.id)).toBe(true);
@@ -110,12 +115,33 @@ describe('TMP — frustum gating inputs (post-fix behavior) — CONFIRMED', () =
 		expect(preview.transport).toBe('paused');
 
 		// Inputs read by EditorCameraRig.showDirectorPreviewFrustum and
-		// EditorCameraFramingHelpers.framingPose:
-		expect(store.isDirectorCameraPreview).toBe(true); // ⇒ moving frustum ON (whole session)
-		expect(store.isVisitorCameraPreview).toBe(false); // ⇒ static framing OFF
+		// EditorCameraFramingHelpers.framingPose (P21.6 review A/B P1, second
+		// pass): paused + editable selection ⇒ the selection owns the filled
+		// helper and the competing preview helper hides; paused with nothing
+		// editable ⇒ `none` (no resurrected wireframe).
+		expect(store.isDirectorCameraPreview).toBe(true); // ⇒ ownership check runs
+		expect(store.isVisitorCameraPreview).toBe(false);
 		expect(store.isCameraPreviewPlaying).toBe(false);
 		expect(store.isDocumentMutationBlocked).toBe(false); // paused Director authors freely
 		expect(store.navigationSelection?.kind).toBe('node');
+		expect(
+			resolveCameraPreviewFramingOwner({
+				hasDirectorPreview: store.isDirectorCameraPreview,
+				previewPlaying: store.isCameraPreviewPlaying,
+				hasEditableSelection: true,
+				framingVisible: true,
+				selectionEligible: true
+			})
+		).toBe('selection');
+		expect(
+			resolveCameraPreviewFramingOwner({
+				hasDirectorPreview: store.isDirectorCameraPreview,
+				previewPlaying: store.isCameraPreviewPlaying,
+				hasEditableSelection: false,
+				framingVisible: true,
+				selectionEligible: true
+			})
+		).toBe('none');
 	});
 
 	it('playing Director: moving frustum ON, static framing OFF (single frustum during play)', () => {

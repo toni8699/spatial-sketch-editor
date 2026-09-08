@@ -1,10 +1,10 @@
 # Museum docs — context router
 
-**Audience:** agents + humans. **Last reviewed:** 2026-09-05 (P21 in progress — P21.1–P21.4 complete, P21.5 pending; docs pruned: tracker recent-5, model-assessment P20-onward, archive README fixed).
+**Audience:** agents + humans. **Last reviewed:** 2026-09-08 (P21 shipped — gate passed, P19/P20/P21 doc sets archived; docs pruned: tracker recent-5, model-assessment P20-onward, archive README fixed).
 **Bootstrap (hard rules):** [`../AGENTS.md`](../AGENTS.md) ·
 **Plan status / what's next:** [`plans/README.md`](./plans/README.md) (tracker) ·
 **Live working-tree state:** [`hand-off/CURRENT.md`](./hand-off/CURRENT.md) ·
-**Roadmap gate:** P12, core P3B, P14, P15, P16, P17, P18, P19, and P20 are shipped (P20 on 2026-09-04 — local live smoke vs real R2 passed; production-topology smoke deferred). P3B.7b remains deferred and non-blocking; P13 remains proposed/unscheduled.
+**Roadmap gate:** P12, core P3B, P14, P15, P16, P17, P18, P19, P20, and P21 are shipped (P21 on 2026-09-08 — six-reference + axe/contrast acceptance gate passed; production-topology smoke deferred). P3B.7b remains deferred and non-blocking; P13 remains proposed/unscheduled.
 
 ## Context discipline (progressive disclosure)
 

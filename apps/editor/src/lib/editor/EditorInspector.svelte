@@ -56,6 +56,8 @@
 		activeSelection,
 		selectedAsset,
 		clusterNameInput = $bindable(),
+		inspectorElement = $bindable<HTMLElement | null>(null),
+		collapsed = false,
 		viewMode = '3d',
 		viewState = null
 	}: {
@@ -70,6 +72,11 @@
 		activeSelection?: EditorActiveSelectionStore;
 		selectedAsset?: Asset;
 		clusterNameInput?: HTMLInputElement;
+		/** P21.6 Slice C — shell focus mode binds the root to restore
+		 * keyboard focus when this panel collapses under it. */
+		inspectorElement?: HTMLElement | null;
+		/** P21.6 Slice C — collapsed panels clip + go inert (CSS grid only). */
+		collapsed?: boolean;
 		/** Authoritative shell view mode. the editor passes the top-level Plan | 3D
 		 *  switch so the domain-driven panel can keep a preserved scene/camera
 		 *  selection visible yet read-only in Plan (Plan is layout CAD only —
@@ -604,7 +611,7 @@
 
 </script>
 
-<aside class="panel inspector" aria-label="Inspector" style="grid-area: right;">
+<aside bind:this={inspectorElement} class="panel inspector" class:collapsed aria-label="Inspector" style="grid-area: right;" inert={collapsed}>
 	<header>
 		<h2>Inspector</h2>
 		{#if domain === 'layout'}
@@ -1057,6 +1064,10 @@
 
 <style>
 	.panel { display: flex; flex-direction: column; gap: 1rem; padding: 1rem 1.1rem; overflow: auto; background: var(--editor-bg-panel); }
+	/* P21.6 Slice C — collapsed panels clip to the zero-width grid track
+	   (the track carries the collapse; this only clips contents). Combined
+	   with `inert`; zero-width alone never removes keyboard focus. */
+	.panel.collapsed { overflow: hidden; visibility: hidden; min-width: 0; }
 	.inspector { border-left: 1px solid var(--editor-border-subtle); }
 	header h2, section h2 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--editor-text-muted); }
 	header p { margin: 0.35rem 0 0; color: var(--editor-text-secondary); font-size: 0.75rem; line-height: 1.4; }

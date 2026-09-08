@@ -44,14 +44,19 @@
 		min-width: 1.15rem;
 		box-sizing: border-box;
 		text-align: center;
-		border: 1px solid var(--editor-accent);
-		background: rgb(24 20 12 / 88%);
-		color: var(--editor-text-primary);
+		/* P21.6 Slice B §4.1 — 2D Plan badge grammar: solid invariant blue
+		   disc, 1.5px white keyline, white tabular numeral. Never the chrome
+		   accent (terracotta/violet in themed shells). */
+		border: 1.5px solid #ffffff;
+		background: var(--editor-camera-node-seq, #2f8cff);
+		color: #ffffff;
 		font-variant-numeric: tabular-nums;
 	}
 	.chip.unsequenced {
-		border: 1px dashed var(--editor-text-muted);
-		background: rgb(18 18 24 / 82%);
-		color: var(--editor-outline-muted);
+		/* Paper badge with a dashed emerald ring — the 2D unsequenced
+		   treatment, invariant in every theme. */
+		border: 1.5px dashed var(--editor-camera-node-unseq, #10b981);
+		background: var(--editor-plan-bg, #f5f3ee);
+		color: #065f46;
 	}
 </style>

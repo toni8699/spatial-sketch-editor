@@ -134,10 +134,12 @@
 			<span>Middle + Drag pan</span>
 			<span>Scroll zoom</span>
 			<span>Shift angle snap</span>
+			<span>\ Focus</span>
 		{:else}
 			<span>Alt + Drag orbit</span>
 			<span>Shift + Drag pan</span>
 			<span>Scroll zoom</span>
+			<span>\ Focus</span>
 		{/if}
 	</div>
 	<div class="status-right">

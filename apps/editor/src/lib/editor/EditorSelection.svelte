@@ -4,7 +4,7 @@
 	import { useOrbitControls } from '@threlte/extras';
 	import { roomLocalPoint } from '$lib/content/rooms';
 	import type { Vec3 } from '$lib/types/scene';
-	import { Plane, Raycaster, Vector2, Vector3, type Intersection } from 'three';
+	import { Plane, Raycaster, Vector2, Vector3, type Intersection, type PerspectiveCamera } from 'three';
 	import type { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 	import { EDITOR_DRAG_THRESHOLD_PX } from './interaction-constants';
 	import type { EditorStore } from './editor-store.svelte';
@@ -18,9 +18,13 @@
 	import {
 		createEditorCameraFramingBasis,
 		clampEditorCameraFrustumDepth,
+		createEditorCameraFovDragBasis,
+		evaluateEditorCameraFovDrag,
+		isFramingSelectionEligible,
+		resolveCameraPreviewFramingOwner,
 		EDITOR_CAMERA_FRAMING_FOV_EPSILON,
 		EDITOR_CAMERA_FRAMING_MOVE_EPSILON,
-		verticalFovFromEditorCameraFrustumPoint
+		type EditorCameraFovDragBasis
 	} from './camera/editor-camera-framing';
 	import {
 		findCameraFovHandleFromObject,
@@ -32,6 +36,7 @@
 		resolveNormalSelection,
 		resolveNormalSelectionWithHit,
 		selectionHitFromIntersection,
+		sortIntersectionsBySameClassProjectedCenter,
 		uniquePlacementIdsInOrder,
 		type EditorNavigationSelection
 	} from './editor-selection';
@@ -185,6 +190,12 @@
 		lastTarget: Vec3;
 		lastFov: number;
 		orbitWasEnabled: boolean | null;
+		/**
+		 * P21.6 Slice B §3.4 — frozen FOV-drag basis (eye/forward/up/depth
+		 * from the authored pointer-down pose + locked solver branch). Null
+		 * for target drags. Never recomputed mid-gesture.
+		 */
+		fovBasis: EditorCameraFovDragBasis | null;
 	};
 
 	let pointerSession:
@@ -223,7 +234,41 @@
 		if (!currentCamera) return [];
 		toNdc(event);
 		raycaster.setFromCamera(pointerNdc, currentCamera);
-		return raycaster.intersectObjects(scene.children, true);
+		// P21.6 review (A/B P1-5) — raw Three.js raycasts hit invisible
+		// subtrees (hidden FOV shells would intercept gestures while their
+		// helper is inactive). Inactive helpers never pick: filter any hit
+		// with an invisible ancestor. Visible `colorWrite:false` shells keep
+		// picking (visible === true).
+		return raycaster
+			.intersectObjects(scene.children, true)
+			.filter((hit) => {
+				let current: typeof hit.object | null = hit.object;
+				while (current) {
+					if (current.visible === false) return false;
+					current = current.parent;
+				}
+				return true;
+			});
+	}
+
+	/**
+	 * P21.6 Slice B §3.4 — committed-selection intersections with
+	 * deterministic arbitration (review A/B P2-6: winning camera class
+	 * first by resolver priority, CSS-pixel distance within the class;
+	 * placements/architecture keep distance order). Hover, click, drag
+	 * entry, and context-menu share this order — no raw-order side paths.
+	 */
+	function selectionIntersections(event: PointerLike) {
+		const intersections = raycast(event);
+		const observer = camera.current;
+		if (!observer || observer.type !== 'PerspectiveCamera') return intersections;
+		return sortIntersectionsBySameClassProjectedCenter(intersections, observer as PerspectiveCamera, {
+			x: pointerNdc.x,
+			y: pointerNdc.y
+		}, {
+			width: Math.max(1, canvas.clientWidth || 1),
+			height: Math.max(1, canvas.clientHeight || 1)
+		});
 	}
 	function isFloorPlacementActive() {
 		return Boolean(
@@ -302,6 +347,7 @@
 		const active = pointerSession;
 		if (!active || active.kind !== 'framing') return false;
 		pointerSession = null;
+		canvas.style.cursor = '';
 		if (active.dragging) {
 			if (active.pending) restorePendingFraming(active);
 			else store.cancelDocumentTransaction();
@@ -332,7 +378,33 @@
 		) {
 			return null;
 		}
-		const objects = raycast(event).map((hit) => hit.object);
+		// P21.6 review (A/B P1-1 + P1-5) — framing picking follows the same
+		// ownership decision as geometry: under a Director preview only the
+		// `selection` owner is eligible (playback / `none` hide the helper,
+		// and the hidden-ancestor raycast filter is the backstop).
+		if (
+			store.isDirectorCameraPreview &&
+			resolveCameraPreviewFramingOwner({
+				hasDirectorPreview: true,
+				previewPlaying: store.isCameraPreviewPlaying,
+				hasEditableSelection:
+					(store.navigationSelection?.kind === 'node' && !!store.selectedNavigationNode) ||
+					(store.navigationSelection?.kind === 'view-keyframe' &&
+						!!store.selectedViewKeyframe),
+				framingVisible: store.viewportShowFraming,
+				selectionEligible: isFramingSelectionEligible({
+					workspace: store.currentWorkspace,
+					hasPendingPlacement: !!(
+						store.pendingPlacementAssetId ||
+						store.pendingPlacementPrimitiveKind ||
+						store.pendingPlacementLightKind
+					)
+				})
+			}) !== 'selection'
+		) {
+			return null;
+		}
+		const objects = selectionIntersections(event).map((hit) => hit.object);
 		for (const object of objects) {
 			const camera = findCameraSelectionFromObject(object);
 			if (camera?.handle === 'target') {
@@ -359,6 +431,7 @@
 			if (!fov) continue;
 			return {
 				interaction: 'fov' as const,
+				side: fov.side,
 				owner:
 					fov.owner === 'node'
 						? { owner: 'node' as const, nodeId: fov.nodeId }
@@ -421,6 +494,7 @@
 		if (!pose) return false;
 		const currentCamera = camera.current;
 		if (!currentCamera) return false;
+		let fovBasis: EditorCameraFovDragBasis | null = null;
 		if (hit.interaction === 'target') {
 			currentCamera.getWorldDirection(viewDragPlaneNormal).normalize();
 			viewDragPlane.setFromNormalAndCoplanarPoint(
@@ -428,6 +502,10 @@
 				new Vector3(...pose.target)
 			);
 		} else {
+			// P21.6 Slice B §3.4 — freeze the full drag basis at pointer-down
+			// (eye/forward/up/depth from the authored pose) and lock the
+			// solver branch for the whole gesture. The side carries the
+			// signed handle identity (top +1 / bottom −1).
 			const basis = createEditorCameraFramingBasis(
 				new Vector3(...pose.position),
 				new Vector3(...pose.target)
@@ -437,6 +515,26 @@
 			);
 			const center = basis.eye.clone().addScaledVector(basis.forward, depth);
 			viewDragPlane.setFromNormalAndCoplanarPoint(basis.forward, center);
+			toNdc(event);
+			raycaster.setFromCamera(pointerNdc, currentCamera);
+			const grabPoint = raycaster.ray.intersectPlane(
+				viewDragPlane,
+				dragIntersection
+			);
+			fovBasis = createEditorCameraFovDragBasis({
+				eye: basis.eye.toArray(),
+				forward: basis.forward.toArray(),
+				up: basis.up.toArray(),
+				depth,
+				fov0: pose.fov,
+				side: hit.interaction === 'fov' ? hit.side : 'top',
+				rayDirection: raycaster.ray.direction.toArray(),
+				p0: grabPoint ? (grabPoint.toArray() as Vec3) : null,
+				startClientY: event.clientY
+			});
+			// Virtual-slider fallback reads as a vertical slider, not a
+			// spatial pull — hint it while the fallback branch is locked.
+			if (fovBasis.useSlider) canvas.style.cursor = 'ns-resize';
 		}
 		const orbitWasEnabled = editorOrbitControls.current?.enabled ?? null;
 		if (editorOrbitControls.current) editorOrbitControls.current.enabled = false;
@@ -453,7 +551,8 @@
 			initialFov: pose.fov,
 			lastTarget: [...pose.target],
 			lastFov: pose.fov,
-			orbitWasEnabled
+			orbitWasEnabled,
+			fovBasis
 		};
 		canvas.setPointerCapture(event.pointerId);
 		event.preventDefault();
@@ -474,8 +573,12 @@
 		if (!currentCamera || !pose) return;
 		toNdc(event);
 		raycaster.setFromCamera(pointerNdc, currentCamera);
-		if (!raycaster.ray.intersectPlane(viewDragPlane, dragIntersection)) return;
+		// The plane is frozen at pointer-down. A null hit (grazing ray or
+		// behind origin) holds the last valid FOV on the locked branch
+		// without switching solvers; target drags simply wait.
+		const planeHit = raycaster.ray.intersectPlane(viewDragPlane, dragIntersection);
 		if (active.interaction === 'target') {
+			if (!planeHit) return;
 			const worldTarget = dragIntersection.toArray() as Vec3;
 			const changed =
 				active.owner.owner === 'node'
@@ -491,10 +594,17 @@
 			if (changed) active.lastTarget = [...worldTarget];
 			return;
 		}
-		const fov = verticalFovFromEditorCameraFrustumPoint(
-			new Vector3(...pose.position),
-			new Vector3(...pose.target),
-			dragIntersection
+		if (!active.fovBasis) return;
+		// P21.6 Slice B §3.4 — evaluate against the frozen pointer-down
+		// basis (never recompute the framing frame mid-gesture). The live
+		// ray direction rechecks grazing alignment per move (review A/B
+		// P1-4): near-parallel moves hold the last valid FOV instead of
+		// clamping a 1/sin(θ) blowup to a rail.
+		const fov = evaluateEditorCameraFovDrag(
+			active.fovBasis,
+			planeHit ? (planeHit.toArray() as Vec3) : null,
+			event.clientY,
+			raycaster.ray.direction.toArray() as Vec3
 		);
 		const changed =
 			active.owner.owner === 'node'
@@ -505,6 +615,7 @@
 
 	function finishFramingPointer(active: FramingPointerSession) {
 		pointerSession = null;
+		canvas.style.cursor = '';
 		if (active.dragging) {
 			const changed =
 				active.interaction === 'target'
@@ -541,7 +652,7 @@
 			return null;
 		}
 		return findPriorityCameraViewKeyframeHandle(
-			raycast(event).map((hit) => hit.object)
+			selectionIntersections(event).map((hit) => hit.object)
 		);
 	}
 
@@ -615,7 +726,7 @@
 		) {
 			return null;
 		}
-		const navigationHits = raycast(event).map((hit) => ({
+		const navigationHits = selectionIntersections(event).map((hit) => ({
 			hit,
 			selection: findNavigationSelectionFromObject(hit.object)
 		}));
@@ -690,7 +801,7 @@
 			onLayoutHover([], null);
 			return;
 		}
-		const intersections = raycast(event);
+		const intersections = selectionIntersections(event);
 		const hits = intersections.map(selectionHitFromIntersection);
 		const normal = resolveNormalSelectionWithHit(hits);
 		const competingSceneDistance =
@@ -851,7 +962,7 @@
 		const currentCamera = camera.current;
 		if (!currentCamera) return;
 
-		const intersections = raycast(event);
+		const intersections = selectionIntersections(event);
 		const pendingNavigation = store.pendingNavigationCommand;
 		if (pendingNavigation?.kind === 'place-camera') {
 			// accept any project-layout room floor, not just Chopin rooms.
@@ -1025,7 +1136,7 @@
 		if (transformControls?.axis || transformControls?.dragging) return;
 		if (pointerSession) return;
 		if (isEditableTarget(event.target)) return;
-		const intersections = raycast(event);
+		const intersections = selectionIntersections(event);
 		const hits = intersections.map(selectionHitFromIntersection);
 		const normal = resolveNormalSelectionWithHit(hits);
 		const handled = onContextMenu({

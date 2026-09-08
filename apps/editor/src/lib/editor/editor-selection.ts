@@ -1,4 +1,5 @@
-import type { Intersection, Material, Mesh, Object3D } from 'three';
+import type { Intersection, Material, Mesh, Object3D, PerspectiveCamera } from 'three';
+import { Vector3 } from 'three';
 import type { CameraConnectionDirection } from '$lib/types/scene';
 
 /** Shared opacity floor for normal and Alt selection hit filtering. */
@@ -247,6 +248,13 @@ export function findCameraFovHandleFromObject(
 ): EditorCameraFovHandle | null {
 	let current: Object3D | null = object;
 	while (current) {
+		// P21.6 review (A/B P1-5) — hidden roots stay pickable to raw
+		// Three.js raycasts (visibility is not consulted), so a hidden FOV
+		// shell would otherwise intercept gestures while its helper is
+		// inactive (e.g. stale pose during Director playback). Inactive
+		// helpers never tag: any invisible ancestor disqualifies. Visible
+		// shells with `colorWrite: false` still tag (visible === true).
+		if (current.visible === false) return null;
 		if (isEditorCameraFovHandleUserData(current.userData)) {
 			const { editorEntity: _, ...handle } = current.userData;
 			return handle;
@@ -349,6 +357,109 @@ export function selectionHitFromIntersection(hit: Intersection): SelectionHitInf
 
 export function filterEffectiveHits(hits: SelectionHitInfo[]): SelectionHitInfo[] {
 	return hits.filter((hit) => hit.opacity >= NEAR_INVISIBLE_OPACITY);
+}
+
+/**
+ * P21.6 Slice B §3.4 — deterministic same-class arbitration, second pass
+ * (review A/B P1-3 + P2-6). Only camera-handle classes arbitrate by
+ * projected center; placements, architecture, and other scene hits keep
+ * raycast distance order (a farther object whose origin is nearer the
+ * cursor must never outrank a nearer intersected object). FOV handles are
+ * an explicit class with a deterministic tie-breaker.
+ *
+ * Cross-class comparison is a total order — the winning semantic class
+ * first (resolver priority: nodes > view-keyframes > anchors >
+ * connections > fov-handles), then CSS-pixel distance within the class —
+ * so an unrelated hit between two same-class handles cannot block the
+ * closer one. NDC deltas scale by half the viewport (rectangular
+ * viewports: NDC-x/y units are different pixel distances). Operates on raw
+ * intersections (the resolver drops object refs) — call it before mapping
+ * to `SelectionHitInfo`. Hover, click, drag entry, and context-menu share
+ * this order via `selectionIntersections`.
+ */
+export function navigationArbitrationClass(object: Object3D | null): string {
+	const navigation = findNavigationSelectionFromObject(object);
+	if (navigation?.kind) return `navigation:${navigation.kind}`;
+	if (findCameraFovHandleFromObject(object)) return 'camera-fov-handle';
+	if (findPlacementIdFromObject(object)) return 'placement';
+	return 'other';
+}
+
+const CAMERA_ARBITRATION_RANK: Record<string, number> = {
+	'navigation:node': 0,
+	'navigation:view-keyframe': 1,
+	'navigation:anchor': 2,
+	'navigation:connection': 3,
+	'camera-fov-handle': 4
+};
+
+function cameraArbitrationRank(kind: string): number | null {
+	const rank = CAMERA_ARBITRATION_RANK[kind];
+	return rank === undefined ? null : rank;
+}
+
+const arbitrationScratch = new Vector3();
+
+export function sortIntersectionsBySameClassProjectedCenter(
+	intersections: readonly Intersection[],
+	observer: PerspectiveCamera,
+	pointerNdc: { x: number; y: number },
+	viewportSize?: { width: number; height: number }
+): Intersection[] {
+	// Default 2×2 keeps NDC-distance semantics for direct unit calls;
+	// production passes live CSS pixels via `selectionIntersections`.
+	const viewportWidth =
+		viewportSize?.width && viewportSize.width > 0 ? viewportSize.width : 2;
+	const viewportHeight =
+		viewportSize?.height && viewportSize.height > 0 ? viewportSize.height : 2;
+	type Decorated = {
+		hit: Intersection;
+		index: number;
+		rank: number | null;
+		pixelDistance: number;
+		distance: number;
+	};
+	const decorated: Decorated[] = intersections.map((hit, index) => {
+		const kind = navigationArbitrationClass(hit.object);
+		const rank = cameraArbitrationRank(kind);
+		let pixelDistance = Number.POSITIVE_INFINITY;
+		if (rank !== null) {
+			try {
+				hit.object.getWorldPosition(arbitrationScratch);
+				arbitrationScratch.applyMatrix4(observer.matrixWorldInverse);
+				// The observer looks down -Z: non-negative view depth sits
+				// behind / inside the near plane — sink, never promote.
+				if (arbitrationScratch.z < 0) {
+					arbitrationScratch.applyMatrix4(observer.projectionMatrix);
+					const dxPx = (arbitrationScratch.x - pointerNdc.x) * (viewportWidth / 2);
+					const dyPx = (arbitrationScratch.y - pointerNdc.y) * (viewportHeight / 2);
+					const distance = Math.hypot(dxPx, dyPx);
+					if (Number.isFinite(distance)) pixelDistance = distance;
+				}
+			} catch {
+				pixelDistance = Number.POSITIVE_INFINITY;
+			}
+		}
+		const distance = Number.isFinite(hit.distance) ? hit.distance : Number.POSITIVE_INFINITY;
+		return { hit, index, rank, pixelDistance, distance };
+	});
+	decorated.sort((a, b) => {
+		const aCamera = a.rank !== null;
+		const bCamera = b.rank !== null;
+		if (aCamera && bCamera) {
+			if (a.rank !== b.rank) return (a.rank ?? 0) - (b.rank ?? 0);
+			if (a.pixelDistance !== b.pixelDistance) return a.pixelDistance - b.pixelDistance;
+			if (a.distance !== b.distance) return a.distance - b.distance;
+			return a.index - b.index;
+		}
+		if (!aCamera && !bCamera) {
+			// Placements / architecture / chrome: distance order only.
+			if (a.distance !== b.distance) return a.distance - b.distance;
+			return a.index - b.index;
+		}
+		return aCamera ? -1 : 1;
+	});
+	return decorated.map((entry) => entry.hit);
 }
 
 /** First-seen unique placement ids from effective hits, preserving order. */
