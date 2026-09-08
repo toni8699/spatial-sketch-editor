@@ -5,17 +5,16 @@ slice plus one next action only.
 
 ## Working tree
 
-- P21 shipped 2026-09-08 — P21.1–P21.6 + final acceptance gate passed (browser evidence below); tracker collapsed, P19/P20/P21 doc sets archived per Rule 4.
-- Uncommitted P21.6 implementation (source + `p21.6-slice-b/c` suites + `camera-tour.md`/`shell.md` contract pins) remains in the tree: 3D camera viz (palette tokens, nub retire, cinematic frustum, node/path unification) + focus mode (session L/R booleans, grid collapse, Zone C + View-menu + `\` + hint, inert + focus restore, drag-deferral, observer-relative aspect).
-- Gate fix (uncommitted, 1 char): `editor-store.svelte.ts` carried a duplicated `}` closing the class early (stray from the scrub-clear edit) — esbuild refused the module and the app could not load. Removed; parse + full battery green after.
-- Owner rulings recorded: visitor-preview black first frame is unlit content, not a bug (lighting expands in P23/P24); all other gate findings minor.
+- P21 shipped 2026-09-08 (closed at `7fece5e`); prior CURRENT dirty claim resolved — P21.6 + gate fix are committed, no source changes pending.
+- Uncommitted docs (P22 approval): tracker P22 → approved, P22 plan → approved with P22.1→P22.5 sequential, `model-assessment.md` P22.1–P22.5 rows (80/high, 78/high, 74/med, 68/med, 64/med).
+- HEAD `e7e39f4` (P23/P24 research-string docs only); no publication/release code yet — greenfield for P22.2.
+- Owner rulings carry over: visitor-preview black first frame is unlit content, not a bug (lighting expands in P23/P24).
 
-- Immediate previous slice: **P21.6 Slices A+B+C implementation + review rounds
-  (2026-09-07).** P20 smoke + `RETURNING` fix (2026-09-04) is the prior baseline.
+- Immediate previous slice: **P21 closeout (2026-09-08).**
 
 ## Next action
 
-- Implement [P22](../plans/2026-09-07-P22-basic-publish-visitor-runtime.md) (Basic Publish + visitor runtime) — brief registered under the P21-complete assumption; tracker pointer is the status authority.
+- Implement [P22.1](../plans/2026-09-07-P22-basic-publish-visitor-runtime.md) (Cold runtime + asset seam) per approved P22 — store-free preparation + release-scoped resolver + shipped-static registry; gate: P22.1 acceptance before P22.2; tracker is status authority.
 
 ## Verification
 

@@ -58,7 +58,7 @@ Policy rules:
 | # | Plan | Status | Depends on | Doc |
 |---|------|--------|------------|-----|
 | P13 | Sequence stop-at-node playback | proposed — nice-to-have, unscheduled (owner 2026-08-27) | P12 | [2026-08-27-P13-stop-at-node-playback.md](2026-08-27-P13-stop-at-node-playback.md) |
-| P22 | Basic Publish + visitor runtime | proposed — brief written assuming P21 complete (owner 2026-09-07) | P21 | [plan](2026-09-07-P22-basic-publish-visitor-runtime.md) |
+| P22 | Basic Publish + visitor runtime | approved — P21 complete, ready P22.1→P22.5 sequential (owner 2026-09-08) | P21 | [plan](2026-09-07-P22-basic-publish-visitor-runtime.md) |
 | P23 | Layout Depth — minimum useful Build set | proposed — brief written assuming P22 complete (owner 2026-09-07) | P22 | [plan](2026-09-07-P23-layout-depth-minimum-build.md) |
 | P24 | Scene / Staging Depth umbrella — P24A asset supply + P24B rich 3D staging | proposed — P24A Phase 2 reviewed + annex registered; P24B detailed contract TBD Phase 4 research (owner 2026-09-08) | P23 | [plan](2026-09-08-P24-scene-staging-depth-umbrella.md) |
 | — | Branch rejoin — experiment, no schedule | proposed | P8 conceptually | [2026-08-21-branch-rejoin-experiment.md](2026-08-21-branch-rejoin-experiment.md) |
@@ -91,8 +91,8 @@ gate) now lives in the archived docs, not here.
 
 - Next: P21 shipped 2026-09-08 (final acceptance gate passed — six-reference
   visual comparison + axe/contrast sweep + Slice C focus/DPR rows, full Vitest
-  + `check` + `build` + bundle gates green); next is P22 implementation.
-  P22 brief is registered under the owner's P21-complete planning assumption.
+  + `check` + `build` + bundle gates green); next is P22 implementation (approved 2026-09-08).
+  P22 approved under the owner's P21-complete assumption; P22.1→P22.5 sequential.
 - Long-term tiers renumbered 2026-09-05 (owner): P23 Layout Depth, P24
   Scene/Staging Depth, P25 Experience Foundation, P26+ platform expansion;
   typed DB is conditional infrastructure, not a tier. Owner reconciliation

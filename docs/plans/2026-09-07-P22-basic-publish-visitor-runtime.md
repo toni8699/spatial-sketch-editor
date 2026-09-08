@@ -1,9 +1,9 @@
 # P22 — Basic Publish + visitor runtime
 
-**Created:** 2026-09-07 · **Status:** proposed (tracker authoritative)
+**Created:** 2026-09-07 · **Status:** approved (tracker authoritative)
 **Depends on:** P21 complete, including its final acceptance gate.
 **Dependency state:** P21 closed on `main` at `7fece5e` on 2026-09-08. P22
-remains proposed until the tracker status changes.
+approved 2026-09-08; implement P22.1→P22.5 sequentially.
 
 ## Outcome and scope
 

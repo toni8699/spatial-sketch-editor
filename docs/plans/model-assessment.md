@@ -63,7 +63,12 @@ success percentages.
 | **P21.4** | 82 | Sol high | shipped — Preview takeover + Hub/flows: layout-owned takeover, exact session restore, generic visitor composition, preview-surface import-closure gate, project-switch teardown, strict Hub + entry/OAuth integrity; highest ambiguity and consequence in P21 |
 | **P21.5** | 45 | Luna high | closed 2026-09-07 — UI polish pass, Slices 1–5 + §2.6 gizmo detach + 2B node colors; owner eye tests passed; presentation-only, no behavior change |
 | **P21.6** | 65 | Sol medium | shipped 2026-09-08 — 3D camera visualization (token swap, nub retire, cinematic frustum, node/path unification) + focus-mode closeout; verified by six-reference visual comparison + axe/contrast sweep + Slice C focus/DPR browser rows on top of the headless suites |
+| **P22.1** | 80 | Sol high | approved — cold runtime + asset seam; global→release-scoped resolver, URL-keyed cache partition, shipped-static registry; highest ambiguity in P22 |
+| **P22.2** | 78 | Sol high | approved — release persistence + API; revision ABA, txn publish, R2 verify, anon matrix; real Postgres required |
+| **P22.3** | 74 | Sol medium | approved — public route cold bootstrap + chrome + bundle closure; escalate to high on isolation failure |
+| **P22.4** | 68 | Sol medium | approved — publish surface; dirty/stale/revision gates, switch-safety, axe |
+| **P22.5** | 64 | Sol medium | approved — hosted acceptance + closeout; verification-heavy, deferred P20 topology smoke rides here |
 
 Pre-P20 numbers still proposed/unscheduled (P13 stop-at-node, branch-rejoin
-experiment) are assessed when scheduled — no standing rows. P22+ entries are
-added here when their briefs land.
+experiment) are assessed when scheduled — no standing rows. P23+ entries are
+added here when scheduled.
