@@ -60,7 +60,7 @@ Policy rules:
 | P13 | Sequence stop-at-node playback | proposed — nice-to-have, unscheduled (owner 2026-08-27) | P12 | [2026-08-27-P13-stop-at-node-playback.md](2026-08-27-P13-stop-at-node-playback.md) |
 | P22 | Basic Publish + visitor runtime | proposed — brief written assuming P21 complete (owner 2026-09-07) | P21 | [plan](2026-09-07-P22-basic-publish-visitor-runtime.md) |
 | P23 | Layout Depth — minimum useful Build set | proposed — brief written assuming P22 complete (owner 2026-09-07) | P22 | [plan](2026-09-07-P23-layout-depth-minimum-build.md) |
-| P24 | Scene / Staging Depth umbrella — P24A asset supply + P24B rich 3D staging | proposed — umbrella registered; detailed subtrack briefs TBD Phase 2/4 research (owner 2026-09-08) | P23 | [plan](2026-09-08-P24-scene-staging-depth-umbrella.md) |
+| P24 | Scene / Staging Depth umbrella — P24A asset supply + P24B rich 3D staging | proposed — P24A Phase 2 reviewed + annex registered; P24B detailed contract TBD Phase 4 research (owner 2026-09-08) | P23 | [plan](2026-09-08-P24-scene-staging-depth-umbrella.md) |
 | — | Branch rejoin — experiment, no schedule | proposed | P8 conceptually | [2026-08-21-branch-rejoin-experiment.md](2026-08-21-branch-rejoin-experiment.md) |
 | … | future work re-registers here | | | |
 
@@ -100,8 +100,9 @@ gate) now lives in the archived docs, not here.
   depth tails later); P25 may follow the minima before the tails; a bounded
   agent/reuse proof follows the first complete visitor-authoring slice. P24
   umbrella registered 2026-09-08 with internal P24A asset-supply/canonical-
-  ingest and P24B rich-3D-staging subtracks; detailed contracts await Phase
-  2/4 research. See Long-term roadmap.
+  ingest and P24B rich-3D-staging subtracks. Phase 2 was reviewed 2026-09-08
+  and the detailed P24A annex is registered; P24B still awaits Phase 4
+  research. See Long-term roadmap.
 - Deferred / non-blocking: P3B.7b (incl. the P3.4/P3.5 acceptance tail).
 - Proposed / unscheduled: P13, branch rejoin.
 - Shipped baseline: P12 + core P3B gate 2026-08-28; P14–P18 extraction slice;
@@ -177,26 +178,27 @@ conditional infrastructure):
   universal command framework.
 - **P24 — Scene / Staging Depth umbrella (registered, staged).** The umbrella
   is registered above and split internally into **P24A — Asset Supply +
-  Canonical Ingest** and **P24B — Rich 3D Scene / Staging Editor**. P24A is
-  informed primarily by Phase 2 research and owns the bounded starter supply
-  and normalization side: reusable models, PBR materials/textures, HDRIs,
-  provenance/license metadata, web-ready derivatives, dimensions/placement
-  metadata, thumbnails and Plan representation where eligible, all converging
-  on the existing project asset registry rather than a new Scene-only store.
-  P24B is informed primarily by Phase 4 research and owns the authoring side:
-  asset place/replace, strong transforms, duplicate, multi-select where
-  justified, align/distribute, floor/wall/support-aware placement, material
-  assignment/editing, authored Scene lighting, environment/HDRI authoring,
-  one useful lighting/environment setup, and bounded 3D-editor polish. The
-  exact minimum, sequencing/parallelism and acceptance contracts are **TBD
-  until the owner supplies Phase 2 + Phase 4 research**; directional bullets
-  are not implementation tickets. Material/texture/HDRI assets may originate
-  in P24A while assignment/editing/light/environment operations belong to
-  P24B. Both preserve one project asset registry, `SceneDocument` ownership,
-  room-local transforms, canonical selection/history, existing gizmo/transform
-  authority, Threlte patterns and visitor/editor isolation. P25 waits only for
-  the accepted useful minimum from both subtracks, never for catalogue/DCC
-  depth tails. See [P24 umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md).
+  Canonical Ingest** and **P24B — Rich 3D Scene / Staging Editor**. Phase 2
+  research is now reviewed and P24A has a linked detailed annex. Its minimum
+  proves a rights/provenance gate, deterministic canonical ingest, a bounded
+  10–12 asset cross-source proof set (Poly Haven + Kenney + Sweet Home 3D),
+  PlanProxy output into the existing `AssetFootprint`, an explicit canonical
+  model Scene/Save/Load/P22 visitor-resolution path, and bounded material/HDRI
+  supply. The research JSON's 32-object Wave 1 remains acquisition backlog,
+  not a P24/P25 gate. P24B is still informed primarily by Phase 4 research and
+  owns the authoring side: asset place/replace, strong transforms, duplicate,
+  multi-select where justified, align/distribute, floor/wall/support-aware
+  placement, material assignment/editing, authored Scene lighting,
+  environment/HDRI authoring, one useful lighting/environment setup, and
+  bounded 3D-editor polish. P24B's exact minimum and combined P24 sequencing /
+  acceptance remain **TBD until Phase 4 review**. Material/texture/HDRI assets
+  originate in P24A while assignment/editing/light/environment operations
+  belong to P24B. Both preserve one project asset registry, `SceneDocument`
+  ownership, room-local transforms, canonical selection/history, existing
+  gizmo/transform authority, Threlte patterns and visitor/editor isolation.
+  P25 waits only for the accepted useful minimum from both subtracks, never
+  for catalogue/DCC depth tails. See [P24 umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md)
+  and [P24A annex](2026-09-08-P24A-asset-supply-canonical-ingest-annex.md).
 - **P25 — Experience foundation (narrow, after P23/P24 minima).** Navigation
   · Content · Interactions, referencing existing Spatial / camera / assets
   work. Begins once the P23/P24 minimum useful slices exist, before their
