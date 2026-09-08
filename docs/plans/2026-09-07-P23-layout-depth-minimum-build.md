@@ -34,8 +34,9 @@ accepted behavior rather than rebuilding features already present.
 | Owner / seam | Existing behavior and intended reuse |
 |---|---|
 | `packages/layout-core/src/layout-types.ts`, codec and geometry modules | Meter-based rooms, frames, segments, openings and `box/plane/cylinder/sphere/profile` objects; one canonical compiler |
+| `packages/layout-core/src/layout-geometry-queries.ts`, compiled query types | Renderer-neutral points/spans/polygons/AABBs with stable semantic/source IDs; preferred source for new snap/query behavior |
 | `lib/editor/layout/layout-object-editing.ts` | Object creation/patches, IDs, dimensions, floor placement and Plan snapping |
-| `layout-opening-editing.ts` | Opening defaults/patches, meter offsets, interval tests and offset snap |
+| `layout-opening-editing.ts` | Opening defaults/patches, **meter offsets along segments**, interval tests and offset snap |
 | `layout-editing.ts`, `layout-room-transform.ts` | Boundary editing and rigid room-unit transform, including frame, curved anchors and owned objects |
 | `layout-preview-state.svelte.ts` | Existing validated mutators, derived bundle, install/commit and snapshots; no new parallel store |
 | `layout-mutation-runner.ts`, `layout-transaction.ts`, editor store | Existing begin/commit/cancel and one chronological tagged history stack |
@@ -48,6 +49,30 @@ Numeric object dimensions and opening fields already exist. P23 improves their
 coverage and validation and adds missing operations; it does not count replacing
 those controls as new functionality. Preserve existing sphere/radius and plane
 dimension semantics rather than treating every kind as a generic scale vector.
+
+## External research references — non-authoritative
+
+Phase 3 CAD/floor-planner research is recorded in
+[`../Deep-research/deep-research-layout-cad.md`](../Deep-research/deep-research-layout-cad.md).
+Agents implementing P23 may inspect the public projects/modules referenced there.
+They are implementation precedents, **not** product architecture and do not
+override Museum Editor contracts. Recheck upstream state/license before reusing
+code; GPL references are for algorithm/UX study unless a separately compatible
+source is found.
+
+Highest-value precedents for this slice:
+
+| P23 concern | Reference | P23 lesson / disposition |
+|---|---|---|
+| Whole-candidate wall edits | `openPlan3D` `wallEditing.ts` + tests | Study plan → validate → apply atomically and adversarial fixtures; do not adopt its renderer/store architecture |
+| Snap grammar / preview | LibreCAD `rs_snapper.cpp` + preview actions | Study endpoint/midpoint/intersection/orthogonal behavior and preview/commit UX; GPL study only |
+| Architectural wall/opening semantics | Sweet Home 3D Plan/Wall controllers + models | Study direct dimensions, wall-relative openings and grouped edits; GPL study only |
+| Wall joins | Blueprint3D wall/corner/half-edge model | Study join concepts; reject Three/render ownership coupling |
+| Human + future-agent semantic edits | KittyCAD/Zoo `modifyAst` + operations | Study typed semantic operations shared by UI/tests/agents; do not create a universal P23 command bus |
+| Robust geometry classification | `robust-predicates` | Permitted focused dependency only if P23 degeneracy/intersection fixtures prove current math insufficient |
+| General 2D geometry | Flatten.js | Prototype/reference only; current compiled query surface remains first choice and Flatten types never become project truth |
+| Room topology diagnostics | JTS `Polygonizer` | Follow-up reference for derived candidate faces/dangles/cut edges while explicit Room identity stays authored |
+| Bounded offset | CavalierContours JS / `clipper2-ts` | Follow-up spike only, not P23 minimum |
 
 ## Operation and ownership contract
 
@@ -94,6 +119,14 @@ Manual numeric values are exact and bypass gesture snapping.
 - Rooms: numeric frame origin X/Z and yaw using `transformLayoutRoomUnit` and
   its existing pivot semantics. Compute the delta needed to reach the requested
   frame; do not mistake frame origin for the transform's centroid pivot.
+- **Selected straight wall:** expose exact length in meters with an explicit
+  `Start | End` fixed-endpoint choice. A semantic candidate moves only the
+  opposite endpoint along the existing line direction, preserves the segment ID,
+  updates the closed room boundary through the canonical room-editing path, keeps
+  opening offsets in meters, validates adjacent segments/openings/topology, and
+  rejects the whole change if the result is invalid. `auto-bezier` arc length is
+  a readout only in P23; no numeric curved-wall length mutation or general wall-
+  angle command is added here.
 - Rectangular rooms: width/depth along room-local axes, anchored at the current
   local minimum corner, with frame unchanged. Enable only for a verified
   four-line rectangle, including rotated rectangles; no bounding-box resize of
@@ -105,6 +138,10 @@ No floor-wide height/elevation expansion is required. Existing thickness/height
 fields keep their current owning scope and validation. Publish a clear reason
 when an operation is unsupported rather than presenting a nonfunctional field.
 
+Research precedent: direct numeric precision is intentionally **not** a general
+persistent geometric-constraint system. FreeCAD/SolveSpace-class solver state,
+DOF/conflict UX and constraint graphs remain outside P23/product scope.
+
 ### P23.2 — Predictable Plan snapping and alignment
 
 Extend the existing Plan snap controls, not global editor preferences. Keep the
@@ -113,37 +150,72 @@ input-validation pattern. Reconcile current hard-coded quarter-meter paths so
 the selected step applies to affected Layout placement and translation gestures.
 Do not silently change Scene/Camera snapping or existing angle modifiers.
 
+New semantic snap candidates derive from **`CompiledLayoutGeometry.queries` plus
+transient gesture guides**. Plan/SVG code must not independently reconstruct or
+resample authored geometry to create another snap truth. Keep a linear scan first;
+a spatial index is added only after measured project-size evidence.
+
 Add reference snapping for room drafting/vertex edits and supported object/room
-translation: existing boundary endpoints and straight-wall midpoints, plus
-rotation-aware object bounds edges/centers in X/Z. Exclude the moving target and
-its owned members. Choose within a fixed CSS-pixel acquisition radius, stable
-across zoom; use deterministic feature priority then distance then stable ID.
-Reference snap wins over grid when acquired. A visible guide identifies the
-winner; snap-off disables both. Reject invalid geometry rather than silently
-moving to a different candidate. No persistent constraints are serialized.
+translation:
+
+- existing boundary endpoints / room corners;
+- straight-wall midpoints;
+- wall/reference-span intersections where valid;
+- nearest point on a wall/reference span;
+- an orthogonal guide relative to the active drafting/editing anchor;
+- opening edges while editing an opening;
+- rotation-aware object bounds edges/centers in X/Z where already supported.
+
+Exclude the moving target and its owned members. Choose within a fixed CSS-pixel
+acquisition radius, stable across zoom; use tool/context validity, semantic
+feature priority, then screen distance, then stable ID/key. Reference snap wins
+over grid when acquired. A visible guide/marker identifies the winner; snap-off
+disables both. Reject invalid geometry rather than silently moving to a different
+candidate. No persistent constraints are serialized. Pointer acquisition radius
+is interaction state in CSS pixels; model-space geometry tolerances are a
+separate canonical policy.
 
 Alignment is initially **one selected supported layout object to one reference**:
-another supported layout object's world AABB, or a room's compiled Plan bounds.
-Choose X or Z and minimum/center/maximum; translate only the selected object,
-preserving height, rotation, dimensions and ownership. The Inspector reference
-picker keeps the active selection intact. This delivers useful alignment without
-inventing a multi-selection owner. General distribution/group alignment is later.
+another supported layout object's world AABB, a room's compiled Plan bounds, or a
+selected straight-wall reference. Choose X or Z and minimum/center/maximum for
+bounds references; wall reference adds a bounded **Center on wall** action using
+compiled/query geometry. Translate only the selected object, preserving height,
+rotation, dimensions and ownership. The Inspector reference picker keeps the
+active selection intact. This delivers useful alignment without inventing a
+multi-selection owner. General distribution/group alignment is later.
+
+Research precedent: LibreCAD informs the bounded snap vocabulary and preview
+behavior, but P23 remains purpose-built around Museum's compiled query records.
+Do not add Flatten.js merely for feature parity; introduce `robust-predicates`
+behind a layout-core adapter only if near-collinear/intersection acceptance
+fixtures demonstrate a real classification weakness in current math.
 
 ### P23.3 — Openings that fit
 
 Build on existing door/window offset, width, height, sill and profile controls.
 Expose segment length and remaining clearance; make clear that offset is the
-opening's start measured in meters along the segment. Add Center on segment and
-distance-from-end placement by converting to the existing offset representation.
-Reuse current rectangular/rounded/pointed profiles; no new door-leaf meshes or
-interactive opening/closing behavior.
+opening's start measured in **meters along the segment**. Add Center on segment
+and distance-from-end placement by converting to the existing offset
+representation. No schema migration to normalized `t` is required. Reuse current
+rectangular/rounded/pointed profiles; no new door-leaf meshes or interactive
+opening/closing behavior.
+
+For **straight segments**, add direct Plan manipulation:
+
+- dragging the opening body slides it along its owning segment only;
+- left/right width handles resize the opening along that same segment;
+- the gesture keeps `segmentId`, height, sill and profile unchanged unless the
+  specific edited field owns that value;
+- preview is transient, pointer-up commits one Layout history entry, and Escape/
+  pointer cancellation restores the immutable baseline with no history.
 
 Validate the whole candidate for finite positive dimensions, segment limits,
 vertical fit and overlapping opening intervals using the canonical geometry
-rules/tolerances. Numeric edits reject overflow rather than clamp silently.
-Changing door/window kind preserves only valid fields; any necessary reset is
-explicit in the UI. Existing curved-segment behavior remains supported as-is;
-new placement assistance may be limited to straight segments with a stated reason.
+rules/tolerances. Numeric and direct edits reject overflow rather than clamp
+silently. Changing door/window kind preserves only valid fields; any necessary
+reset is explicit in the UI. Existing curved-segment behavior remains supported
+as-is; the new body-drag/width-handle assistance may be limited to straight
+segments with a stated reason.
 
 Expose the existing optional door `connectsRoomIds` relation through an explicit
 room choice, using current codec/portal semantics. Windows remain unpaired;
@@ -151,6 +223,10 @@ unrelated/self/missing-room targets are rejected. Do not infer a relationship
 because two walls look adjacent, create camera edges, or promise that a relation
 cuts a second wall automatically. Show the actual compiled result. Two physical
 wall openings, where required, remain explicit authored openings.
+
+Research precedent: mature floor planners reinforce wall-relative opening
+semantics, but Museum's current meter-based `segmentId + offset + width` model is
+already the preferred P23 base. Extend it rather than replacing it.
 
 ### P23.4 — Duplicate and linear repeat
 
@@ -176,13 +252,23 @@ rejects the whole operation with the failing target/reason. One commit and one
 Undo cover the whole batch. Select the first new top-level target after success;
 do not create multi-selection merely because repeat creates several records.
 
+Research precedent: first repeat/array behavior should bake independent normal
+entities. Do not add persistent array relations, definition/instance overrides,
+or a component framework to P23.
+
 ### P23.5 — Small architectural preset set
 
 Offer three labeled Layout presets using existing shapes: **Column** (cylinder),
-**Partition** (box) and **Platform** (box). Each starts with editable dimensions
-and floor-relative placement, then becomes an ordinary Layout object. Reuse
-primitive placement, preview, validation and cancellation. Presets are creation
-defaults, not linked prefab instances or new serialized object kinds.
+**Platform** (box) and **Plinth** (box). Each starts with editable dimensions and
+floor-relative placement, then becomes an ordinary Layout object. Reuse primitive
+placement, preview, validation and cancellation. Presets are creation defaults,
+not linked prefab instances or new serialized object kinds.
+
+Do **not** ship a generic box preset called `Partition` in this minimum slice. A
+wall-like box cannot own openings or participate in room-boundary semantics and
+would create a misleading second-class wall concept. If a freestanding display
+partition becomes a repeated need, register it later as an explicit fixture or
+template with truthful semantics.
 
 Use existing native number inputs and toolbar/Inspector placement. No preset
 editor, library service, dependency or metadata schema is needed. Plan, 3D and
@@ -196,10 +282,11 @@ and theme tokens; no new global mode or parallel toolbar system. Existing 3D
 selection/transform remains available, but direct wall/anchor 3D picking and full
 3D drafting are not prerequisites for this Plan-led slice.
 
-New state is transient input drafts, snap step/winner, alignment reference and
-repeat/preset preview. No document schema change, saved constraint graph, new
-history store or backend dependency. All new durable results use existing fields.
-Both mounted Plan workspaces must retain their hidden/inert boundaries.
+New state is transient input drafts, snap step/winner, alignment reference,
+opening direct-manipulation preview and repeat/preset preview. No document schema
+change, saved constraint graph, new history store or backend dependency. All new
+durable results use existing fields. Both mounted Plan workspaces must retain
+their hidden/inert boundaries.
 
 Begin gestures from an immutable baseline. Escape, pointer cancellation, target
 deletion, project change and leaving the owning surface cancel pending edits and
@@ -208,6 +295,23 @@ selection change/Undo; focus moving to a different target cannot commit an old
 input against the new target. Undo/Redo reconciles selection via existing helpers.
 Unit labels, keyboard operation, visible focus and announced validation errors
 are required. Typing in a field must not trigger canvas shortcuts.
+
+## Geometry robustness policy
+
+P23 does not introduce a general geometry kernel, but new CAD-like behavior must
+keep interaction tolerance separate from authored-geometry validity:
+
+- **pointer/snap acquisition** — CSS pixels converted through current Plan zoom;
+- **minimum authored size** — meters and operation-specific product limits;
+- **geometric equality/degeneracy** — canonical layout-core policy/helpers;
+- **display rounding** — UI formatting only, never authored geometry.
+
+Do not introduce one magic `EPSILON` that controls both pointer UX and topology.
+New/touched geometry code must be deterministic around near-collinear and nearly
+coincident cases. If current line/intersection math fails the P23 acceptance
+fixtures, prefer a focused `robust-predicates` adapter in `layout-core` before a
+broad geometry framework. Flatten.js/JSTS remain research references unless a
+bounded missing capability earns them.
 
 ## Acceptance and sequencing
 
@@ -218,12 +322,12 @@ operations; no transport or command registry is required.
 
 | Increment | Exact focused acceptance |
 |---|---|
-| P23.1 | Numeric object edit equals the equivalent gizmo candidate; room frame reaches requested coordinates/yaw; rotated rectangle gets requested local dimensions without changing frame/segment IDs; arbitrary/curved room resize rejects; invalid/blank/zero inputs preserve state; one Undo/Redo round-trip |
-| P23.2 | Non-default grid step reaches every affected caller; snap winner is stable at different zooms and ties; moving members excluded; guides clear on cancel; rotated object's AABB min/center/max matches reference after alignment; no-op alignment adds no history |
-| P23.3 | Center and end-clearance yield exact offsets; endpoint/overlap/vertical limits reject atomically; profile survives round-trip; explicit valid door relation survives codec/portal derivation; invalid target/window relation rejects; wall shrink cannot leave an invalid opening |
+| P23.1 | Numeric object edit equals the equivalent gizmo candidate; room frame reaches requested coordinates/yaw; straight wall reaches requested length while the chosen endpoint remains fixed, segment ID survives and invalid attached-opening/topology results reject atomically; rotated rectangle gets requested local dimensions without changing frame/segment IDs; arbitrary/curved room resize and numeric auto-bezier length mutation reject; invalid/blank/zero inputs preserve state; one Undo/Redo round-trip |
+| P23.2 | Non-default grid step reaches every affected caller; snap winner is stable at different zooms and ties; endpoint/midpoint/intersection/nearest-span/orthogonal/opening-edge fixtures resolve deterministically from compiled query geometry; moving members excluded; guides clear on cancel; rotated object's AABB min/center/max and Center-on-wall alignment reach the requested reference; no-op alignment adds no history |
+| P23.3 | Center and end-clearance yield exact offsets; straight-wall opening body drag and width handles preserve segment/height/sill/profile, commit once, and cancel cleanly; endpoint/overlap/vertical limits reject atomically; profile survives round-trip; explicit valid door relation survives codec/portal derivation; invalid target/window relation rejects; wall shrink cannot leave an invalid opening |
 | P23.4 | N copies have unique IDs, exact offsets and correct internal remaps; owned objects follow copied room; no Scene/camera records copied or modified; linked-door/profile restrictions explained; invalid final copy rolls back all; undo/redo restores IDs and entire batch |
-| P23.5 | Each preset compiles as its ordinary shape; dimension edits and cancellation use existing paths; floor placement accounts for elevation and object center; export/import preserves editable values |
-| P23.6 | End-to-end author/save/preview/publish checks, regression/bundle gates and contract updates |
+| P23.5 | Column/Platform/Plinth presets compile as their ordinary shapes; dimension edits and cancellation use existing paths; floor placement accounts for elevation and object center; export/import preserves editable values |
+| P23.6 | Degeneracy fixtures cover near-collinear intersections, nearly coincident endpoints, zero/tiny wall length, endpoint intersection, deterministic snap ties and opening-invalidating wall resize; end-to-end author/save/preview/publish checks, regression/bundle gates and contract updates pass |
 
 Tests belong in existing layout/editor suites. Cover candidate validation and
 the transaction adapter, including commit failure and stale selection; do not
@@ -234,11 +338,13 @@ Do not create a new test framework or broad benchmark project. Use a bounded
 compilation; add performance machinery only on a demonstrated regression.
 
 Manual integration fixture: create a rotated 6 m × 4 m room, set a 0.1 m grid,
-place a column and platform, align their bounds, add a centered 0.9 m door and a
-window with a sill, repeat three columns, duplicate the unlinked room, and edit
-one copy independently. Check Plan/3D, Undo/Redo, project switching and Preview
-return. Save/Load and portable export/import retain dimensions, IDs, ownership
-and opening relations. Publish through P22 and inspect in a fresh unauthenticated
+set one straight wall to an exact requested length, place a column and platform,
+align one object to bounds and another to a straight wall, add a centered 0.9 m
+door, drag it along the wall, resize it with a width handle, add a window with a
+sill, repeat three columns, duplicate the unlinked room, and edit one copy
+independently. Check Plan/3D, Undo/Redo, project switching and Preview return.
+Save/Load and portable export/import retain dimensions, IDs, ownership and
+opening relations. Publish through P22 and inspect in a fresh unauthenticated
 browser; later Layout edits leave the old publication unchanged until Update.
 
 Final checks: focused suites, full `npm test -- --run`, `npm run check`, shared
@@ -247,19 +353,50 @@ gates, and P22 API tests. Use the scripts present after P22; record actual resul
 Smoke `/museum`, `/museum/editor`, Scene Arrange and Camera Plan/3D for regressions.
 No commits or live publication are performed merely by writing this plan.
 
+## Research-backed follow-up candidates — not P23 ship gates
+
+Keep the broader Layout Depth family staged. After the minimum lands, use measured
+pilot/user/agent demand to register follow-ups in approximately this order:
+
+1. **Mirror selected Layout structure** — baked deterministic transform, no
+   persistent symmetry relation.
+2. **Box selection + distribute/equal spacing** — normal canonical selections and
+   transforms; no mixed Layout/Scene transaction.
+3. **Richer temporary guides/snaps** — parallel/perpendicular/extension/equal-
+   spacing only where repeated workflows justify them.
+4. **Bounded straight/non-branching wall-chain offset** — compare
+   CavalierContours JS vs `clipper2-ts` in a focused spike; bake normal Layout
+   entities, no persistent offset relation.
+5. **Derived room-topology diagnostics / assisted face candidates** — JTS
+   Polygonizer behavior is the reference; explicit Room IDs/ownership remain
+   authored truth.
+6. **Trim/extend** — only after wall/opening/reference semantics are mature enough
+   to define deterministic dependent-reference behavior.
+
+Demand-gated later work remains: circular-arc wall semantics, stairs, levels,
+railings, profile/extrude, reusable definition/instance components and bounded
+DXF/IFC adapters. General constraint solvers, arbitrary BRep/STEP-native modeling,
+full BIM/MEP and mesh/DCC editing remain outside the product direction.
+
+These follow-ups must never become a hidden gate before P24 minimum Scene/Staging
+Depth or P25's narrow Experience proof.
+
 ## Boundaries and fallback
 
 Keep `LayoutDocument` → `compileLayoutGeometry()` → Plan + 3D + P22 runtime as
-the only geometry path. No generated endpoints are persisted; no Layout helpers
-enter visitor chunks; frozen `/museum` remains `rooms.ts`/Chopin-owned under its
-existing gates. One camera graph/motion, no additional selection/history system.
+the only geometry path. Snap/query helpers consume canonical compiled query
+records rather than rebuilding Plan geometry. No generated endpoints are
+persisted; no Layout helpers enter visitor chunks; frozen `/museum` remains
+`rooms.ts`/Chopin-owned under its existing gates. One camera graph/motion, no
+additional selection/history system.
 
-If rectangle sizing or duplication uncovers cross-domain mutation requirements,
-keep the operation bounded or reject that input with a reason; do not split a
-supposed atomic edit into separate Layout/Scene commits. If richer presets need
-new document kinds, ship the existing-shape presets and register that depth later.
-Partial increments can land independently, but P23 ships only when the minimum
-capabilities above pass. Optional depth tails never become a hidden P25 gate.
+If straight-wall sizing, rectangle sizing, opening direct manipulation or
+duplication uncovers cross-domain mutation requirements, keep the operation
+bounded or reject that input with a reason; do not split a supposed atomic edit
+into separate Layout/Scene commits. If richer presets need new document kinds,
+ship the existing-shape presets and register that depth later. Partial increments
+can land independently, but P23 ships only when the minimum capabilities above
+pass. Optional depth tails never become a hidden P25 gate.
 
 Rollback removes the new UI/operation entry points while retaining canonical
 documents; ordinary shapes/openings need no reverse migration. On ship update
