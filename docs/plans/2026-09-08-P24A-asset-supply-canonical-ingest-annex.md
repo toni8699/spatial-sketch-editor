@@ -19,6 +19,45 @@ Phase 2 is specific enough to stop broad asset-source discovery. It recommends a
 
 The research JSON's 32-object Wave 1 is an **acquisition backlog**, not the P24A ship gate.
 
+### Research closure vs implementation readiness
+
+The **broad source-discovery gate is closed**. P24A does not need another general survey of asset sites, model repositories, material libraries or HDRI providers before planning can continue.
+
+That does **not** mean every pipeline choice below is automatically implementation-ready. Before P24A.0–P24A.6 become implementation tickets, run a bounded implementation-readiness reconciliation against the exact current repository and the exact upstream tools/resources selected from Phase 2.
+
+The readiness pass must inspect the current end-to-end asset path, including:
+
+- built-in `Asset` catalogue / manifest behavior and `AssetFootprint` generation/consumption;
+- current model loading and Scene asset references;
+- P20 project asset registry + R2 ownership/storage boundaries;
+- current image/texture registry path and what can genuinely be reused for models;
+- P22 release-resource resolution and cold visitor behavior;
+- Scene Save/Load model references;
+- current material definitions, texture resources and visitor material resolution;
+- current Plan footprint/proxy behavior;
+- editor/visitor bundle isolation.
+
+It must also verify the exact external tools/sources that would become implementation dependencies or acquisition authorities. For each serious dependency/reference record:
+
+```text
+Project / source
+Pinned version / commit / dated API or archive
+Exact module / CLI / endpoint / file format used
+License / redistribution evidence
+Current measured behavior in Museum's pipeline
+Disposition: KEEP CURRENT | EXTEND | BENCHMARK FIRST | DEFER | REJECT
+```
+
+At minimum recheck glTF Transform, Khronos glTF Validator, meshoptimizer/`gltfpack`, the selected Poly Haven/Kenney/Sweet Home 3D acquisition paths, ambientCG material supply and any `pmndrs/assets` packaging pattern actually reused.
+
+The readiness pass is **not another broad ecosystem-research phase**. Its purpose is to prevent the annex from assuming that a research recommendation maps cleanly onto the live P20/P22/Scene runtime, and to benchmark unresolved choices before they become architecture.
+
+The same maturity rule used by P24B applies here:
+
+> Existing asset infrastructure is not automatically product-complete because a registry, loader or catalogue seam has shipped; external tooling is not automatically better because Phase 2 recommends it. Preserve canonical Museum Editor ownership, identify the concrete pipeline gap, then extend only the seam that needs depth.
+
+Until this reconciliation closes, P24A.0–P24A.6 below are the **approved planning direction and acceptance hypotheses**, not permission to blindly implement every named mechanism exactly as written.
+
 ## Outcome
 
 P24A proves one deterministic route from external reusable content to canonical Stage supply:
