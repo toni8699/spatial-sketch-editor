@@ -2,15 +2,15 @@
 
 **Created:** 2026-09-08 · **Status:** proposed (tracker authoritative)
 **Depends on:** P23 minimum useful Build set complete.
-**Detail status:** P24A Phase 2 research reviewed and detailed annex registered; P24B remains TBD until Phase 4 Scene / 3D-staging research is supplied and reviewed.
+**Detail status:** P24 remains an umbrella/research-reconciliation plan, not an implementation-ready brief. P24A Phase 2 research has been reviewed and has a linked annex; the checked-in Phase 4 compact research has now been reviewed directionally for P24B, but P24B still requires deeper current-code audits and direct reference studies before its implementation contract/minimum can be frozen.
 
 ## Outcome
 
 P24 turns Scene authoring into a reusable staging system rather than a collection
-of model-placement controls. A creator can bring useful 3D content into the
-project, place and revise it precisely, style it with reusable materials and
-environments, author lighting, and publish the same canonical Scene state through
-the visitor runtime.
+of model-placement controls. A creator should be able to bring useful 3D content
+into the project, place and revise it precisely, style it with reusable materials
+and environments, author lighting, and publish the same canonical Scene state
+through the visitor runtime.
 
 P24 remains one registered roadmap tier because all of this is **Stage** work over
 one project/Scene system. Internally it is split into two bounded subtracks so
@@ -26,33 +26,64 @@ P24 — Scene / Staging Depth
 not consume P25 or relax the tracker rule that registered plans use one flat
 P-number namespace.
 
+This umbrella deliberately records **research direction, architecture boundaries,
+required audits and planning gates**. Except for the already-linked P24A annex, it
+must not be read as approval to turn the directional capability lists below into
+implementation tickets.
+
+## Research basis
+
+### Phase 2 — P24A asset supply / ingest
+
+Checked-in research:
+
+- `docs/Deep-research/P24-3D-assets-staging/museum-editor-phase2-exact-asset-harvest-P24.md`
+- `docs/Deep-research/P24-3D-assets-staging/museum-editor-phase2-acquisition-manifest.json`
+
+These are the primary research inputs for P24A. They provide source ranking,
+acquisition/provenance guidance, exact starter inventory, materials/HDRIs,
+PlanProxy fixtures, pipeline references and reject/defer lists.
+
+### Phase 4 — P24B rich 3D staging
+
+Current checked-in research:
+
+- `docs/Deep-research/P24-3D-assets-staging/deep-research-P24-3D-editing-compact.md`
+
+The compact artifact says it is a compression/normalization of
+`docs/Deep-research/P24-3D-assets-staging/deep-research-P24-3D-editing.md`.
+That full source file is **not currently present on `main`**. Until it is added,
+the compact artifact is the durable Phase 4 research input and agents must not
+claim to have inspected evidence that exists only in the absent source.
+
+Phase 4 is useful as a **capability/reference inventory**, not as a direct P24B
+implementation plan. Its generic “must-build” list includes several capabilities
+that Museum Editor already implements in some form. The correct next step is to
+reconcile the research against live code and mature reference tools, not to copy
+that list into tickets.
+
 ## Why split
 
-The two subtracks solve different product problems and are informed by different
-research:
+The two subtracks solve different product problems:
 
 - **P24A** asks: *What reusable 3D content can enter the product safely and in a
-  normalized form?* Phase 2 now answers this with an exact acquisition manifest,
-  source ranking, materials/HDRIs, PlanProxy fixtures, pipeline references and
-  reject list. Its detailed contract is registered in
-  [the P24A annex](2026-09-08-P24A-asset-supply-canonical-ingest-annex.md).
-- **P24B** asks: *What semantic Scene operations and editor interactions make that
-  content genuinely easy to stage and revise?* It remains primarily informed by
-  the future Phase 4 Scene/3D-staging capability harvest.
+  normalized form?*
+- **P24B** asks: *How mature should the Scene staging experience become once that
+  content is available, and which existing capabilities need preservation,
+  polish or deeper expansion?*
 
 The split is not a document-ownership split like P23 Layout vs P24 Scene. Both
 subtracks ultimately support one Stage vocabulary and must converge on the
 existing project asset registry, `SceneDocument`, selection/history, Threlte/Three
 render path and P22 visitor-safe publish boundary.
 
-## P24A — Asset Supply + Canonical Ingest
+---
 
-**Research reviewed:**
+# P24A — Asset Supply + Canonical Ingest
 
-- `docs/Deep-research/P24-3D-assets-staging/museum-editor-phase2-exact-asset-harvest-P24.md`
-- `docs/Deep-research/P24-3D-assets-staging/museum-editor-phase2-acquisition-manifest.json`
+**Research reviewed:** Phase 2 files listed above.
 
-**Detailed contract:**
+**Detailed planning annex:**
 [2026-09-08-P24A-asset-supply-canonical-ingest-annex.md](2026-09-08-P24A-asset-supply-canonical-ingest-annex.md)
 
 P24A owns the **supply, normalization, provenance and canonical acceptance side**
@@ -92,52 +123,480 @@ P24A may supply material, texture and HDRI bytes plus reusable definitions, but 
 does not define the complete user-facing material or lighting editor. Those
 authoring semantics belong to P24B.
 
-## P24B — Rich 3D Scene / Staging Editor
+---
 
-**Research input:** Phase 4 Scene / 3D-staging capability harvest. Detailed scope
-TBD until that research is supplied and reviewed against the live repository.
+# P24B — Rich 3D Scene / Staging Editor
 
-P24B owns the **authoring and revision side** of staging. Directionally the first
-useful set is expected to investigate and bound:
+**Research state:** Phase 4 compact artifact reviewed directionally; **not
+implementation-ready**.
 
-- durable asset placement and replacement while preserving intended transform /
-  placement state;
-- stronger translate/rotate/scale workflows without introducing a second gizmo
-  or transform authority;
-- duplicate and multi-selection where justified by current Scene selection/history;
-- align/distribute/spacing operations;
-- floor, wall and support-aware placement/snap behavior;
-- material assignment and a bounded useful material-editing surface;
-- authored Scene lights such as the core light types justified by research;
-- light selection, transforms, targets/gizmos and Inspector behavior where needed;
-- environment/HDRI assignment and a bounded exposure/intensity workflow;
-- one useful reusable lighting/environment setup or rig;
-- 3D-editor visual/interaction polish needed to make selection, placement,
-  materials and lighting understandable rather than merely technically present;
-- deterministic semantic Scene operations that future agents can invoke through
-  the same behavior as human UI.
+P24B owns the **authoring and revision side** of staging. The research confirms
+that the highest-value areas are object arrangement, placement/replacement,
+materials, lighting/environment, staging feedback and semantic operations usable
+by humans and future agents. However, the live repository already contains
+substantial implementations in several of those areas.
 
-The final P24B minimum is **not yet approved by this umbrella list**. Phase 4 must
-compare public/open-source 3D editors, scene editors and DCC interaction patterns
-against the actual Museum Editor Scene seams before the detailed brief is written.
+The planning rule is therefore:
 
-### P24B ownership boundary
+> **“Shipped” answers whether Museum Editor already has a canonical
+> implementation. It does not answer whether that capability is sufficiently
+> capable, efficient, discoverable, polished or expressive for P24's Stage goal.**
 
-Durable staged objects, authored materials/overrides, lights and other Scene
-properties remain `SceneDocument`-owned according to the existing project model.
-`LayoutDocument` architecture does not migrate into Scene because P24 gains richer
-3D controls. Scene Plan Arrange may remain a 2D client of eligible Scene behavior,
-but owner routing remains explicit and no mixed Layout/Scene transaction is
-introduced casually.
+Likewise, an external editor doing something differently is not evidence that the
+Museum Editor architecture should be replaced.
 
-Lighting remains authored Scene truth, not shell/global configuration. Material
-and environment state must likewise resolve through canonical project/Scene
-semantics rather than live only inside Threlte components, Three objects or UI
-stores.
+P24B planning must avoid both errors:
 
-## Material/environment boundary between A and B
+```text
+“It already exists, so skip it.”
 
-The split is intentionally:
+and
+
+“Blender/Godot/Three Editor does it differently, so replace ours.”
+```
+
+Existing architecture is the baseline to preserve. Existing **product maturity**
+remains open to evidence-led improvement.
+
+## Known live baseline — preserve, then audit maturity
+
+Current live code/docs already establish canonical foundations including:
+
+- ordered Scene multi-selection;
+- one active Scene selection/history system rather than a P24-local selection;
+- one mounted TransformControls host with domain adapters;
+- room-local Scene transforms with explicit world/local conversion at editor
+  boundaries;
+- translate / rotate / scale, numeric Inspector editing and snapping;
+- active-object multi-selection pivot and rigid multi-object transforms;
+- uniform/independent editor scale behavior;
+- floor placement ghost, Drop to Floor and Keep on Floor;
+- selection-aware duplicate;
+- flat, same-room `SceneObjectCluster` grouping with rigid group transforms and
+  editor hierarchy UI;
+- one chronological Scene/Layout history model with transaction/coalescing
+  behavior already used by transform gestures;
+- `SceneMaterialInstance`, material assignment, base texture, roughness/metalness,
+  shared usage and Make Unique behavior;
+- canonical Scene light entities for Point / Spot / Directional plus a basic light
+  Inspector;
+- existing Outliner/Unified Project Tree and Scene Inspector surfaces.
+
+This list is **not a declaration that those capabilities are finished**. It is a
+list of authorities that a deeper P24B study must inspect before deciding what to
+keep, polish, deepen or defer.
+
+## Mandatory capability-maturity audit
+
+Before a P24B implementation brief is registered, every major existing/missing
+Stage capability must receive the same reconciliation pass:
+
+1. inspect the current implementation end-to-end;
+2. establish its actual current behavior and architectural owner;
+3. inspect mature reference implementations directly, including exact public
+   source modules/files where available;
+4. compare operation semantics, UX, discoverability, edge cases and performance;
+5. identify concrete maturity gaps rather than feature-name parity gaps;
+6. classify the capability as:
+
+```text
+KEEP AS-IS
+POLISH
+DEEPEN IN P24B
+FOLLOW-UP
+REJECT / WRONG PRODUCT
+```
+
+7. preserve the current architectural authority unless the audit demonstrates a
+   specific architectural limitation that cannot be solved by extension.
+
+The resulting maturity matrix should record at least:
+
+| Capability | Current behavior | Canonical authority | Reference evidence | Proven maturity gap | Disposition |
+|---|---|---|---|---|---|
+| Selection / multi-select | audit | existing selection system | direct study | TBD | TBD |
+| Transform / pivot | audit | single gizmo host + Scene adapter | direct study | TBD | TBD |
+| Duplicate | audit | existing Scene mutator/history | direct study | TBD | TBD |
+| Groups / clusters | audit | flat `SceneObjectCluster` model | direct study | TBD | TBD |
+| Outliner | audit | Unified Project Tree | direct study | TBD | TBD |
+| Placement / grounding | audit | existing placement ghost/pipeline | direct study | TBD | TBD |
+| Snapping | audit | existing transform/placement snap path | direct study | TBD | TBD |
+| Materials | audit | current material definition/instance path | direct study | TBD | TBD |
+| Lights | audit | `SceneLightEntity` + renderer/Inspector | direct study | TBD | TBD |
+| Environment | missing/partial TBD | must inspect renderer/Scene seams | direct study | TBD | TBD |
+| History integration | audit | one chronological history model | direct study | TBD | TBD |
+
+Do not pre-fill “maturity gap” simply because the Phase 4 research names a
+feature. Evidence from current Museum behavior plus reference study must justify
+it.
+
+## Required direct-reference study
+
+The Phase 4 compact artifact names useful reference systems including Three.js
+Editor, BabylonJS Editor, Godot, Blender, PlayCanvas, Blockbench, nunuStudio,
+A-Frame Inspector, Threlte/R3F examples and other web/editor projects.
+
+Before freezing each major P24B area, agents should inspect the relevant references
+**directly**, not rely only on the compact research's summarized comparison.
+For serious references record:
+
+```text
+Project
+Commit / release inspected
+Exact file / module / class / function
+Relevant behavior
+License
+What Museum Editor can reuse / adapt / study
+What must not be transplanted
+```
+
+Reference status must be rechecked at planning time. The compact artifact itself
+preserves unresolved evidence such as an uncertain Pascal Editor license and
+conflicting snap-angle examples; those must not become plan facts without
+verification.
+
+GPL or otherwise restrictive references can still be valuable UX/algorithm study
+material, but exact code reuse must be license-compatible.
+
+---
+
+# P24B study tracks — directional, not implementation increments
+
+The following B0–B6 labels are **research/planning tracks** inside this umbrella.
+They are not approved implementation slices and do not create tickets by their
+presence here.
+
+## B0 — Existing Stage capability audit + reference reconciliation
+
+Audit the current Stage surface before defining new scope.
+
+Minimum audit coverage:
+
+- Scene selection and ordered multi-selection;
+- active/primary selection semantics and viewport/Outliner synchronization;
+- single TransformControls host, Scene adapter, pivot math and room-local/world
+  conversion;
+- current transform modes, snapping, cancellation, Inspector synchronization and
+  history coalescing;
+- duplicate semantics;
+- flat cluster/group model and hierarchy UI;
+- floor placement, ghost, grounding and Keep on Floor;
+- asset-library placement entry points;
+- current Scene material schema, resolver, Inspector and runtime rendering;
+- current Scene light schema, creation, renderer, selection/pick proxy, Inspector,
+  transform behavior and visitor rendering;
+- current Outliner/Unified Project Tree behavior at representative scene density;
+- editor-only versus visitor-authored visibility/state boundaries;
+- current P22/P24A asset-resolution implications.
+
+B0 should produce the capability maturity matrix and the exact questions that
+later B tracks must answer. It should **not** introduce a new generic Stage command
+framework merely to organize the audit.
+
+## B1 — Transform + arrangement maturity study
+
+Preserve the one TransformControls authority and investigate whether the existing
+experience needs targeted depth in areas such as:
+
+- Local vs World gizmo orientation while keeping room-local storage unchanged;
+- bounded pivot options beyond the current Active Object behavior, especially a
+  Selection Center if useful;
+- active/primary selection visual clarity;
+- transform-handle discoverability and camera-distance readability;
+- axis/plane manipulation quality;
+- numeric Inspector ↔ gizmo synchronization;
+- snap discoverability and visual feedback;
+- cancellation and no-op semantics;
+- alignment operations;
+- distribution/equal-spacing operations;
+- duplicate productivity improvements such as duplicate-then-move or modifier
+  drag if evidence supports them;
+- group/cluster UX improvements without silently introducing nested transform
+  hierarchy;
+- Outliner improvements required for richer staging.
+
+### Architecture guardrails
+
+- Local/World, if adopted, is **gizmo orientation**, not a new storage coordinate
+  model.
+- Multi-room operations must compute in an explicit common/world frame and inverse
+  through each member's owning room without inferring a new owner from position.
+- Alignment/distribution should become deterministic semantic Scene operations,
+  not one-off UI calculations.
+- One user action remains one Scene history result.
+- Existing flat `SceneObjectCluster` semantics are not replaced by Three.js
+  parenting merely because mature DCC tools expose nested groups.
+
+## B2 — Placement + replacement maturity study
+
+Audit the existing floor-placement/ghost system first, then investigate depth such
+as:
+
+- current floor-placement usability and visual feedback;
+- viewport drag from the asset picker as a client of the existing placement
+  pipeline;
+- selected-instance **asset replacement** while preserving intended placement;
+- wall placement for art, signage, screens, sconces and shelves;
+- bounded support/surface placement on known tables, plinths, cabinets or shelves;
+- placement snapping and support visualization;
+- replacement behavior across different normalized pivots/bounds;
+- P24A placement metadata and normalized dimensions/pivots as inputs.
+
+The study must compare one-time placement against persistent support references.
+The default hypothesis is to prefer **one-time semantic placement** first so a
+Scene object does not acquire an unplanned durable dependency on a Layout wall or
+another Scene object. Persistent wall/support relationships require their own
+delete/move/history/cross-document contract before approval.
+
+Do not treat arbitrary triangle raycasts as semantic support merely because a ray
+hits a mesh.
+
+## B3 — Material authoring maturity study
+
+Treat the current material system as a baseline, not a placeholder to replace.
+Audit:
+
+- `MaterialDefinition` / static material catalogue behavior;
+- `SceneMaterialInstance` identity and shared-vs-unique semantics;
+- material assignment and Make Unique flow;
+- base textures, roughness and metalness overrides;
+- existing texture-resolution/runtime material path;
+- current physical tile-size metadata;
+- multi-selection material workflows;
+- imported P24A material definitions/textures;
+- replacement compatibility;
+- editor/visitor rendering parity.
+
+Directly compare mature material editors and configurators before deciding the
+minimum authoring surface. Candidate depth to evaluate includes:
+
+- better material/preset discovery;
+- base color/tint override;
+- PBR-map-backed definitions from P24A;
+- physical texture scale where the existing mapping path can support it without
+  becoming a UV editor;
+- Apply Material to a multi-selection;
+- clearer shared/unique material feedback and preview behavior.
+
+Do **not** assume P24B minimum needs arbitrary GLB internal material-slot editing,
+UV editing, shader graphs, texture painting, node materials or arbitrary texture
+transforms. Those introduce asset-node identity and DCC-level complexity and must
+be separately justified.
+
+## B4 — Lighting authoring + environment system study
+
+Existing Point / Spot / Directional Scene entities are a **technical baseline,
+not evidence that lighting authoring is complete**.
+
+Before any B4 implementation plan is frozen, inspect the Museum Editor light
+pipeline end-to-end:
+
+- `SceneLightEntity` types, codec and validation;
+- creation/mutator/history paths;
+- editor and visitor `EntityLight` rendering;
+- Inspector behavior;
+- selection and current pick-proxy behavior;
+- existing transform/gizmo integration;
+- how Spot/Directional rotation currently produces direction;
+- Scene Plan visibility/selection possibilities;
+- renderer exposure, tone mapping, environment/IBL ownership;
+- shadow defaults, costs and visitor behavior.
+
+Then inspect mature reference implementations directly, especially relevant
+lighting/environment modules in:
+
+- Three.js Editor;
+- BabylonJS Editor / Inspector;
+- Godot 3D editor;
+- Blender;
+- PlayCanvas Editor/engine tooling where inspectable;
+- other high-value references identified by Phase 4.
+
+The study must answer, rather than assume:
+
+### Light authoring UX
+
+- How should Point, Spot and Directional sources be represented in the editor?
+- Should selected Point lights expose range visualization?
+- Should Spot lights expose direction, cone/range and direct-manipulation handles?
+- Can any direct direction/cone manipulation compose with the existing
+  TransformControls/operation system instead of creating a second light gizmo
+  authority?
+- Should Directional receive equal first-class UX investment or remain a lower
+  priority for indoor exhibition/showroom use?
+- Should the current numeric Spot angle be presented in degrees while remaining
+  canonically stored in the existing representation?
+
+### Units and authoring semantics
+
+- What should the user-facing meaning of intensity be for each supported light?
+- Are raw renderer-relative numbers sufficient, or should physical/user-facing
+  units such as lumen/candela/lux be introduced?
+- Is color temperature useful enough for the first mature lighting surface?
+- Which details are semantic Scene truth versus renderer implementation?
+
+### Environment / HDRI
+
+P24A supplies HDRI resources. P24B must separately determine the authoring model:
+
+- environment asset reference;
+- environment/IBL intensity;
+- Y rotation;
+- visible background versus lighting-only environment;
+- exposure;
+- PMREM/cache lifecycle;
+- whether tone-mapping choice stays system-owned;
+- whether environment is global Scene state rather than per-room state.
+
+Do not freeze a schema until the P24A asset identity and current renderer seams are
+inspected together.
+
+### Shadows and performance
+
+Study safe defaults for:
+
+- which lights cast shadows by default;
+- point/spot/directional shadow cost;
+- shadow-map resolution;
+- bias/normal-bias policies;
+- warnings versus hard limits;
+- editor and cold-visitor parity.
+
+Most low-level renderer controls should remain system-owned unless real authoring
+value justifies exposing them.
+
+### Presets
+
+Study at least one reusable lighting/environment preset such as a neutral gallery
+setup. Prefer a preset operation that creates/updates ordinary Scene
+lights/environment state over a new persistent `LightingRig` hierarchy unless a
+real durable-rig use case is demonstrated.
+
+B4 should end with a dedicated visual/interaction acceptance fixture, not merely
+schema tests: representative room, mixed materials, multiple light types and an
+HDRI/environment, verifying editor handles, Inspector synchronization, authored
+output and visitor isolation.
+
+## B5 — Unified staging UX / visual polish study
+
+After B1–B4 identify actual depth, specify a bounded presentation pass that makes
+the resulting Stage capability coherent rather than technically present.
+
+Study visual treatment for:
+
+- primary versus secondary multi-selection;
+- Local/World and pivot state if adopted;
+- alignment/distribution preview;
+- snap winners and support targets;
+- floor/wall/surface placement ghosts;
+- valid versus invalid placement;
+- group/cluster selection and bounds;
+- light source markers, Spot cones, direction indicators and range helpers;
+- material shared/unique state and material previews;
+- environment status;
+- Outliner/Inspector coordination;
+- representative scene density and all shipped editor themes.
+
+Presentation remains derived editor state. Do not persist gizmo/helper geometry or
+UI-only handles into `SceneDocument`.
+
+## B6 — Integration / implementation-brief gate study
+
+Only after B0–B5 have enough evidence should the owner register an implementation-
+ready P24B contract.
+
+That later contract should prove one coherent authored flow, directionally:
+
+```text
+P24A normalized asset
+→ browse / place
+→ transform / arrange
+→ replace
+→ material
+→ light
+→ environment
+→ Save
+→ Load
+→ Preview
+→ Publish
+→ cold visitor
+```
+
+The exact operations and acceptance criteria remain TBD until the studies above
+close their open questions.
+
+The visitor must reproduce canonical authored Scene/material/light/environment
+state without editor-only systems such as TransformControls, selection stores,
+placement ghosts, light helpers, Inspectors or P24A acquisition tooling.
+
+---
+
+# Likely research dispositions — not yet scope commitments
+
+Phase 4 plus the live-code review already suggests several guardrails worth
+preserving while deeper study continues:
+
+### Preserve / audit for maturity
+
+- ordered multi-selection;
+- one TransformControls host/adapters;
+- room-local transforms;
+- flat same-room clusters;
+- existing duplicate/history model;
+- floor placement/grounding pipeline;
+- current material-instance architecture;
+- current Scene light entity architecture;
+- existing Outliner/Inspector authority.
+
+### Strong candidates to study for P24B depth
+
+- Local/World gizmo orientation;
+- Selection Center pivot in addition to Active Object;
+- align/distribute;
+- selected-instance asset replacement;
+- wall placement and bounded support placement;
+- viewport asset drag as another client of canonical placement;
+- richer material preset/PBR/physical-scale/multi-apply UX;
+- materially deeper lighting authoring UX;
+- editor-only light visualization/direct manipulation;
+- HDRI/environment/exposure authoring;
+- one reusable lighting/environment preset;
+- unified staging visual polish.
+
+### Follow-up / evidence-gated candidates
+
+- box selection;
+- editor visibility/lock semantics;
+- persistent wall/support relationships;
+- nested or cross-room grouping;
+- copy/paste across room/project boundaries;
+- advanced material-slot editing;
+- color-temperature workflows if not selected for the first mature lighting set;
+- advanced shadow controls;
+- arrays/components;
+- richer procedural staging fixtures.
+
+### DCC / wrong-product boundary
+
+Do not pull the following into P24 merely because reference editors support them:
+
+- arbitrary mesh topology editing;
+- sculpting;
+- UV editor / texture painting;
+- shader/node graph;
+- general modifier stack / CSG modeling;
+- physics authoring;
+- keyframe animation editor / rigging;
+- particle/VFX authoring;
+- general-purpose game-engine level-design systems.
+
+These remain external-DCC or separately evidence-gated territory.
+
+---
+
+# Material/environment boundary between A and B
+
+The split remains:
 
 ```text
 P24A
@@ -151,58 +610,69 @@ SceneDocument + project asset references
 visitor-safe runtime
 ```
 
-P24A can therefore continue expanding the catalogue after P24B begins. P24B must
-not depend on harvesting the entire Phase 2 inventory before useful staging can
-ship.
+P24A can therefore continue expanding the catalogue while P24B studies/implements
+Stage behavior. P24B must not depend on harvesting the entire Phase 2 inventory
+before useful staging can ship.
 
-## Research gates
+---
 
-### P24A
+# P24A / P24B sequencing — directional only
 
-**Broad research gate closed.** Phase 2 has been reviewed and the linked P24A
-annex is now the planning source. Implementation agents still verify live code
-seams, pinned upstream versions and license evidence before each increment; that
-is implementation due diligence, not another broad source-discovery pass.
+The research suggests partial overlap may be possible, but **this umbrella does not
+schedule implementation yet**.
 
-### Before P24B detailed planning
+Directionally:
 
-Review Phase 4 against at least:
+```text
+P24A asset/provenance/normalization contracts
+        │
+        ├──────────────┐
+        │              │
+        ↓              ↓
+P24B current-capability audits   P24B transform/light baseline studies
+        │              │
+        └──────┬───────┘
+               ↓
+P24A model/material/HDRI identities become concrete
+               ↓
+P24B replacement/material/environment planning can freeze
+               ↓
+implementation-ready P24A/P24B slices registered
+               ↓
+combined P24 minimum gate
+```
 
-- current `SceneDocument` and scene codec/types;
-- canonical selection and one chronological history model;
-- existing TransformControls/gizmo ownership and room-local transforms;
-- Scene Plan Arrange owner routing;
-- Threlte/Three rendering patterns;
-- current material/light representation, if any;
-- P22 visitor-runtime serialization/resolution;
-- editor/visitor bundle isolation.
+No implementation agent should infer from this diagram that B1 or B4 may start
+without checking the then-current dependency state.
 
-The brief should identify the smallest coherent set of semantic Stage operations,
-then map UI/gizmos/Inspector affordances onto them. Do not invent a universal
-command bus or a second transform/material/light state model.
+---
 
-## Minimum gate before P25
+# Minimum gate before P25
 
-P25 Experience Foundation should wait for the **useful minimum from both P24A and
-P24B**, not their optional depth tails.
+P25 Experience Foundation should wait for the **accepted useful minimum from P24**,
+not optional asset-catalogue or DCC-depth tails.
 
-P24A's own minimum is now pinned in its annex: provenance/rights contract,
-repeatable normalization, the bounded cross-source proof set, canonical
-`AssetFootprint` output for eligible assets, model Scene/Save/Load/visitor
-resolution, and bounded material/HDRI supply. The remaining Wave 1 catalogue is
-not a P25 blocker.
+P24A's current annex gives a candidate bounded supply/ingest minimum, but the
+**combined P24 gate is still not frozen** because P24B has not completed the
+maturity/reference studies above.
 
-The combined P24 acceptance gate remains final-TBD until Phase 4/P24B review. It
-must stay small enough that P24 does not become “finish Blender before
-Experience.”
+A future combined gate is expected to prove enough Stage depth to:
 
-Optional tails such as a much larger catalogue, marketplace/store workflows,
-advanced grouping/components, broad surface-placement tooling, shader graphs, UV
-editing, advanced PBR workflows, IES/baked/volumetric lighting, large lighting-rig
-catalogues, animation/rigging, mesh topology editing or other DCC-class depth do
-not silently gate P25.
+- use a representative normalized P24A asset set;
+- place/revise/replace assets efficiently;
+- materially differentiate the scene;
+- author credible lighting/environment intent;
+- Save/Load/Preview/Publish that state;
+- cold-boot the resulting visitor without editor-only authoring systems.
 
-## Shared architecture invariants
+The exact P24B features that satisfy this gate must come from the later audits and
+implementation brief. P25 must not wait for hundreds of assets, marketplace/store
+workflows, nested components, advanced material graphs, IES/baked/volumetric
+lighting, animation/rigging, mesh editing or other DCC-class tails.
+
+---
+
+# Shared architecture invariants
 
 Both P24A and P24B must preserve:
 
@@ -211,34 +681,58 @@ Both P24A and P24B must preserve:
 - separate `LayoutDocument` and `SceneDocument` ownership;
 - room-local Scene transforms where currently authoritative;
 - deterministic selection and one chronological history model;
-- one existing transform/gizmo authority rather than a parallel staging gizmo;
+- one existing transform/gizmo authority rather than a parallel staging/light
+  gizmo system;
 - one camera graph/navigation/motion system, untouched by staging depth;
+- Scene Plan Arrange as a bounded 2D client of eligible Scene operations, not a
+  second Scene state model;
 - Svelte 5 runes and current Threlte patterns;
 - authored project state as serializable semantic data, never persisted Three
   objects, GPU resources, DOM nodes, Svelte component state or generated runtime
   handles.
 
-## Planning / registration rule
+Durable staged objects, authored materials/overrides, lights and any eventual
+Scene-level environment properties remain `SceneDocument`-owned according to the
+project model. `LayoutDocument` architecture does not migrate into Scene because
+P24 gains richer 3D controls.
 
-P24 remains one registered roadmap tier. `P24A` and `P24B` remain internal scope
-labels rather than tracker numbers.
+When a P24B operation consults Layout geometry for placement, the plan must state
+whether that reference is transient calculation or durable cross-document
+semantics. No mixed Layout/Scene transaction or persistent cross-document support
+reference is introduced casually.
+
+---
+
+# Planning / registration rule
+
+P24 remains one registered **umbrella** roadmap tier. `P24A` and `P24B` remain
+internal scope labels rather than tracker numbers.
 
 Current detail state:
 
 ```text
-P24A — Phase 2 research reviewed; detailed annex registered; not implemented
-P24B — umbrella direction only; detailed contract awaits Phase 4 research
+P24A — Phase 2 research reviewed; linked planning annex exists; implementation not started
+P24B — Phase 4 compact research reviewed directionally; deeper code/reference studies required; no implementation brief registered
+P24  — umbrella only; combined minimum/P25 gate not frozen
 ```
 
 Next planning steps:
 
-1. when P24A becomes active, inspect the exact current asset/registry/runtime code
-   before turning annex increments into implementation tickets;
-2. review Phase 4 and register the detailed P24B contract;
-3. reconcile overlap, especially materials, HDRIs/environments, Plan footprints,
-   asset replacement and semantic agent operations;
-4. pin whether P24A and P24B execute sequentially or partially in parallel based
-   on actual implementation dependencies;
-5. define the combined P24 minimum acceptance gate that unlocks P25;
-6. keep optional catalogue/DCC depth as separately registered evidence-led
+1. retain the Phase 2 research files and P24A annex as the P24A planning basis;
+2. run B0 against the then-current live Scene/editor implementation;
+3. for B1–B5, directly inspect mature reference implementations and exact public
+   source modules rather than relying only on the compact Phase 4 comparison;
+4. build the capability maturity matrix and record evidence-backed
+   KEEP/POLISH/DEEPEN/FOLLOW-UP/REJECT decisions;
+5. pay special attention to the current bare-bones lighting authoring experience,
+   material depth, transform/selection maturity, placement usability, grouping
+   UX and Outliner/Inspector scale rather than assuming “shipped = finished”;
+6. reconcile P24A identities with P24B replacement/material/environment needs;
+7. only then write/register an implementation-ready P24B annex/brief;
+8. only after both subtracks have concrete implementation contracts, pin actual
+   sequencing/parallelism and the combined P24 minimum that unlocks P25;
+9. keep optional catalogue/DCC depth as separately registered evidence-led
    follow-up work.
+
+Until those studies close, this umbrella is a **decision framework and research
+map**, not authorization to implement B0–B6 as numbered delivery slices.
