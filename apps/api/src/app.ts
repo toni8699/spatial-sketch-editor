@@ -38,6 +38,17 @@ import {
 	projectValidationError,
 	saveProject
 } from './project-persistence.js';
+import {
+	getPublicationStatus,
+	isValidPublicationId,
+	PublicationConflictError,
+	PublicationNotFoundError,
+	PublicationValidationError,
+	publishVersion,
+	readPublicRelease,
+	readPublicReleaseAsset,
+	unpublishVersion
+} from './publication-persistence.js';
 import { validateProject } from '@portfolio/project-model';
 
 export type ApiAppOptions = {
@@ -350,6 +361,99 @@ export function createApp({
 		if (contentLength instanceof AssetInputError) return assetInputFailure(reply, contentLength);
 	};
 
+	app.get('/projects/:projectId/publication', async (request, reply) => {
+		const userId = sessionUserId(request, sessionsEnabled);
+		if (!userId) return unauthorized(reply);
+		const projectId = (request.params as { projectId?: unknown }).projectId;
+		if (typeof projectId !== 'string' || !projectId) {
+			return reply.code(400).send(errorBody('invalid_project_id', 'Invalid project ID'));
+		}
+		try {
+			return await getPublicationStatus(pool, userId, projectId);
+		} catch (error) {
+			if (error instanceof ProjectNotFoundError) return notFound(reply);
+			return databaseFailure(app, reply, error, 'Publication status failed');
+		}
+	});
+
+	app.put('/projects/:projectId/publication', async (request, reply) => {
+		const userId = sessionUserId(request, sessionsEnabled);
+		if (!userId) return unauthorized(reply);
+		const projectId = (request.params as { projectId?: unknown }).projectId;
+		if (typeof projectId !== 'string' || !projectId) {
+			return reply.code(400).send(errorBody('invalid_project_id', 'Invalid project ID'));
+		}
+		const target = readPublicationTarget(request.body);
+		if (!target) return reply.code(400).send(errorBody('invalid_body', 'Expected a publication body'));
+		try {
+			return await publishVersion(pool, userId, projectId, target.version, target.expectedPublicationRevision, objectStore);
+		} catch (error) {
+			if (error instanceof ProjectNotFoundError) return notFound(reply);
+			if (error instanceof PublicationValidationError) {
+				return reply.code(400).send(errorBody('invalid_publication', error.message));
+			}
+			if (error instanceof PublicationConflictError) return publicationConflict(reply, error);
+			return databaseFailure(app, reply, error, 'Project publish failed');
+		}
+	});
+
+	app.delete('/projects/:projectId/publication', async (request, reply) => {
+		const userId = sessionUserId(request, sessionsEnabled);
+		if (!userId) return unauthorized(reply);
+		const projectId = (request.params as { projectId?: unknown }).projectId;
+		if (typeof projectId !== 'string' || !projectId) {
+			return reply.code(400).send(errorBody('invalid_project_id', 'Invalid project ID'));
+		}
+		const revision = readExpectedPublicationRevision(request.body);
+		if (revision === null) return reply.code(400).send(errorBody('invalid_body', 'Expected a publication body'));
+		try {
+			return await unpublishVersion(pool, userId, projectId, revision);
+		} catch (error) {
+			if (error instanceof ProjectNotFoundError || error instanceof PublicationNotFoundError) {
+				return notFound(reply);
+			}
+			if (error instanceof PublicationConflictError) return publicationConflict(reply, error);
+			return databaseFailure(app, reply, error, 'Project unpublish failed');
+		}
+	});
+
+	app.get('/publications/:publicationId', async (request, reply) => {
+		const publicationId = (request.params as { publicationId?: unknown }).publicationId;
+		if (!isValidPublicationId(publicationId)) return notFound(reply);
+		try {
+			const release = await readPublicRelease(pool, publicationId);
+			reply.header('Cache-Control', 'no-store');
+			return release;
+		} catch (error) {
+			if (error instanceof PublicationNotFoundError) return notFound(reply);
+			return databaseFailure(app, reply, error, 'Public release read failed');
+		}
+	});
+
+	app.get('/publications/:publicationId/versions/:version/assets/:assetId/content', async (request, reply) => {
+		const params = request.params as { publicationId?: unknown; version?: unknown; assetId?: unknown };
+		if (!isValidPublicationId(params.publicationId)) return notFound(reply);
+		const version = readReleaseVersionParam(params.version);
+		if (version === null || !isValidAssetId(params.assetId)) return notFound(reply);
+		try {
+			const { entry } = await readPublicReleaseAsset(pool, params.publicationId, version, params.assetId);
+			if (!objectStore) throw new Error('Object storage is unavailable');
+			const stored = await objectStore.get(entry.objectKey);
+			if (!stored || stored.contentLength !== entry.byteSize) {
+				return reply.code(503).send(errorBody('service_unavailable', 'Service Unavailable'));
+			}
+			reply
+				.header('Content-Type', entry.mime)
+				.header('Content-Length', String(entry.byteSize))
+				.header('Cache-Control', 'no-store')
+				.header('X-Content-Type-Options', 'nosniff');
+			return reply.send(stored.body);
+		} catch (error) {
+			if (error instanceof PublicationNotFoundError) return notFound(reply);
+			return databaseFailure(app, reply, error, 'Public asset bytes failed');
+		}
+	});
+
 	app.get('/projects/:projectId/assets', { onRequest: requireAssetSession }, async (request, reply) => {
 		const userId = sessionUserId(request, sessionsEnabled);
 		const projectId = (request.params as { projectId?: unknown }).projectId;
@@ -586,6 +690,40 @@ function callbackFailure(
 
 function boundedRedirect(origin: string | undefined, path: string): string {
 	return origin ? new URL(path, origin).toString() : path;
+}
+
+function readPublicationTarget(value: unknown): { version: number; expectedPublicationRevision: number } | null {
+	if (!isRecord(value) || Object.keys(value).length !== 2) return null;
+	const version = value.version;
+	const expectedPublicationRevision = value.expectedPublicationRevision;
+	if (!Number.isSafeInteger(version) || (version as number) < 1) return null;
+	if (!Number.isSafeInteger(expectedPublicationRevision) || (expectedPublicationRevision as number) < 0) {
+		return null;
+	}
+	return { version: version as number, expectedPublicationRevision: expectedPublicationRevision as number };
+}
+
+function readExpectedPublicationRevision(value: unknown): number | null {
+	if (!isRecord(value) || Object.keys(value).length !== 1) return null;
+	const revision = value.expectedPublicationRevision;
+	if (!Number.isSafeInteger(revision) || (revision as number) < 0) return null;
+	return revision as number;
+}
+
+function readReleaseVersionParam(value: unknown): number | null {
+	if (typeof value !== 'string' || !/^\d+$/.test(value)) return null;
+	const version = Number(value);
+	if (!Number.isSafeInteger(version) || version < 1) return null;
+	return version;
+}
+
+function publicationConflict(
+	reply: { code(statusCode: number): { send(body: unknown): unknown } },
+	error: PublicationConflictError
+) {
+	return reply
+		.code(409)
+		.send({ error: { code: 'revision_conflict', message: error.message }, revision: error.revision });
 }
 
 function isDocumentBody(value: unknown): value is { document: unknown } {

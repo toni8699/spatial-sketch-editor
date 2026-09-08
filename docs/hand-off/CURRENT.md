@@ -7,14 +7,16 @@ slice plus one next action only.
 
 - P21 shipped 2026-09-08 (closed at `7fece5e`); prior CURRENT dirty claim resolved — P21.6 + gate fix are committed, no source changes pending.
 - Uncommitted docs (P22 approval): tracker P22 → approved, P22 plan → approved with P22.1→P22.5 sequential, `model-assessment.md` P22.1–P22.5 rows (80/high, 78/high, 74/med, 68/med, 64/med).
-- P22.1 in progress (uncommitted): cold runtime + asset seam — `visitor-cold-runtime.ts` + `visitor-texture-scope.ts` + `shipped-static-registry.ts`, release-scoped `TextureLoadScope` through texture-cache/remap/visitor surfaces, `p22-1-cold-runtime.test.ts` (14 tests) + boundary two-hop fixture. Review follow-up: registry retention proof (append-only snapshot + catalogue self-containment + parity vs canonical URI guard + built-output check), AssetModel single-remap scoped gate, key-only `TextureScopeKey` releases.
+- P22.1 shipped in review (committed `1c8caaf` on top of first-slice `2fcb899`): cold runtime + asset seam with retention proof (append-only snapshot + catalogue self-containment + URI-guard parity + built-output check), single-remap model gate, key-only scope releases; full suite 2529 green at close.
+- P22.2 complete (uncommitted): release persistence + API — migration 003 (`publications` + `releases`), revision OCC (ABA-observable, idempotent no-ops, lost-race 409), R2 stream-verify outside the SQL txn, 5 endpoints; canonical shipped-static registry now in `@portfolio/project-model` for server sharing; 10 real-Postgres tests, full API suite 33 green, test DB left clean.
+- Bundle-gate reference reconciled: `verify:visitor-bundle` lives in the museum workspace (`npm run verify:visitor-bundle -w @portfolio/museum`, green); the editor side is `scripts/verify-preview-surface.mjs` + the build-time boundary plugin (green). No root-level script; P22.5 gate should invoke both workspace paths.
 - Owner rulings carry over: visitor-preview black first frame is unlit content, not a bug (lighting expands in P23/P24).
 
 - Immediate previous slice: **P21 closeout (2026-09-08).**
 
 ## Next action
 
-- Implement [P22.2](../plans/2026-09-07-P22-basic-publish-visitor-runtime.md) (Release persistence + API) per approved P22 — P22.1 acceptance met (cold runtime + asset seam green); tracker is status authority.
+- Implement [P22.3](../plans/2026-09-07-P22-basic-publish-visitor-runtime.md) (Public route) — `/p/:publicationId` cold bootstrap + public chrome on the P22.1 runtime against P22.2 releases; tracker is status authority.
 
 ## Verification
 
