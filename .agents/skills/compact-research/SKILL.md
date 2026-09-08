@@ -33,7 +33,7 @@ Compression and normalization, **not summarization**.
 
 Extract and hold:
 
-- findings/claims, named projects/products/companies/models/tools, URLs/sources with owning claim, numeric facts (benchmarks, versions, LOC, counts, thresholds, zoom/tolerance values), tables/matrices + their columns, code/API/type/pseudocode blocks, test fixtures/examples, recommendations, rejected/deferred options, caveats/confidence, unresolved questions.
+- findings/claims, named projects/products/companies/models/tools, URLs/sources with owning claim, numeric facts (benchmarks, versions, LOC, counts, thresholds, zoom/tolerance values), tables/matrices + their columns, code/API/type/pseudocode blocks, test fixtures/examples, recommendations, rejected/deferred options, caveats/confidence, unresolved questions, plus every substantive enumeration (member lists) and every protected token (field/flag/filename/path/ID/endpoint/status/format) for closure audit.
 
 ### Pass 2 — Compact + reorganize by concept
 
@@ -50,6 +50,8 @@ Verify against inventory + original section-by-section:
 - [ ] every source/link retained and attached to its claim
 - [ ] every quantitative fact retained
 - [ ] every concrete fixture retained with inputs/outputs/invariants/edges (see below)
+- [ ] every enumeration has member-level coverage; no umbrella substitution (see enumeration closure)
+- [ ] every protected token preserved or explicitly mapped (see protected-token audit)
 - [ ] every rejection/defer decision retained
 - [ ] every caveat + unresolved question retained
 - [ ] no invented citations; no silent conclusion changes
@@ -61,6 +63,26 @@ Verify against inventory + original section-by-section:
 - Every meaningful cell is content. May reformat, merge overlapping tables (merge columns, never drop dimensions), or convert to dense structured bullets — but every relationship must stay reconstructable.
 - Never collapse away dimensions such as: reference/source, reusable candidate, complexity, risk, license, score, priority, status, bucket, rationale, verdict.
 - Example — original row `Intersection snap | LibreCAD | own/Flatten | Medium | Low | P23 Minimum` must survive with all five relations, e.g. `intersection (LibreCAD | own/Flatten | M | Low) → P23 MINIMUM` or equivalent row. A bare `intersection → P23 MINIMUM` fails audit.
+
+### Preserve enumeration and row-level granularity
+
+- Never replace a concrete enumeration with an umbrella term when the members carry information. `polygon/vertex/material/object/animation counts` may not become `counts`.
+- When compressing tables, every original row must remain reconstructable independently. Rows may be grouped only when shared fields are truly identical. Lift identical fields to a group header, but retain every non-identical cell value.
+- Descriptive cells count as substantive when they encode category, intended use, behavior, appearance, semantics, constraints, or implementation implications. Do not shorten `Gallery/event hall neutral` to `Gallery neutral`, or drop `media plane child`, etc., merely because the broader idea survives.
+- During loss audit, compare row × column values, not merely whether each column/category appears somewhere in the compact document.
+- Reconstruction test: given any original table row or enumerated list, a future agent must be able to recreate all meaningful members/fields from the compact artifact alone. No abstraction substitution: preserving a parent concept does not prove its children were preserved. `counts`, `metadata`, `parameters`, `tests`, `rights`, `stats`, `fixtures`, `pipeline details`, etc. do not satisfy the audit when the source enumerated their specific members.
+
+### Enumeration closure invariant
+
+- Before rewriting, extract every substantive enumeration into the loss inventory. Examples: `node names, material names, animation names, extras`; `polygon, vertex, material, object, animation counts`; specific validation checks; specific metadata fields; named pipeline stages; supported/rejected entity lists.
+- After rewriting, audit every enumeration member-by-member. Members may be syntactically compressed (`width/height/depth`), but every semantically distinct member must remain recoverable.
+- A parent or umbrella term never satisfies preservation: `node/material/animation names + extras → names/extras = FAIL`; `polygon/vertex/material/object/animation counts → counts = FAIL`; `width/height/depth/border profile + media plane child → frame parameters = FAIL`.
+- Do not mark the loss audit passed until every inventory enumeration has member-level coverage.
+
+### Protected-token audit
+
+- Identifiers that may matter to implementation receive special treatment: field names, type members, CLI flags, enum values, filenames, module names, paths, IDs, metadata keys, API endpoints, status names, named formats/extensions.
+- Never replace several such tokens with a generic category unless the source explicitly treats them as interchangeable. `icon/planIcon` may not become `icons`; `resizable/deformable/texturable` may not become `resizable`; `-kn/-km/-ke` may not become `keep names`; `shelfElevations/shelfBoxes/dropOnTopElevation` may not become `shelf metadata`.
 
 ### Concrete tests / fixtures / worked examples
 
