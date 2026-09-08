@@ -43,6 +43,14 @@ export async function loginAs(input: {
 	user: TestAuthUserKey | string;
 	apiOrigin: string;
 	secret: string;
+	/**
+	 * Value for the `Origin` header. Required when the API has an editor
+	 * origin configured (always, via `EDITOR_ORIGIN`): its unsafe-method
+	 * guard rejects header-less non-browser POSTs with 403. Use the same
+	 * origin the automated browser will run from (e.g.
+	 * `http://localhost:5173`).
+	 */
+	origin?: string;
 	fetchImpl?: TestAuthFetchLike;
 }): Promise<TestAuthSession> {
 	const origin = input.apiOrigin.trim().replace(/\/+$/, '');
@@ -61,6 +69,7 @@ export async function loginAs(input: {
 			headers: {
 				Accept: 'application/json',
 				'Content-Type': 'application/json',
+				...(input.origin ? { Origin: input.origin } : {}),
 				Authorization: `Bearer ${input.secret}`
 			},
 			body: JSON.stringify({ user: input.user })

@@ -45,6 +45,16 @@ describe('E2E test-auth helper', () => {
 		});
 	});
 
+	it('sends the browser origin when the API enforces one', async () => {
+		const fetchImpl = vi.fn(async (_input: string, init?: RequestInit) => {
+			expect(init?.headers).toMatchObject({ Origin: 'http://localhost:5173' });
+			return jsonResponse(successBody, 201, `${sessionPair}; Path=/`);
+		});
+		await expect(
+			loginAs({ user: 'agent-admin', apiOrigin: ORIGIN, secret: SECRET, origin: 'http://localhost:5173', fetchImpl })
+		).resolves.toMatchObject({ userId: 'google:e2e-agent-admin' });
+	});
+
 	it('maps rejection codes without leaking the secret', async () => {
 		const cases = [
 			{ status: 401, code: 'auth' },
