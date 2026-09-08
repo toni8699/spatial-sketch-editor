@@ -53,10 +53,43 @@ coverage and validation and adds missing operations; it does not count replacing
 those controls as new functionality. Preserve existing sphere/radius and plane
 dimension semantics rather than treating every kind as a generic scale vector.
 
+### Capability-maturity recheck before each touched increment
+
+P23 has already completed the broad Phase 3 research → live-repository
+reconciliation needed to write this implementation-ready brief. Do **not** reopen
+a general CAD/floor-planner research phase before implementation.
+
+However, the same maturity rule used by P24 applies to every capability P23
+touches:
+
+> **“Shipped” answers whether Museum Editor already has a canonical
+> implementation. It does not answer whether that capability is sufficiently
+> capable, discoverable, precise or polished for the P23 Build goal.**
+
+Before implementing a P23 increment, re-inspect the exact current code path for
+that capability after P22 and directly recheck the most relevant public reference
+modules where the plan relies on them. The bounded recheck should answer:
+
+1. what behavior actually ships now and which module/document owns it;
+2. which part is already sufficient and should be preserved;
+3. which concrete maturity gap this P23 increment closes;
+4. whether upstream reference code/version/license has materially changed;
+5. whether the proposed extension still composes with the existing compiler,
+   transaction/history, selection and Plan-rendering authorities.
+
+Classify touched behavior as `KEEP AS-IS`, `POLISH`, `DEEPEN IN P23`,
+`FOLLOW-UP`, or `REJECT`. Do not add work merely for feature-name parity with a
+CAD reference, and do not replace a canonical Museum Editor seam merely because a
+reference tool solves the UX differently.
+
+This is implementation due diligence, not another broad research gate. The
+minimum scope below remains the approved P23 contract unless the recheck uncovers
+a concrete incompatibility that requires owner review.
+
 ## External research references — non-authoritative
 
-Phase 3 CAD/floor-planner research is recorded in
-[`../Deep-research/deep-research-layout-cad.md`](../Deep-research/deep-research-layout-cad.md).
+The current checked-in Phase 3 CAD/floor-planner research artifact is
+[`../Deep-research/P23-Staging-Research/deep-research-P23-compact.md`](../Deep-research/P23-Staging-Research/deep-research-P23-compact.md).
 Agents implementing P23 may inspect the public projects/modules referenced there.
 They are implementation precedents, **not** product architecture and do not
 override Museum Editor contracts. Recheck upstream state/license before reusing
