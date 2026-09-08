@@ -9,14 +9,15 @@ slice plus one next action only.
 - Uncommitted docs (P22 approval): tracker P22 → approved, P22 plan → approved with P22.1→P22.5 sequential, `model-assessment.md` P22.1–P22.5 rows (80/high, 78/high, 74/med, 68/med, 64/med).
 - P22.1 shipped in review (committed `1c8caaf` on top of first-slice `2fcb899`): cold runtime + asset seam with retention proof (append-only snapshot + catalogue self-containment + URI-guard parity + built-output check), single-remap model gate, key-only scope releases; full suite 2529 green at close.
 - P22.2 complete (uncommitted): release persistence + API — migration 003 (`publications` + `releases`), revision OCC (ABA-observable, idempotent no-ops, lost-race 409), R2 stream-verify outside the SQL txn, 5 endpoints; canonical shipped-static registry now in `@portfolio/project-model` for server sharing; 10 real-Postgres tests, full API suite 33 green, test DB left clean.
-- Bundle-gate reference reconciled: `verify:visitor-bundle` lives in the museum workspace (`npm run verify:visitor-bundle -w @portfolio/museum`, green); the editor side is `scripts/verify-preview-surface.mjs` + the build-time boundary plugin (green). No root-level script; P22.5 gate should invoke both workspace paths.
+- P22.3 complete (uncommitted): public route — `/p/:publicationId` cold bootstrap (`public-release-client.ts`: anonymous release fetch + version-qualified P20 bytes with MIME/size/magic verification + `composeColdReleaseBundle`) + public chrome (`VisitorPreviewSurface` `public` mode: released-name pill, no draft banner/exit; route header/focus help, reduced-motion, keyed `publicationId@v` runtime with abort/dispose cleanup); new `public-surface-boundary` build plugin + `verify-public-surface.mjs`; 15 new Vitest (loader matrix + closure fixture + plugin); full editor suite 2544 green, API 10 green, `check` clean, editor `build` green with both boundary plugins, route + shared visitor chunks grep-clean of editor tokens.
+- Bundle-gate reference reconciled: `verify:visitor-bundle` lives in the museum workspace (`npm run verify:visitor-bundle -w @portfolio/museum`, green); the editor side is `scripts/verify-preview-surface.mjs` + `scripts/verify-public-surface.mjs` + both build-time boundary plugins (green). No root-level script; P22.5 gate should invoke both workspace paths.
 - Owner rulings carry over: visitor-preview black first frame is unlit content, not a bug (lighting expands in P23/P24).
 
 - Immediate previous slice: **P21 closeout (2026-09-08).**
 
 ## Next action
 
-- Implement [P22.3](../plans/2026-09-07-P22-basic-publish-visitor-runtime.md) (Public route) — `/p/:publicationId` cold bootstrap + public chrome on the P22.1 runtime against P22.2 releases; tracker is status authority.
+- Implement [P22.4](../plans/2026-09-07-P22-basic-publish-visitor-runtime.md) (Publish surface) — same-session author UI with explicit saved-version action + revision-aware status; tracker is status authority.
 
 ## Verification
 

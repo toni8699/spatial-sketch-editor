@@ -24,6 +24,8 @@
 		resolveTexture,
 		textureScope = null,
 		reducedMotion = false,
+		mode = 'preview',
+		title = null,
 		onExit
 	}: {
 		scene: RuntimeScene;
@@ -33,7 +35,9 @@
 		resolveTexture: (uri: string) => string | null;
 		textureScope?: TextureLoadScope | null;
 		reducedMotion?: boolean;
-		onExit: () => void;
+		mode?: 'preview' | 'public';
+		title?: string | null;
+		onExit?: () => void;
 	} = $props();
 
 	// svelte-ignore state_referenced_locally
@@ -53,10 +57,15 @@
 
 	const isZeroNode = $derived(startNodeId === null);
 	const canvasDescription = $derived(
-		isZeroNode
-			? 'Visitor preview. No cameras: drag to orbit, wheel to zoom, right-drag to pan. Press Escape to exit preview.'
-			: 'Visitor preview. Use Left and Right arrows to move along the tour, W A S D or drag to look around. Press Escape to exit preview.'
+		mode === 'public'
+			? isZeroNode
+				? 'Published project. No cameras: drag to orbit, wheel to zoom, right-drag to pan.'
+				: 'Published project. Use Left and Right arrows to move along the tour, W A S D or drag to look around.'
+			: isZeroNode
+				? 'Visitor preview. No cameras: drag to orbit, wheel to zoom, right-drag to pan. Press Escape to exit preview.'
+				: 'Visitor preview. Use Left and Right arrows to move along the tour, W A S D or drag to look around. Press Escape to exit preview.'
 	);
+	const publicTitle = $derived((title ?? '').trim() || 'Published project');
 
 	onMount(() => {
 		// Exercise the detached read-only resolver so preview-local URLs stay
@@ -79,7 +88,7 @@
 		class="visitor-canvas"
 		tabindex="0"
 		role="application"
-		aria-label="Visitor preview canvas"
+		aria-label={mode === 'public' ? 'Published project canvas' : 'Visitor preview canvas'}
 		aria-describedby="visitor-preview-help"
 	>
 		<Canvas dpr={[1, 1.5]} shadows>
@@ -93,8 +102,14 @@
 		</Canvas>
 	</div>
 	<div class="visitor-pill" role="status">
-		<span class="pill-label">VISITOR PREVIEW · Viewing Current Draft</span>
-		<button type="button" class="pill-exit" onclick={onExit}>✕ Exit Preview (Esc)</button>
+		{#if mode === 'public'}
+			<span class="pill-label">PUBLISHED · {publicTitle}</span>
+		{:else}
+			<span class="pill-label">VISITOR PREVIEW · Viewing Current Draft</span>
+			{#if onExit}
+				<button type="button" class="pill-exit" onclick={onExit}>✕ Exit Preview (Esc)</button>
+			{/if}
+		{/if}
 	</div>
 	<p id="visitor-preview-help" class="visitor-help">{canvasDescription}</p>
 </div>
