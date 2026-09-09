@@ -1,59 +1,64 @@
 # P25 — Experience Foundation umbrella
 
-**Created:** 2026-09-08 · **Status:** proposed (tracker authoritative)  
+**Created:** 2026-09-08 · **Reconciled:** 2026-09-09 · **Status:** proposed (tracker authoritative)  
 **Depends on:** accepted minimum useful P24 Stage set; P24 itself depends on the P23 minimum useful Build set.  
-**Detail status:** P25 is an umbrella/research-reconciliation plan, not an implementation-ready brief. Phase 5 external capability research has been reviewed directionally and is strong enough to narrow the product thesis, but exact persistence ownership, Destination semantics, guided-occurrence semantics, Narration scope, and the minimum implementation contract remain unfrozen pending focused studies and live-code reconciliation.
-**Planning model:** progressive — this umbrella owns the WHAT/WHY/BOUNDARIES/ORDER/RESEARCH GATES/high-level acceptance. Evidence here is primarily **product/UX/experience research** (E0–E6), not code harvest. The directional conclusions and leading minimum hypothesis preserved in this document are seed material for the future P25.x child plans: they stay here (challenged/refined by the studies) rather than being copied into speculative child files — child seeds are created only when their owning study closes. A P25.x child plan may not be marked implementation-ready while the hypothesis it depends on is unfrozen. Child status vocabulary lives in the [tracker rules](README.md).
+**Detail status:** P25 remains an umbrella/research-reconciliation plan, not an implementation-ready brief. Focused P25 research now closes the minimum **product semantics** for Destination, guided Stop/occurrence, Content/Info Panel, bounded Interaction, visitor navigation/accessibility, authoring direction and Narration placement. Exact persistence ownership, durable Stop/Sequence representation, post-F0 Spatial/Camera reference shapes, Scene interaction targets, media plumbing, operation APIs/codecs and implementation slicing remain unfrozen pending the required P23/P24 seam rechecks and E6.  
+**Planning model:** progressive — this umbrella owns WHAT/WHY/BOUNDARIES/ORDER/RESEARCH GATES/high-level acceptance. No P25.x child plan becomes implementation-ready until its owning product semantics are closed and all required post-P23/P24 seams are reconciled.
 
 ## Outcome
 
-P25 turns an authored Spatial project into a complete visitor-facing experience without turning Museum Editor into a general website builder, CMS, visual-scripting environment or game engine.
+P25 turns an authored Spatial project into a complete visitor-facing experience without turning Museum Editor into a general website builder, CMS, visual-scripting environment, game engine or second navigation/camera system.
 
-The leading product model is:
+The reconciled product model is:
 
 ```text
 Experience
 ├─ Navigation
-│  └─ Destinations over existing Spatial / Camera meaning
+│  ├─ Destination references over existing Spatial / Camera meaning
+│  └─ guided Stop / occurrence semantics over canonical Camera Sequence order
 ├─ Content
-│  └─ reusable contextual information, with Narration studied as high-value depth
+│  └─ reusable contextual information through one responsive Info Panel
 └─ Interactions
-   └─ bounded semantic Event → Target → Action rules
+   └─ bounded semantic Event → Target/context → Action rules
 ```
 
-P25 should prove that a creator can take the useful P23/P24 environment, direct the visitor through existing Camera semantics, present contextual interpretation, bind a small set of visitor interactions, Preview the same runtime, and publish the same canonical project through P22.
+P25 should prove that a creator can take the useful P23/P24 environment, direct a visitor through canonical Camera semantics, present contextual interpretation, bind a small set of visitor interactions, Preview the same runtime semantics, and publish the same canonical project through P22.
 
 The first complete proof should remain dramatically simpler than authoring equivalent behavior in Unity/Godot/custom Three.js code.
 
-## Research basis and evidence status
+## Research basis and authority
 
-Phase 5 external research was intentionally run as a capability-exploration pass rather than a Museum Editor code audit. It surveyed spatial tours, museums/exhibitions, spatial storytelling, narrative tools, web-3D systems, game-engine interaction UX, accessibility patterns and semantic interaction models.
+Broad Phase 5 ecosystem discovery is closed. The canonical active P25 evidence artifact is:
 
-The research source artifact used for the 2026-09-08 review is **not yet checked into `main`**. This umbrella therefore records only the reviewed directional conclusions and must not claim repository-backed provenance for exact external source citations until that artifact is added under `docs/Deep-research/`.
+- [`../Deep-research/P25-research/P25-research-compact.md`](../Deep-research/P25-research/P25-research-compact.md)
 
-Broad P25 ecosystem discovery is now sufficiently mature to stop another generic “what can Experience be?” survey. Remaining work should be focused comparison, prototype evidence and Museum Editor reconciliation.
+The compact preserves the focused research decisions, evidence matrix, fixtures, quantitative/accessibility facts, named references, source URLs, rejections/deferrals and unresolved gates. The superseded long focused report is history, not an active planning input.
 
-Accepted directional conclusions from Phase 5:
+Museum repository docs/code remain **product context**, not external research evidence. The focused research explicitly reconciled against current P22 visitor/runtime and Camera seams; any seam changed by P23 F0 or the accepted P24 minimum is rechecked before E6 freezes implementation detail.
 
-- **Destination + Content + bounded Interaction** is the strongest current core vocabulary hypothesis.
-- Existing Camera/Direct semantics should be composed, not replaced by an Experience-owned camera graph/timeline/motion engine.
-- The first guided journey should preferentially reuse the existing Camera Sequence rather than introduce a second tour-motion structure.
-- `Activate` is a better semantic event candidate than pointer-specific `Click`; mouse/touch/keyboard/future gaze/controller inputs may map to one semantic activation.
-- `DestinationReached` is a strong core event candidate because it composes explicit authored navigation.
-- `ShowContent`, `NavigateTo` and `OpenUrl` form a plausible first action set; richer media/Scene mutation belongs behind evidence gates.
-- Structured reusable Content is preferable to arbitrary HTML/page-builder state.
-- A small opinionated Info presentation primitive may cover a large fraction of museum/portfolio/product/architecture use cases without becoming a generic layout system.
-- Accessibility and responsive visitor behavior should be platform guarantees wherever possible rather than repeated per-project configuration.
-- Inspector/rule-card/direct-selection authoring is a stronger minimum UX hypothesis than a node graph.
-- Arbitrary variables, generic conditions, visual scripting, workflow graphs and general state machines are outside the P25 minimum and likely wrong-product territory.
+### Ratified product-level conclusions from focused research
 
-These are **planning hypotheses**, not frozen schema/API decisions.
+- **Destination + guided Stop/occurrence + Content + bounded Interaction** is the minimum semantic vocabulary.
+- `Destination` is reusable visitor-facing meaning over canonical Spatial/Camera identity.
+- `Stop` is one occurrence of a Destination in canonical guided order. It is **Sequence-relative only** and owns no pose/path/timing/connectivity or independent order graph.
+- Repeated visits such as `Intro → Piano → Paris → Piano → Exit` require distinct occurrence context without duplicating the Piano Camera node.
+- Stable Stop identity is required conceptually once occurrence-specific content/narration/progress/selection can bind to a visit; array index is not identity. Exact durable owner waits for reconciliation.
+- Existing Camera/Direct semantics remain the sole navigation/motion authority. No Experience Camera graph/timeline/path/motion system.
+- Core events remain `Activate` and `DestinationReached`; core actions remain `ShowContent`, `NavigateTo`, `OpenUrl`.
+- One rule owns one semantic action. Multiple independent non-conflicting rules may share an event; ordered action lists, waits/durations, generic conditions/variables and workflow graphs are rejected from the minimum.
+- Content is constrained reusable information, not arbitrary HTML/page-builder state. One responsive **Info Panel** is the minimum authored presentation semantic.
+- Narration is a first-depth semantic subsystem, not generic `PlayAudio`, and is not a P25 minimum ship gate.
+- Accessibility/responsive behavior is a platform contract wherever possible: semantic DOM companion navigation/content, keyboard/touch-equivalent `Activate`, focus discipline, adequate touch targets, and same-Destination reduced-motion behavior.
+- Reduced motion substitutes or eliminates camera animation while reaching the same semantic Destination; merely traversing the same route much faster is not the P25 contract.
+- Authoring direction is the same 3D world + Experience overlays + structured Destination/Stop/Content/rule lists + Inspector/rule cards. No node graph.
 
-## Hard architecture boundaries
+These are product/architecture decisions, not frozen persistence/schema/API decisions.
 
-P25 must preserve the existing product contracts unless focused evidence proves a concrete architectural limitation.
+---
 
-### One navigation and camera-motion system
+# Hard architecture boundaries
+
+## One navigation and camera-motion system
 
 Experience navigation intent resolves through existing Camera/navigation meaning. Do not introduce parallel durable copies such as:
 
@@ -64,143 +69,260 @@ ExperienceTimeline
 VisitorNavigationV2
 ```
 
-A visitor-facing Destination may reference a Camera node/view or other semantic Spatial identity, but Experience does not own duplicate route/path geometry.
+A visitor-facing Destination may reference a Camera node/view or another explicitly supported semantic Spatial identity, but Experience never owns duplicate route/path geometry.
 
-### Spatial ownership remains Spatial
+A guided Stop is an occurrence over canonical guided order:
 
-`LayoutDocument` continues to own Layout semantics through the single `compileLayoutGeometry()` path. `SceneDocument` continues to own placed Scene/staging truth. Experience references those identities; it does not absorb them.
+```text
+Camera / Spatial truth
+Destination Piano ── canonical target/view
 
-Room-local transforms remain authoritative. Experience must not infer durable object identity from world coordinates.
+Canonical guided order
+Intro → Piano → Paris → Piano → Exit
+          │               │
+          ▼               ▼
+       Stop A           Stop B
+       context 1        context 2
+```
 
-### Same project, same assets, same runtime
+Stop owns no:
+
+```text
+XYZ / camera pose
+path geometry / anchors
+transition timing
+connectivity
+independent nextId / previousId graph
+```
+
+Exact durable Stop identity and whether the canonical Camera Sequence itself evolves to carry stable occurrences are **POST-F0 / POST-P24 RECONCILIATION REQUIRED**.
+
+## Spatial ownership remains Spatial
+
+`LayoutDocument` and `SceneDocument` remain separately owned. Experience references stable semantic identities; it does not absorb Layout or Scene truth.
+
+P25 consumes the canonical Spatial ownership/coordinate model accepted after P23 F0. It must **not encode the pre-F0 Room-local representation** into Experience references merely because that is current baseline behavior.
+
+Layout continues through the single canonical geometry compiler. Experience never infers durable identity from world coordinates.
+
+## Same project, same assets, same runtime
 
 Experience consumes the shared project asset registry. It does not get a separate upload/media store.
 
-Preview and Publish should use the same visitor-safe runtime semantics with editor-only debugging/presentation layered outside the visitor bundle.
+Preview and Publish execute the same visitor-safe semantics; editor-only simulation/diagnostics sit outside that runtime contract.
 
-### Visitor/editor isolation
+## Visitor/editor isolation
 
-Published visitors must not require editor selection, gizmos, Inspector state, authoring history, editor overlays or authoring stores.
+Published visitors must not require editor selection, gizmos, Inspector state, authoring history, editor overlays or editor stores.
 
-### Deterministic authoring/history
+## Deterministic authoring/history
 
-One logical Experience edit should produce one logical authoring history result. The UI must be a client of semantic operations rather than the sole place Experience mutations exist.
+One logical Experience edit should produce one logical authoring history result where history applies. UI is a client of semantic domain behavior, not its sole owner.
 
 Do not create a universal command framework merely for P25.
 
 ---
 
-# Study tracks — not implementation slices
+# Study/reconciliation tracks — not implementation slices
 
-`E0`–`E6` below are research/reconciliation tracks. They must not be converted mechanically into implementation tickets.
+The focused research closes E1–E4 at **product-semantics level** and closes the main E5 authoring direction. E0 retains post-F0/P24 seam rechecks; E5 retains reference-integrity reconciliation; E6 remains intentionally blocked until those seams settle.
 
-## E0 — Current Camera / visitor capability maturity audit
+| Track | Reconciled state | Remaining work |
+|---|---|---|
+| E0 — Camera / visitor maturity | **PARTIAL — product audit complete enough for P25 direction** | targeted post-P23 F0 / accepted-P24 rechecks where identities, Scene targets, media or runtime seams change |
+| E1 — Destination / navigation | **PRODUCT SEMANTICS CLOSED** | exact Destination target variants, durable Stop owner/representation, Room/preferred-view behavior wait for reconciliation |
+| E2 — Content / presentation / Narration | **PRODUCT SEMANTICS CLOSED** | exact media record/pinning and persistence wait; Narration stays first-depth |
+| E3 — bounded Interaction | **PRODUCT SEMANTICS CLOSED** | exact target/ref representation and operation APIs wait |
+| E4 — guided UX / accessibility | **PRODUCT SEMANTICS CLOSED** | implementation details and device/runtime acceptance wait |
+| E5 — authoring UX / Preview / integrity | **DIRECTION CLOSED; integrity reconciliation pending** | deletion/reorder/reference-repair contract and exact UI entry points after reference model settles |
+| E6 — persistence / operations / implementation brief | **BLOCKED INTENTIONALLY** | runs after required P23/P24 seam rechecks; no schema/API now |
 
-Reconcile the external Experience findings against the live post-P22 repository before freezing any P25 implementation contract.
+## E0 — Current Camera / visitor capability maturity + seam recheck
 
-Audit end-to-end:
+Current focused audit established:
 
-- canonical NavigationGraph / Camera node identity and connectivity;
-- Camera Sequence representation and ordering;
-- Camera route/motion evaluator;
-- Camera Timeline and Camera Preview scopes;
-- visitor guided/free behavior;
-- visitor current/target/visited state;
-- pointer/touch/keyboard navigation;
-- reduced-motion behavior;
-- visitor shell/chrome;
-- P22 Preview/publish/cold-runtime path;
-- Scene-object visitor picking/activation seams, if any;
-- shared project asset/media resolution relevant to Experience;
-- existing accessibility/focus/semantic-DOM behavior.
+- Camera order currently uses node `nextNodeId` / `previousNodeId`; current visitor flow walks node identity rather than occurrence identity.
+- current visitor session supports `guided | free`, canonical route requests and Camera-order Back/Next;
+- current visited state is room-based, not Stop-occurrence progress;
+- P22 visitor/Preview reuse the canonical Camera route/motion system;
+- current reduced-motion behavior reaches the same target but accelerates traversal rather than substituting motion;
+- current visitor rendering has no authored object `Activate` seam;
+- current visitor surface lacks an authored semantic DOM Destination menu / visible Home-Back-Next / Content companion;
+- P22 resource plumbing is not yet a general Experience image/audio/video contract.
 
-For each capability classify:
+Targeted recheck after P23 F0 / accepted P24 minimum:
 
-```text
-KEEP AS-IS
-POLISH
-DEEPEN
-EXPERIENCE SHOULD REFERENCE IT
-FOLLOW-UP
-REJECT / WRONG PRODUCT
-```
+- canonical Camera/Spatial reference identities;
+- Room/grouping semantics relevant to Destination;
+- Scene entity kinds eligible for `Activate`;
+- shared media/asset resolution and cold visitor closure;
+- any visitor runtime seam changed by those tiers.
 
-“Shipped” means a canonical seam exists; it does not mean the visitor/editor Experience around that seam is product-complete.
+Do not reopen broad ecosystem research.
 
-## E1 — Experience ownership + Destination / Navigation study
+## E1 — Destination + guided Stop / Navigation
 
-Determine the smallest durable Experience-owned navigation semantics that reference existing Spatial/Camera truth without duplicating it.
+### Destination
 
-### Leading hypothesis
+Product meaning:
 
 ```text
 Camera node / authored view
-= spatial viewpoint truth
+= canonical spatial viewpoint truth
 
 Experience Destination
-= visitor-facing semantic reference to existing spatial meaning
+= reusable visitor-facing semantic reference to canonical navigation meaning
 ```
 
-Destination may need visitor-specific fields such as label, navigation visibility/grouping and presentation metadata while movement still resolves through canonical Camera/navigation systems.
+Minimum should prefer explicit Camera/view-backed navigation meaning. Exact support for Room or Scene-entity Destinations waits until a deterministic preferred-view/reference contract exists; do not invent “first camera in room” heuristics.
 
-### Questions to resolve
+Destination may eventually carry visitor-facing label/grouping/visibility/entry metadata. Exact fields/storage are not frozen.
 
-- Is `Destination` a new Experience entity or a derived/reference view over existing identities?
-- Is a Camera/view target sufficient for the P25 minimum?
-- Can a Room be a Destination directly, or must it resolve through a preferred authored view?
-- Can a Scene entity be a Destination, and if so how is its preferred view resolved?
-- Can multiple visitor-facing labels reference one spatial target?
-- How are entry/Home/Back/Next semantics represented without duplicating Camera Sequence ordering?
-- What visitor navigation grouping is required in the minimum?
-- Should deep-link/share identity influence the Destination model now or remain follow-up?
+### Guided Stop / occurrence
 
-Do not persist arbitrary XYZ destinations merely for convenience if an authored semantic target can be referenced.
+Product meaning:
 
-## E2 — Content + presentation + Narration study
+```text
+Stop
+= one occurrence of a Destination in canonical guided order
+```
 
-Determine the smallest reusable Content model that works across museum exhibitions, artist portfolios, product showcases, architecture walkthroughs and educational experiences.
+Why it is minimum rather than depth:
 
-### Leading hypothesis
+```text
+Intro
+→ Piano: Construction
+→ Paris
+→ Piano: Performance
+→ Exit
+```
 
-A bounded contextual information resource is preferable to arbitrary authored HTML/layout.
+Both Piano visits must resolve to one reusable Piano Destination/canonical Camera meaning while allowing distinct context/progress/narration later.
 
-Conceptually:
+A Stop may carry occurrence-specific visitor context, but order is derived from canonical guided Camera order. No Experience-owned graph.
+
+### Visitor navigation semantics
+
+Minimum semantic surface:
+
+```text
+Home
+Back
+Next
+Destinations
+current location / guided step
+Guided / Free / Resume
+Help
+motion preference
+```
+
+- **Home** = canonical guided entry Destination/Stop.
+- **Next/Back in guided mode** = next/previous **Stop occurrence**, executed through canonical Camera navigation.
+- Destination menu lists reusable Destinations; repeated Piano may appear once there while guided outline exposes its two occurrences.
+- free-navigation detour keeps ephemeral `currentGuidedStop`; Resume returns to current/next guided occurrence without mutating Sequence.
+- guided progress such as `Step 2 of 5` is platform-derived session presentation, not authored graph state.
+- browser Back remains browser history in the minimum. Per-Destination URL/history semantics wait for deep-link scope.
+- map/minimap is derived Spatial presentation and deferred.
+
+## E2 — Content + Info Panel + Narration placement
+
+### Minimum Content capability
+
+Conceptual only; no schema is frozen:
 
 ```text
 Content
 ├─ title
-├─ body / structured description
-├─ optional project-asset media
-├─ credits / attribution where relevant
+├─ constrained rich body
+├─ optional primary project-asset media
+│  ├─ accessible description / alt semantics
+│  ├─ caption
+│  └─ attribution / credit
 └─ optional link / CTA
 ```
 
-Exact fields and storage are not frozen.
+Minimum constrained body semantics:
 
-Study whether one canonical **Info Panel** presentation primitive, responsive across desktop/mobile, covers the first useful slice before adding arbitrary cards/modals/world-space UI.
+```text
+paragraph
+heading
+list
+emphasis
+inline link
+```
+
+Markdown may later be an authoring input. It is not automatically persistence truth.
+
+### One Info Panel
+
+P25 minimum authors one semantic presentation primitive: **Info Panel**.
+
+Platform owns responsive presentation, typography, scrolling, breakpoints, focus behavior, close semantics, media fitting and accessible DOM. Wide layouts may render side-sheet-like; small layouts may render bottom/full sheet without becoming separate authored Content types.
+
+Author owns content semantics, media choice, useful alt/decorative designation, contextual caption/credit and meaningful CTA/link labeling.
+
+Derive provenance/license credit from canonical project asset metadata where possible rather than maintaining unrelated duplicate truth.
+
+### Explicitly deferred / rejected
+
+One level deeper:
+
+- video;
+- small media gallery;
+- related Destination link;
+- secondary CTA;
+- richer captions.
+
+Deferred:
+
+- standalone passive labels/captions;
+- world-space interpretation labels;
+- downloads.
+
+Reject for minimum / wrong product:
+
+- arbitrary authored HTML/CSS/JavaScript;
+- arbitrary page/layout composition;
+- iframe ecosystem;
+- arbitrary web-component trees;
+- CMS/page-builder behavior.
+
+Exact Experience media identity/pinning is **POST-P24 RECONCILIATION REQUIRED**.
 
 ### Narration
 
-Narration should receive a focused study rather than being treated as generic `PlayAudio`.
+Narration is **first-depth, highest-priority**, not a P25 minimum gate and not generic `PlayAudio`.
 
-Compare attaching Narration to:
+Conceptually:
 
 ```text
-Content
-Destination
-Camera Sequence occurrence / future Tour Stop
-Interaction action
+Narration resource
+= reusable narrated media + accessible transcript
+
+Narration binding
+= where/when narration belongs
 ```
 
-Evaluate transcript/accessibility, user-initiation/autoplay policy, interruption/resume and navigation-away behavior.
+For guided flow the strongest attachment is Stop, because repeated Destination visits may need different narration.
 
-Narration is a high-value candidate for one level beyond the minimum, but is not automatically a P25 ship gate.
+First-depth lifecycle direction:
 
-## E3 — Bounded Interaction model study
+- may begin on semantic Stop/Destination arrival only after visitor has enabled/started audio as browser policy permits;
+- navigation stops previous narration;
+- no overlapping narration by default;
+- manual pause resumes current track;
+- jumping elsewhere stops current narration;
+- revisit restarts initially;
+- autoplay rejection falls back to visible Play;
+- transcript required;
+- mute/volume and playback progress are visitor-session state;
+- reduced motion does not change narration semantics.
 
-Research has narrowed the strongest minimum toward a small semantic rule system rather than generic scripting.
+Exact media ownership/resolution waits for P24 reconciliation.
 
-### Leading core hypothesis
+## E3 — Bounded Interaction model
+
+### Minimum vocabulary
 
 Events:
 
@@ -217,329 +339,376 @@ NavigateTo
 OpenUrl
 ```
 
-Potential later depth:
+`Activate` is semantic and input-independent: pointer, touch, keyboard and accessible DOM activation map to one authored behavior. Do not author `Click`, `Tap` and `KeyPress` separately.
+
+A distinct `StopReached` event is not required for the minimum. Runtime arrival may conceptually carry guided context:
 
 ```text
-Narrate / PlayAudio
-Highlight
-Show / Hide Scene entity
-RoomEntered
-CueReached
-Once / FirstVisit
+DestinationReached {
+  destination,
+  guidedOccurrence: Stop | null
+}
 ```
 
-Reject from the minimum unless new evidence proves necessity:
+Exact runtime shape is not frozen.
+
+### Composition rule
+
+One rule = one semantic action:
 
 ```text
+Activate Piano
+→ ShowContent PianoInfo
+
+Activate Piano
+→ Highlight Score    // depth, when supported
+```
+
+Multiple independent non-conflicting rules may share an event. No ordering is promised.
+
+Prefer causal semantic composition:
+
+```text
+Activate PianoMarker
+→ NavigateTo Piano
+
+DestinationReached Piano
+→ ShowContent PianoInfo
+```
+
+Never require:
+
+```text
+Activate
+→ Navigate
+→ wait 3.6 s
+→ ShowContent
+```
+
+This keeps behavior valid when Camera timing changes or reduced-motion substitutes animation.
+
+Validator must reject conflicting same-event outcomes such as two competing `NavigateTo` actions rather than adding execution-order semantics.
+
+### OpenUrl boundary
+
+Use real semantic links where a link inside Content suffices. Automatic arrival must not unexpectedly open a browser context; `OpenUrl` minimum behavior remains tied to explicit visitor activation/native link semantics.
+
+### Depth / rejection
+
+First-depth candidates:
+
+- `Highlight` as transient Experience/runtime attention, not Scene mutation;
+- bounded session-only `Once` / `FirstVisit`;
+- Narration.
+
+Later/deferred:
+
+- Show/Hide Scene entities;
+- `MediaEnded`;
+- `CueReached` only after canonical Camera cues actually exist.
+
+Reject:
+
+```text
+ordered action lists
+wait / duration workflow semantics
 arbitrary variables
 arbitrary expressions
-generic TriggerCondition graph
-ordered workflow scripting
-visual node graph
+generic conditions
 custom JavaScript actions
-generic state machine
-physics/game-mechanic events
+generic state machines
+visual node graphs
+physics/gameplay event systems
 ```
 
-### One action vs multiple actions
+## E4 — Guided visitor UX + accessibility contract
 
-Do not assume an ordered action-list engine is required.
+### Automatic platform guarantees
 
-Prefer testing whether multiple semantic rules compose adequately, for example:
+P25 should eventually enforce automatically:
+
+- one semantic `Activate` across mouse/touch/keyboard/DOM;
+- semantic DOM companion navigation and Content — never canvas/raycast-only;
+- programmatic current Destination/Stop state;
+- visible focus and logical focus order;
+- deterministic Info Panel focus entry, Escape/close and focus restoration;
+- responsive readable Content;
+- touch targets meeting accessibility floor with a stronger comfortable product default;
+- keyboard-operable media controls where media exists;
+- same semantic Destination under normal and reduced-motion presentation;
+- same semantic `DestinationReached` result after animated or substituted motion;
+- safe external-link behavior;
+- same accessibility/runtime semantics in Preview and Publish.
+
+### Author-required semantic input
+
+Authors supply:
+
+- Destination label;
+- interactive target label/name;
+- Content title/body;
+- meaningful link text;
+- image alt text or explicit decorative designation;
+- caption where context requires it;
+- Narration transcript when Narration exists;
+- video captions where meaningful audio exists.
+
+Authors must not be able to disable visitor reduced-motion preference.
+
+### Reduced-motion contract
+
+Normal:
 
 ```text
-Activate PianoMarker → NavigateTo Piano
-DestinationReached Piano → ShowContent PianoInfo
+Piano Destination
+→ authored canonical camera motion
+→ Piano
 ```
 
-before introducing action ordering, waits, durations, rollback/failure chains or workflow semantics.
-
-### Interaction target identity
-
-Prefer stable semantic IDs such as placed Scene entity, Destination and Content identity over geometry/raycast coordinates as authored truth.
-
-A dedicated `Hotspot` entity is not automatically required for making an existing Scene object interactive. Study a distinct semantic hotspot only for cases where no existing target identity exists or where a visitor marker itself carries useful authored meaning.
-
-## E4 — Guided journey + visitor UX + accessibility study
-
-### First guided journey
-
-The leading hypothesis is:
+Reduced/no-motion:
 
 ```text
-existing Camera Sequence
-+ Experience Destination / Content / Interaction bindings
-= first guided visitor journey
+Piano Destination
+→ cut / dissolve / minimal non-vestibular transition
+→ same Piano
 ```
 
-Do not add a second Experience timeline merely to represent the first tour.
+Accessibility changes transition presentation only. No second graph, alternate Destination or duplicate navigation state.
 
-### Critical unresolved question: Destination vs occurrence
+## E5 — Authoring UX + Preview / Publish + reference integrity
 
-Study repeated visits explicitly.
+### Authoring direction — closed
 
-Example:
-
-```text
-Sequence
-Intro → Piano → Paris → Piano → Exit
-```
-
-The reusable Destination `Piano` may need different contextual meaning on its first and second occurrence.
-
-Determine whether future guided meaning needs a distinct occurrence/Stop concept without prematurely adding `Tour`, `Chapter`, `Step` or narrative-graph hierarchy.
-
-### Visitor UX / wayfinding
-
-Study minimum visitor chrome for:
-
-- destination/menu navigation;
-- guided/free coexistence;
-- Back/Next/Home behavior;
-- visited/progress feedback where useful;
-- mobile/touch behavior;
-- optional derived visitor map/minimap as follow-up;
-- onboarding/control help.
-
-### Accessibility contract
-
-Separate:
-
-```text
-AUTOMATIC PLATFORM GUARANTEE
-AUTHOR-REQUIRED SEMANTIC INPUT
-OPTIONAL AUTHOR ENHANCEMENT
-```
-
-Strong automatic candidates include:
-
-- keyboard-equivalent activation/navigation;
-- semantic DOM representation of visitor destinations/content;
-- visible focus and deterministic focus return;
-- reduced-motion navigation through the same destination semantics;
-- responsive visitor Content presentation;
-- touch-target sizing;
-- safe overlay/modal semantics.
-
-Do not require authors to configure separate mouse/touch/keyboard behaviors for one semantic `Activate` interaction.
-
-## E5 — Authoring UX + Preview / Publish + reference integrity study
-
-### Authoring UX
-
-Prioritize testing:
+Use:
 
 ```text
 same project / same 3D world
 +
 Experience semantic overlays
 +
+structured Destination / Stop / Content / rule lists
++
 Inspector / rule cards
 ```
 
-Example presentation only:
+Direct-world authoring alone is insufficient because two Stops may reference the same world target. Structured list/outliner support is therefore part of the authoring direction, not a second world authority.
+
+Example rule card:
 
 ```text
-Interactions
-
 When
-Visitor activates this object
+Visitor activates Piano
 
 Do
 Show “Piano Information”
 ```
 
-Study Destination/Content/Interaction trees, badges/markers, direct selection and small wizards before introducing a node graph.
+or:
 
-Editor-only overlays may expose Destination badges, interaction markers, content bindings and invalid-reference diagnostics; they must not become visitor truth.
+```text
+When
+Destination reached · Piano / Stop 4
+
+Do
+Show “Performance context”
+```
+
+Do not introduce a node graph unless later scope introduces graph-shaped behavior such as branches/loops/ordered workflows — all outside the minimum.
+
+No numeric “rule count” threshold is ratified; complexity threshold is structural, not count-based.
 
 ### Preview
 
-Experience Preview should execute the same visitor runtime semantics as Publish, with editor-only diagnostics outside the runtime contract.
+Experience Preview executes the same visitor runtime semantics as Publish. Editor-only testing may layer on:
 
-Useful editor-only simulation candidates:
-
-- jump to Destination;
+- jump to Destination/Stop;
 - simulate `Activate` / `DestinationReached`;
 - reset visitor session;
-- simulate first visit / reduced motion;
+- test reduced motion;
 - show interaction targets;
-- inspect invalid references.
+- inspect invalid references;
+- show active rule/event.
 
-### Reference integrity
+Those are test lenses, not a second runtime.
 
-Define deterministic behavior for:
+### Reference integrity — remains to reconcile
 
-- deleting a referenced Scene entity;
-- replacing the asset on a referenced placed entity;
-- deleting a referenced Camera node;
-- removing/reordering Camera Sequence occurrences;
+Define deterministic warning/rejection/repair behavior for:
+
+- deleting referenced Scene entity;
+- replacing asset on referenced placed entity;
+- deleting referenced Camera node;
+- removing/reordering canonical guided occurrences;
 - deleting Content;
-- renaming/re-grouping a Destination.
+- renaming/re-grouping Destination.
 
-Prefer explicit warning/rejection/repair over silent semantic retargeting or cascade destruction.
+Prefer explicit invalid-reference state and repair over silent retargeting or cascade destruction.
 
 ## E6 — Persistence / operations / implementation-brief gate
 
-Only after E0–E5 should P25 freeze an implementation-ready contract.
+E6 no longer reopens the product questions closed above. It runs only after required P23/P24 seam rechecks.
 
-### Persistence ownership
+### Still genuinely open
 
-A separate Experience-owned document is now a **credible architecture hypothesis**, because Navigation/Content/Interaction state crosses references into Camera, Scene and project Assets.
+| Question | Required gate |
+|---|---|
+| final Experience persistence/document owner | post-F0/P24 reconciliation |
+| durable Stop owner / identity representation | post-F0 Camera/Sequence reconciliation |
+| exact Destination reference variants | post-F0 Spatial/Camera reconciliation |
+| Scene `Activate` target contract | accepted P24 minimum |
+| Content/media durable identity and public asset resolution | accepted P24 minimum |
+| deletion/reorder/reference repair behavior | after reference model settles |
+| semantic Experience mutation APIs/history integration | after ownership/reference model settles |
+| Save/Load codec/version | after persistence owner settles |
+| P22 publish/resource validation closure | after media/reference model settles |
+| exact implementation child slicing | last |
 
-It is not yet ratified.
+### Persistence hypotheses only
 
-Compare at least:
+Compare when E6 runs:
 
 ```text
 A. separate ExperienceDocument
-B. bounded Experience section in the canonical project envelope
+B. bounded Experience section in canonical project envelope
 C. smaller resources owned by existing project-level persistence boundaries
 ```
 
-Reject putting Experience truth into GLB/glTF `extras` merely because assets use glTF. Asset format is not the canonical cross-domain project model.
+No option is ratified now. Do not place Experience truth into GLB/glTF `extras` merely because assets use glTF.
 
-### Operation model
+### Operation direction only
 
-The eventual authoring surface should support semantic operations usable by UI/tests/future agents, conceptually such as:
+Future operations must expose semantic inputs, validation/preconditions, deterministic mutation scope, one logical history result where applicable, actionable errors and visitor-runtime consumption. Illustrative names such as `createDestination` or `bindInteraction` remain examples, not API commitments.
 
-```text
-createDestination
-updateDestination
-createContent
-updateContent
-bindInteraction
-removeInteraction
-setExperienceEntry
-validateExperience
-```
-
-Names are illustrative only. Exact APIs wait for live-code reconciliation.
-
-For every proposed operation require:
-
-```text
-owner
-stable semantic inputs
-preconditions / reference validation
-deterministic mutation scope
-one logical history result
-actionable errors
-visitor-runtime consumption
-```
-
-### Implementation-ready gate
-
-Before implementation tickets exist, P25 must have resolved or explicitly deferred:
-
-1. persistence/document ownership;
-2. minimum Destination target model;
-3. first guided-journey relationship to Camera Sequence;
-4. repeated-Destination / occurrence semantics;
-5. minimum Content resource and presentation primitive;
-6. minimum Event/Action vocabulary;
-7. Narration minimum-vs-follow-up decision;
-8. reference integrity for Scene/Camera/Content deletion/replacement;
-9. automatic visitor accessibility/reduced-motion guarantees;
-10. authoring UX entry points and same-runtime Preview contract;
-11. P22 cold visitor resource/publish compatibility;
-12. one complete acceptance fixture.
+No generic command framework is created for P25.
 
 ---
 
-# Leading minimum hypothesis — not frozen implementation scope
-
-Use this as the primary thing to challenge through E0–E6:
+# Reconciled P25 minimum — product semantics, not implementation schema
 
 ```text
-P25 Foundation candidate
+P25 Foundation
 
 Navigation
-- Destination references over existing Spatial / Camera meaning
-- visitor label / grouping / entry
-- first guided flow composed from existing Camera Sequence
+- Destination references over canonical Spatial / Camera meaning
+- guided Stop / occurrence semantics over canonical Camera Sequence order
+- Home / Back / Next
+- Destination menu
+- derived guided progress
+- Guided / Free / Resume semantics
 
 Content
-- reusable contextual information
-- one opinionated accessible visitor presentation primitive
+- reusable contextual Content
+- constrained rich text
+- optional primary image + accessibility/credit semantics
+- one opinionated responsive Info Panel
 
 Interaction
 - Activate
-- DestinationReached
+- DestinationReached (+ guided occurrence context when applicable)
 - ShowContent
 - NavigateTo
 - OpenUrl
+- multiple independent rules; one action per rule
 
 Visitor / runtime
-- keyboard + touch + reduced-motion semantics
-- accessible DOM companion navigation/content
-- same visitor runtime for Preview and Publish
+- semantic DOM companion navigation/content
+- keyboard + touch equivalence
+- reduced/no-motion reaches same Destination
+- responsive/focus-safe presentation
+- same visitor runtime semantics for Preview and Publish
 - actionable reference validation
 
 Authoring
-- semantic operations + one history result per logical edit
-- direct selection / semantic overlays / Inspector-rule-card UX
+- same 3D world + Experience overlays
+- structured Destination / Stop / Content / rule lists
+- Inspector / rule cards
+- semantic operations + one history result per logical edit when history applies
 ```
 
 The minimum must prove a **complete visitor journey**, not merely an interaction demo.
 
-Example acceptance narrative:
+## Primary semantic acceptance fixture — repeated Destination
 
 ```text
-visitor opens cold published project
-→ sees an understandable visitor navigation surface
-→ navigates to an authored Destination through the canonical Camera system
-→ receives contextual Content on arrival
-→ activates a Scene target to reveal related Content or navigate elsewhere
-→ can use equivalent keyboard/touch behavior
-→ reduced-motion preference reaches the same semantic destination safely
-→ no editor-only systems are required
+Intro
+→ Piano: Construction
+→ Paris
+→ Piano: Performance
+→ Exit
 ```
+
+Acceptance:
+
+- both Piano Stops resolve to one reusable Piano Destination and one canonical Spatial/Camera meaning;
+- the two occurrences may carry distinct contextual Content;
+- no duplicate Camera pose/path/node is created solely for semantic repetition;
+- Next/Back operate on Stop occurrence;
+- Destination menu may expose one Piano Destination;
+- canonical Camera route/motion executes every navigation;
+- reduced motion reaches the same Piano Destination with substituted/minimal motion;
+- Preview and Publish execute the same visitor semantics;
+- visitor runtime requires no editor selection/history/gizmo/store infrastructure.
+
+## Cross-category proof narratives
+
+Use the repeated-Piano fixture as the primary semantic gate, then verify the same minimum primitives cover:
+
+1. museum artwork — arrival Content + object activation + attribution link;
+2. artist portfolio — guided sequence + free Destination jump + Resume;
+3. product showroom — product activation → Info Panel + specifications link;
+4. architecture walkthrough — explicit views + menu + Home/Next/Back + DOM navigation.
+
+Educational experience is covered by the repeated-Piano occurrence fixture.
+
+---
 
 # One level deeper — evidence-gated candidates
 
-After the minimum, the highest-leverage depth candidates currently appear to be:
+Ranked after minimum:
 
 1. Narration + transcript semantics;
-2. bounded `Once` / `FirstVisit` visitor-state conditions;
-3. richer visitor navigation grouping / wayfinding;
-4. semantic hotspots where no existing Scene identity exists;
-5. lightweight attention actions such as Highlight/Reveal;
+2. transient `Highlight` attention action;
+3. bounded session-only `Once` / `FirstVisit`;
+4. video + small media gallery;
+5. Resume/visited-state polish;
 6. deep-linked/shareable Destinations;
-7. multiple tours or explicit occurrence/Stop semantics if real projects require them;
-8. a visitor map/minimap derived from Spatial truth.
+7. visitor map/minimap derived from Spatial truth;
+8. Camera Cue binding after canonical Camera cues exist.
 
-These are not hidden P25 minimum gates.
+Multiple tours / branching remain later than the first occurrence-aware guided proof. A dedicated semantic Hotspot remains evidence-gated for cases where no existing Scene target identity exists.
 
 # Product boundary
 
 ## Core reusable Experience primitives
 
-- Destination/navigation semantics;
-- contextual Content;
-- bounded semantic interaction;
-- visitor-safe presentation/accessibility;
+- Destination + guided Stop occurrence semantics;
+- contextual Content + one Info Panel;
+- bounded semantic Interaction;
+- visitor navigation/chrome;
+- visitor-safe accessibility/reduced-motion platform behavior;
 - same-runtime Preview/Publish.
 
 ## High-value spatial Experience depth
 
 - Narration;
-- richer wayfinding;
+- transient Highlight;
 - bounded first-visit state;
-- attention/reveal behaviors;
-- semantic hotspots;
+- richer wayfinding/resume;
+- richer media;
 - deep links;
-- multiple tours/occurrence semantics when proven.
+- semantic hotspots where required;
+- derived map/minimap;
+- later multiple tours / richer story structures.
 
 ## Later platform / specialist capabilities
 
-- richer media orchestration;
 - localization workflow;
 - analytics;
-- more advanced visitor-state persistence;
+- cross-session/account visitor-state persistence;
 - XR-specific presentation/input;
 - reusable Experience templates/presets;
-- richer multi-tour/story structures.
+- richer media orchestration;
+- multiple tours/branching when proven.
 
 ## Wrong-product territory for P25
 
@@ -547,53 +716,35 @@ These are not hidden P25 minimum gates.
 - arbitrary JavaScript actions;
 - arbitrary variables/expression language;
 - general state machines/workflow automation;
+- ordered wait/duration action pipelines;
 - physics/gameplay systems;
 - inventory/scoring;
 - arbitrary HTML/CSS page builder;
 - general CMS;
 - a second Camera/navigation/timeline system.
 
+---
+
 # Minimum gate from P23/P24
 
 P25 waits for the **accepted useful minima**, not optional depth tails.
 
-P23 must provide enough Build capability that the acceptance fixture is a credible authored environment. P24 must provide enough Stage capability that representative Scene content can be placed/revised/styled and delivered through P22. P25 does not wait for broad CAD depth, giant asset catalogues, DCC features, marketplace work or advanced lighting/material tails.
+P23 must provide enough Build capability that the acceptance fixture is a credible authored environment. P24 must provide enough Stage capability that representative Scene content can be placed/revised/styled and delivered through P22.
 
-The exact P23/P24→P25 acceptance gate remains owned by those plans until their minima freeze.
-
-# Closeout rule
-
-P25 does not become implementation-ready because the external research identified attractive capabilities.
-
-### Progressive-planning migration accounting (2026-09-08 restructure)
-
-| Existing detail | Old location | New owner | Class | Notes |
-|---|---|---|---|---|
-| Outcome, product model, hard architecture boundaries (one nav system, Spatial ownership, same runtime, visitor isolation, deterministic authoring) | this umbrella | this umbrella | umbrella contract | durable; unchanged |
-| Phase 5 accepted directional conclusions (Destination+Content+Interaction, Activate, reuse Camera Sequence, etc.) | §Research basis | this umbrella | evidence context (hypotheses) | seed material for future P25.x children; stays under study until frozen |
-| E0–E6 study definitions, open questions, rejection lists, persistence options A–C | this umbrella | this umbrella | evidence gates | RESEARCH GATES are umbrella-owned; P25.x children inherit their study's conclusions at reconciliation |
-| Leading minimum hypothesis + one-level-deeper candidates + product boundary | this umbrella | this umbrella | evidence context / deferred | explicitly not frozen scope; P25.x seeds form from these after E0–E5 |
-| Camera canonical contracts (one graph, topology ≠ Sequence, Plan/3D authority split) | this umbrella + architecture docs | this umbrella | umbrella contract | Experience extends, never replaces |
-
-Explicitly deferred: P25.x child seeds — the roadmap's own rule (no Experience
-implementation tickets from research alone; schema unfrozen until E6) means
-creating child files now would violate the umbrella's own gate. The first
-child plans form from the minimum hypothesis once E0–E5 close.
-
-The sequence is:
+Before E6 / implementation-ready child plans:
 
 ```text
-external capability research
+focused P25 product semantics    CLOSED
         ↓
-E0 live capability audit
+P23 F0 targeted reference recheck
+        +
+accepted P24 minimum target/media recheck
         ↓
-E1–E5 focused semantic/UX/runtime studies
+E5 reference-integrity reconciliation
         ↓
-owner decisions + bounded prototypes where needed
+E6 persistence / operations / codec / publish closure
         ↓
-E6 persistence/operation reconciliation
-        ↓
-implementation-ready P25 brief / annex
+implementation-ready P25.x child slicing
 ```
 
-At closeout, broad Experience ecosystem discovery should remain closed. Later research should be targeted only at unresolved semantics, UX, performance/accessibility evidence or implementation-specific seams.
+No P25 schema, `ExperienceDocument`, operation API, Save/Load codec, backend endpoint or implementation ticket is created merely because the product semantics above are ratified.
