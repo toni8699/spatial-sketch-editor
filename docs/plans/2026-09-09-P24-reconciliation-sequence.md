@@ -32,7 +32,7 @@ Read in this order:
 2. [Unified Plan / 3D addendum](2026-09-09-P23-P24-unified-plan-3d-authoring-addendum.md);
 3. [P24A annex](2026-09-08-P24A-asset-supply-canonical-ingest-annex.md);
 4. current Museum Editor code and tests for the capability being reconciled;
-5. checked-in Phase 2 / Phase 4 research;
+5. checked-in Phase 2 / Phase 4 research — durable inputs are `../Deep-research/P24-3D-assets-staging/deep-research-exact-asset-compact.md` + `museum-editor-phase2-acquisition-manifest.json` (Phase 2) and `../Deep-research/P24-3D-assets-staging/deep-research-P24-3D-editing-compact.md` (Phase 4). The `museum-editor-phase2-exact-asset-harvest-P24.md` path cited in the umbrella/P24A annex is absent on disk; use the compact as authority until it is restored. The Phase 4 full source remains absent per the umbrella;
 6. completed [Pascal harvest](../Deep-research/P24-3D-assets-staging/Pascal-editor-harvest.md) where relevant;
 7. additional direct reference inspection only where a concrete unresolved maturity question remains.
 
@@ -54,6 +54,21 @@ current Museum behavior
 
 If current code already answers the question, close it from Museum evidence rather than adding reference work for completeness.
 
+## R-to-B mapping
+
+| R step | Umbrella track |
+|---|---|
+| R0 | P23 delta map (no B equivalent) |
+| R1 | P24A readiness (no B equivalent) |
+| R2 | B0 capability-maturity baseline |
+| R3 | B2 shared Plan/3D placement |
+| R4 | B5 behavioral contract (ship-gate-relevant only) |
+| R5 | B1 transform + arrangement |
+| R6 | B3 material |
+| R7 | B4 lighting + environment |
+| R8 | B5 presentation/polish remainder |
+| R9 | B6 minimum freeze / child-plan gate |
+
 ## R0 — current-state + P23 delta map
 
 Before freezing P24 scope, produce one concise map of the seams P23 changes underneath Stage authoring.
@@ -67,6 +82,8 @@ At minimum inspect:
 - canonical selection identity across Plan/3D;
 - Scene history/gesture lifecycle;
 - Camera records only where P24 code touches shared Scene persistence/runtime;
+- `LayoutDocument` / `SceneDocument` ownership boundary (`LayoutObjects` vs Scene entities) where P24 placement consults Layout geometry;
+- Layout compile/query/editor-adapter cutover (`compileLayoutGeometry()`, query, migration) affecting Plan projection and support/surface resolution;
 - Save/Load and P22 visitor consumption of Scene state.
 
 Classify every finding as:
@@ -113,12 +130,14 @@ Required matrix:
 | Groups / clusters | audit | existing cluster model | TBD | TBD | TBD |
 | Plan Scene staging | audit | Scene entity + derived Plan projection | TBD | TBD | TBD |
 | Placement / grounding | audit | existing placement pipeline | TBD | TBD | TBD |
+| Asset-library placement entry points | audit | existing asset picker → placement pipeline | TBD | TBD | TBD |
 | Snapping / guides | audit | existing Scene/Plan seams | TBD | TBD | TBD |
 | Materials | audit | current Scene material model | TBD | TBD | TBD |
 | Lights | audit | current Scene light model | TBD | TBD | TBD |
 | Environment | audit | renderer/Scene seams | TBD | TBD | TBD |
 | Outliner / Inspector | audit | existing editor surfaces | TBD | TBD | TBD |
 | History integration | audit | canonical history | TBD | TBD | TBD |
+| Editor-only vs visitor + asset-resolution boundary | audit | P20 registry / P22 resolver / visitor isolation | TBD | TBD | TBD |
 
 Do not create a generic Stage command framework merely to organize this matrix.
 
@@ -146,7 +165,7 @@ Required decisions:
 - Plan-ineligible assets remain selectable but do not expose misleading manipulation;
 - replacement preserves intended placement through normalized asset metadata;
 - one completed placement gesture produces one history result; cancel/no-op produces none;
-- no persistent Layout/Scene support dependency is introduced without a separately specified ownership/delete/history contract.
+- no persistent Layout/Scene support dependency is introduced without a separately specified ownership/delete/history contract (umbrella invariant: `LayoutDocument`/`SceneDocument` stay separate, P24 placement consults Layout geometry as transient calculation by default; addendum target: `LayoutObjects` vs `SceneEntity`).
 
 Pascal evidence to reuse here is fixture-level only: same-ID Plan/3D mutation, derived renderer, transient preview patterns, and negative counterexamples around fresh IDs, pitch/roll reset and clamping.
 
@@ -161,7 +180,7 @@ Freeze the **behavioral** B5 contract early:
 - PlanProxy/ghost presentation is derived editor state;
 - final displayed preview and committed result agree.
 
-Do not freeze the full B5 presentation/polish scope yet. Final visual density, affordances and staging polish should close only after B1–B4 determine what tools actually ship.
+Do not freeze the full B5 presentation/polish scope yet. Final visual density, affordances and staging polish should close only after B1–B4 determine what tools actually ship. R4 is the ship-gate-relevant behavioral freeze; R8 holds the remaining presentation/polish.
 
 Pascal's mounted-pane behavior is a **negative reference** here: its view switch does not provide Museum's required cancel semantics.
 
@@ -239,6 +258,8 @@ Only after R0–R8 have enough evidence:
 No implementation-ready P24B brief is created before this gate closes.
 
 ## Required acceptance themes for the eventual P24 minimum
+
+Start from Pascal harvest §7 candidate fixtures 1–6 (same-ID Plan/3D mutation with Y/pitch/roll/scale preservation; Plan-ineligible-but-selected; view-switch cancel with no history; preview/state consistency; preview/commit agreement; one-handle-drag-one-history with failure/no-op safety) and rewrite each as a Museum-owned fixture; do not port Pascal machinery.
 
 The final minimum should prove, for the capabilities actually selected:
 
