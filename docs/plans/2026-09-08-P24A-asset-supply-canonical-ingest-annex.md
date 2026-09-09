@@ -1,5 +1,7 @@
 # P24A — Asset Supply + Canonical Ingest annex
 
+**Ratified cross-view direction:** [Unified Plan / 3D authoring addendum](2026-09-09-P23-P24-unified-plan-3d-authoring-addendum.md) — read alongside this plan for entity-owned mutations, selection continuity, gesture cancellation and PlanProxy/placement ownership. Existing scope, status and dependency gates remain unchanged.
+
 **Created:** 2026-09-08  
 **Parent:** [P24 — Scene / Staging Depth umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md)  
 **Status:** `seed — evidence pending` — Phase 2 research reviewed; the bounded implementation-readiness reconciliation below has not run, so this is not yet implementation-ready.  

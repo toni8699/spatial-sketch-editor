@@ -9,6 +9,8 @@ placement, persistence presentation) lives in
 Current behavior remains canonical in the architecture/component/design
 contracts; this document states the destination, not a claim that every
 capability already exists.
+**Ratified 2026-09-09 — unified Spatial authoring:** Plan and 3D are complementary authoring lenses over the same canonical project entities and operations. Both may expose an operation where their representation supports it truthfully; the target entity’s owning document determines the mutation domain. Neither view owns duplicate spatial truth. Committed selection survives view changes; unfinished placement/transform gestures cancel without a history result. This is target direction, not a claim of shipped feature parity. The [active P23/P24 addendum](plans/2026-09-09-P23-P24-unified-plan-3d-authoring-addendum.md) owns the detailed view, PlanProxy, placement and roadmap contracts.
+
 **Ratified 2026-08-31:** the project shell has two primary creative modes —
 **Spatial** (the current editor) and **Experience** (long-term direction) —
 plus project-level **Assets** and **Publish** surfaces. Not-yet-built

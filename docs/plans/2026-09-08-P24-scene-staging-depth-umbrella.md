@@ -1,5 +1,7 @@
 # P24 — Scene / Staging Depth umbrella
 
+**Ratified cross-view direction:** [Unified Plan / 3D authoring addendum](2026-09-09-P23-P24-unified-plan-3d-authoring-addendum.md) — read alongside this plan for entity-owned mutations, selection continuity, gesture cancellation and PlanProxy/placement ownership. Existing scope, status and dependency gates remain unchanged.
+
 **Created:** 2026-09-08 · **Status:** proposed (tracker authoritative)
 **Depends on:** P23 minimum useful Build set complete.
 **Detail status:** P24 remains an umbrella/research-reconciliation plan, not an implementation-ready brief. P24A Phase 2 research has been reviewed and has a linked annex; the checked-in Phase 4 compact research has now been reviewed directionally for P24B, but P24B still requires deeper current-code audits and direct reference studies before its implementation contract/minimum can be frozen.

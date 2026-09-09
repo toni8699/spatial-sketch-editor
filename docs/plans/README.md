@@ -5,6 +5,8 @@ history lives on disk under `docs/archive/plans/`, not in this file).
 **Status enum:** `proposed | approved | in-progress | shipped | archived`.
 The tracker is authoritative when a plan doc's `**Status:**` drifts.
 
+**Active P23/P24 direction:** [Unified Plan / 3D authoring addendum](2026-09-09-P23-P24-unified-plan-3d-authoring-addendum.md) (ratified 2026-09-09; existing statuses and gates unchanged).
+
 ## Rules
 
 1. **One flat namespace.** New top-level plans are
