@@ -1,15 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { chopinProject } from '$lib/content/chopin-project';
 import { compileLayoutGeometry } from '$lib/layout/layout-geometry';
+import type { LayoutDocument } from '$lib/layout/layout-types';
 import {
 	g1AutoBezierDocument,
+	g1DocumentWithRooms,
 	g1ElevatedFloorDocument,
+	g1LineSegments,
 	g1InvalidGeometryDocument,
 	g1LineRectangleDocument,
 	g1LShapedDocument,
 	g1MultipleOpeningsDocument,
 	g1ObjectMatrixDocument,
-	g1ProfileMatrixDocument
+	g1ProfileMatrixDocument,
+	g1RectangleRoom
 } from './__fixtures__/layout-g1-fixtures';
 import { normalizeForParity } from './__fixtures__/layout-g1-normalize';
 
@@ -243,5 +247,80 @@ describe('compileLayoutGeometry', () => {
 			new Set(['room-rectangle', 'room-second'])
 		);
 		expect(new Set(spans.map((span) => span.id)).size).toBe(spans.length);
+	});
+
+	// P23 review round 1 / B1: the compiler cutover briefly compiled only
+	// floors[0]; multi-floor legacy documents must compile every floor with
+	// its own elevation frame.
+	it('compiles every floor of a multi-floor legacy document (B1 regression)', () => {
+		const document = g1DocumentWithRooms([g1RectangleRoom('room-ground', 0, 0, 4, 4)]);
+		document.floors.push({
+			id: 'floor-upper',
+			name: 'Upper Floor',
+			elevation: 3.2,
+			height: 2.8,
+			rooms: [g1RectangleRoom('room-upper', 10, 0, 3, 3)]
+		});
+
+		const { geometry, issues } = compileLayoutGeometry(document);
+		expect(issues).toEqual([]);
+
+		expect(geometry.floors).toHaveLength(2);
+		expect(geometry.floors.map((floor) => floor.floorId)).toEqual(['floor-ground', 'floor-upper']);
+
+		const ground = geometry.rooms.find((room) => room.roomId === 'room-ground')!;
+		const upper = geometry.rooms.find((room) => room.roomId === 'room-upper')!;
+		expect(ground.floorElevation).toBe(0);
+		expect(ground.ceilingElevation).toBe(3);
+		expect(upper.floorElevation).toBe(3.2);
+		expect(upper.ceilingElevation).toBe(6);
+
+		const floorAabbs = geometry.queries.aabbs.filter((aabb) => aabb.kind === 'floor');
+		expect(floorAabbs.map((aabb) => aabb.sourceId)).toEqual(['floor-ground', 'floor-upper']);
+
+		// Document bounds span both floors.
+		expect(geometry.bounds).not.toBeNull();
+		expect(geometry.bounds!.max[1]).toBeCloseTo(6.1, 9);
+	});
+
+	it('keeps legacy issue paths floor-indexed when a later floor has a bad room (B1)', () => {
+		const document = g1DocumentWithRooms([g1RectangleRoom('room-ground', 0, 0, 4, 4)]);
+		document.floors.push({
+			id: 'floor-upper',
+			name: 'Upper Floor',
+			elevation: 3.2,
+			height: 2.8,
+			rooms: [g1RectangleRoom('room-upper', 10, 0, 3, 3)]
+		});
+		const broken = g1RectangleRoom('room-broken', 20, 0, 3, 3);
+		// Self-intersecting boundary: the closing edge crosses the first edge.
+		broken.boundary.segments = g1LineSegments(
+			[
+				[20, 0],
+				[26, 0],
+				[20, 3],
+				[26, 3]
+			],
+			'room-broken:wall'
+		);
+		document.floors[1]!.rooms.push(broken);
+
+		const { issues } = compileLayoutGeometry(document);
+		expect(issues.length).toBeGreaterThan(0);
+		for (const issue of issues) {
+			expect(issue.path.startsWith('floors[1].rooms[1]')).toBe(true);
+		}
+	});
+
+	// Review round 1 nit: an empty-floors document must compile to zero
+	// floors — exactly what the pre-cutover per-floor loop produced — with
+	// no placeholder floor materialized.
+	it('compiles an empty-floors document to zero floors (pre-cutover parity)', () => {
+		const empty: LayoutDocument = { units: 'meters', floors: [], objects: [] };
+		const { geometry, issues } = compileLayoutGeometry(empty);
+		expect(issues).toEqual([]);
+		expect(geometry.floors).toEqual([]);
+		expect(geometry.rooms).toEqual([]);
+		expect(geometry.bounds).toBeNull();
 	});
 });
