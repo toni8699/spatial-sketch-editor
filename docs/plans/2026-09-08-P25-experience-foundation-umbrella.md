@@ -360,8 +360,8 @@ One rule = one semantic action:
 Activate Piano
 → ShowContent PianoInfo
 
-Activate Piano
-→ Highlight Score    // depth, when supported
+Activate PianoMarker
+→ NavigateTo Piano
 ```
 
 Multiple independent non-conflicting rules may share an event. No ordering is promised.
