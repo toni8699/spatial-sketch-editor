@@ -9,46 +9,59 @@ The tracker is authoritative when a plan doc's `**Status:**` drifts.
 
 1. **One flat namespace.** New top-level plans are
    `docs/plans/YYYY-MM-DD-P<number>-<slug>.md` — the P-number is assigned on
-   registration and written into the filename. No letter codes beyond the
-   P-number. **Child-plan exception:** child slices / umbrella-internal annexes
-   may use parent-derived IDs such as `P23.0`–`P23.9` or `P24A` without
-   consuming tracker P-numbers; only top-level roadmap plans appear in Active.
-2. **Numbers live in filenames and this tracker.** Sequential P-numbers are
-   assigned on registration and never renumbered; execution order is separate.
+   registration and written into the filename (e.g.
+   `2026-08-18-P1-camera-overhaul.md`). No letter codes beyond the P-number.
+   **Child-plan exception (2026-09-08):** child slice plans and umbrella-internal
+   annexes may use parent-derived IDs — `P23.0`–`P23.9` style names and
+   `P24A`-style labels — without consuming tracker P-numbers; only umbrella/
+   top-level roadmap plans are registered in the Active table with a P-number.
+2. **Numbers live in filenames and this tracker.** Sequential numbers
+   (`P1`, `P2`, …) are assigned on registration and carried in the filename;
+   this tracker is the register that owns them (status, depends-on, order)
+   and never renumbers files. The renewal that created the tracker is an
+   **unnumbered process row** (a tracker cannot number its own bootstrap).
 3. **Dependencies by tracker number**, never by letter family.
-4. **Archive on close.** Shipped plan docs move to `docs/archive/plans/`; this
-   tracker lists only the 5 most recent archived artifacts.
+4. **Archive on close.** When a plan ships, its doc moves to
+   `docs/archive/plans/` and this tracker lists stubs for the **5 most recent
+   archived artifacts only** (see `Archived plans`). Older history stays on
+   disk, unlisted (owner decision 2026-09-05).
 5. **Re-registration, not re-lettering.** Approved-but-unscheduled work keeps
-   content and gains a tracker number; only shipped/superseded docs archive.
-6. **Execution order is pinned by dependencies/order contracts, not numbering.**
-   Child numeric order is historical naming, not a sequencing guarantee.
-7. **No narrative in Active rows.** Keep rows compact; detailed scope lives in
-   plan docs.
-8. **Collapse on ship.** Archive doc + tracker row update happen together.
+   its content and gains a tracker number; that content lives **folded into
+   the plan's umbrella doc**. Only shipped/superseded docs archive.
+6. Execution order is **pinned in the table's depends-on column**, not implied
+   by the numbers (registration order ≠ priority).
+7. **No narrative in this tracker.** Rows and stubs stay one line each;
+   shipped detail lives in the plan doc (archived on close), never here.
+8. **Collapse on ship.** Archiving a doc and collapsing its Active row happen
+   in the same edit — shipped rows never linger in the table.
 
-## Progressive planning model
+## Progressive planning model (2026-09-08)
 
-Roadmap tiers follow:
+Roadmap tiers follow one structure — umbrella plan → targeted research / code
+harvest / technical spike **where required** → implementation-ready child
+slice plan → implementation:
 
-```text
-umbrella
-→ targeted evidence only where needed
-→ implementation-ready child plan
-→ implementation
-```
+- **Umbrella plans** define the durable product contract, architecture
+  boundaries, slice order and evidence gates (WHAT/WHY/BOUNDARIES/ORDER/
+  RESEARCH GATES/high-level acceptance).
+- **Evidence artifacts** (code harvest, product/UX research, technical spike,
+  feasibility investigation) answer what was learned; they inform
+  implementation but never silently override umbrella product/architecture
+  contracts — conflicts go to owner review.
+- **Child slice plans** carry implementation detail. Existing implementation
+  detail is preserved in child-plan seeds rather than discarded. Only
+  implementation-ready child plans may proceed to implementation.
 
-- Umbrellas own durable WHAT/WHY/BOUNDARIES/ORDER/research gates/high-level acceptance.
-- Evidence artifacts inform plans but never silently override product contracts.
-- Accepted owner reconciliation is the architecture authority when evidence and
-  prior plan text conflict.
-- Child plans carry implementation detail and may proceed only when marked
-  `implementation-ready`.
+Evidence selection: do not reopen broad research when prior discovery already
+selected the relevant references — use bounded capability-specific
+harvest/recheck work. Do not impose research on slices whose implementation
+uncertainty is already sufficiently resolved.
 
-Evidence selection: do not reopen broad research when prior discovery/harvests
-already answer the relevant questions. Use bounded rechecks only where code has
-changed or a concrete implementation uncertainty remains.
+Maximum planning chain (avoid bureaucracy): umbrella → evidence artifact, only
+if required → implementation-ready child plan → implementation. A child seed is
+the preserved draft form of the future child plan, not an extra layer.
 
-Child-plan status vocabulary:
+Child-plan status vocabulary (a child plan existing ≠ implementation-ready):
 
 ```text
 seed — pre-evidence
@@ -59,126 +72,291 @@ in progress
 shipped / archived
 ```
 
-Applied: P23 umbrella + implementation-ready P23.0–P23.9 child set, informed by
-completed H1/H2/H3/H5 (`H4` remains deferred until offset/trim/curve work is
-actually scheduled); P24 umbrella with P24A annex; P25 umbrella awaiting its
-own evidence/reconciliation gates.
+Applied: P23 umbrella + implementation-ready child plans P23.0–P23.9,
+informed by completed H1/H2/H3/H5; H4 remains deferred until bounded
+offset/trim/curve follow-up is actually scheduled. P24 umbrella with the P24A
+annex as its child seed; P25 umbrella (child plans form after its E-studies
+close).
 
 ## Model routing
 
-Per-increment difficulty/model routing lives in [`model-assessment.md`](model-assessment.md).
-Policy rules remain:
+Per-increment difficulty (1–100) and model routing live in the living
+assessment doc — [`model-assessment.md`](model-assessment.md) — not in this
+tracker. Update it as increments ship.
+Policy rules:
 
-- DeepSeek V4 Flash substitutes for Luna-tier work while retaining the Luna
-  difficulty as the capability reference.
-- Never route to Terra or Sol low.
-- Escalate by evidence, not habit; pass stronger models the original failure state.
-- Margin 0 means escalate on first demonstrated failure rather than pre-paying.
+- **DeepSeek V4 Flash substitution (2026-08-20):** Luna max ≈ DeepSeek V4
+  Flash. Any increment rated at **Luna difficulty (any effort)** routes to
+  **DeepSeek V4 Flash** — the Luna effort is retained as the capability
+  reference, not replaced. Sol tiers unchanged.
+- **Never route to Terra (all efforts) or Sol low** — dominated points on the
+  cost/intelligence frontier.
+- **Escalate by evidence, not habit:** start at the cheapest tier clearing the
+  required index; escalate one tier on a demonstrated capability failure,
+  sending the stronger model the original failure state (not a summary).
+- **Margin** = chosen tier index − required index. Margin 0 → escalate on
+  first failure; don't pre-pay.
+- Adjacent tiers differ 2–8% capability for 1.3–2.6× per-task cost — pay the
+  jump only when the threshold matters.
 
 ## Active (live work only)
 
 | # | Plan | Status | Depends on | Doc |
 |---|------|--------|------------|-----|
-| P13 | Sequence stop-at-node playback | proposed — nice-to-have, unscheduled | P12 | [2026-08-27-P13-stop-at-node-playback.md](2026-08-27-P13-stop-at-node-playback.md) |
-| P23 | Layout Depth — minimum useful Build set | **approved** — owner-ratified wall-first reconciliation 2026-09-09; H1/H2/H3/H5 complete; next = coupled Foundation Gate `P23.0a → P23.8 → P23.0b`, no new-schema writes before full F0 acceptance | P22 | [umbrella](2026-09-07-P23-layout-depth-minimum-build.md) |
-| P24 | Scene / Staging Depth umbrella — P24A asset supply + P24B rich 3D staging | proposed — P24A Phase 2 reviewed + annex registered; P24B current-code/reference studies still required; consumes P23's shipped coordinate/ownership model rather than reasserting room-local storage as a future invariant | P23 | [umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md) |
-| P25 | Experience Foundation umbrella | proposed — Phase 5 external research reviewed directionally; E0–E6 reconciliation required before implementation brief | P24 | [umbrella](2026-09-08-P25-experience-foundation-umbrella.md) |
+| P13 | Sequence stop-at-node playback | proposed — nice-to-have, unscheduled (owner 2026-08-27) | P12 | [2026-08-27-P13-stop-at-node-playback.md](2026-08-27-P13-stop-at-node-playback.md) |
+| P23 | Layout Depth — minimum useful Build set | approved — owner-ratified wall-first reconciliation 2026-09-09; H1/H2/H3/H5 complete; next is coupled Foundation Gate `P23.0a → P23.8 → P23.0b`; no new-schema writes before full F0 acceptance | P22 | [umbrella](2026-09-07-P23-layout-depth-minimum-build.md) |
+| P24 | Scene / Staging Depth umbrella — P24A asset supply + P24B rich 3D staging | proposed — umbrella/research reconciliation; P24A Phase 2 reviewed + annex registered (child seed, evidence pending); P24B Phase 4 compact reviewed directionally, deeper code/reference studies required; consume the coordinate/ownership model actually shipped by P23 rather than treating current room-local storage as a future invariant | P23 | [umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md) |
+| P25 | Experience Foundation umbrella | proposed — Phase 5 external capability research reviewed directionally; E0–E6 reconciliation required before implementation brief; P25.x child plans form after the studies close (owner 2026-09-08) | P24 | [umbrella](2026-09-08-P25-experience-foundation-umbrella.md) |
 | — | Branch rejoin — experiment, no schedule | proposed | P8 conceptually | [2026-08-21-branch-rejoin-experiment.md](2026-08-21-branch-rejoin-experiment.md) |
 | … | future work re-registers here | | | |
 
+**Pending archival (live files for shipped work — not tracked rows; owner follow-up):**
+
+- Done 2026-09-05: P7 umbrella + P7.6 annex + P8 umbrella moved to
+  `docs/archive/plans/` (moved as a set — the annex link at umbrella `:1179`
+  is relative and survives); byte-identical P11.2 annex deleted (archive holds
+  the copy); 0-byte P12.2 live husk deleted (archive holds the content).
+- Reconcile-then-delete (live copy has **diverged** from the archived copy —
+  diff before dropping either side): `2026-08-18-P1-camera-overhaul.md`.
+  Done 2026-09-08 (P22 closeout cleanup): reconciled — the archived copy holds
+  the evolved record (review amendments F1–F7, shipped status, compressed §D);
+  the live copy's 366 diverged lines were all pre-review text §D/F2 had
+  replaced with pointers. Live husk deleted; archive copy is canonical.
+  Also removed the `2026-08-29-backend-persistence-migration-review.md`
+  pointer husk (archive copy confirmed present, zero live inbound links).
+- Done 2026-09-05: `hand-off/designer-context-packet.md` moved to
+  `docs/archive/designer-context-packet-2026-09-03.md` (one-off 2026-09-03
+  packet; its output already landed as the P21.5 brief; `hand-off/` holds
+  `CURRENT.md` only per the folder map).
+- Done 2026-09-05: superseded `Design-specs/Camera-plan-objects-brief.md`
+  moved to `docs/archive/plans/`, stub left behind pointing at frozen
+  `Camera-layout-design.md`.
+- Done 2026-09-08: P19 umbrella + P19.4 annex, P20 umbrella + S2/S3/S4 briefs,
+  and the P21 set (umbrella + P21.4 + P21.5 + P21.6 + slice-2B annex) moved to
+  `docs/archive/plans/` as sets at P21 closeout (cross-links survive — each
+  set's relative links stay inside the set, same as the P7 precedent).
+
 ## Gate status
 
-- P22 shipped 2026-09-08 with hosted cold-browser acceptance.
-- **Next: P23 Foundation Gate F0.** P23 wall-first direction was owner-ratified
-  2026-09-09 after H1/H2/H3/H5. F0 is one gate across P23.0 + P23.8:
-  schema/compat scaffolding → topology/Room reconciliation → migration/compiler/
-  editor-adapter cutover → compatibility acceptance → enable new writers.
-- P23 current code remains Room-owned/Room-local until F0 ships; plans/North Star
-  describe target direction, while implementation/component docs continue to
-  describe current behavior until code changes.
-- P24 follows accepted P23 minimum and must consume the coordinate/ownership
-  model actually shipped by P23. Current P24 research references to room-local
-  transforms describe the pre-P23 baseline, not a future invariant.
-- P25 may follow accepted P23/P24 useful minima before optional depth tails.
-- Deferred/non-blocking: P3B.7b (incl. P3.4/P3.5 acceptance tail).
-- Proposed/unscheduled: P13, branch rejoin.
+Ship narrative for P1–P21 (execution order, scope decisions, the P12/P3B hard
+gate) now lives in the archived docs, not here.
+
+- Next: P22 shipped 2026-09-08 (P22.1–P22.5 + hosted acceptance — production
+  cold-browser loop through deployed proxy/API/Postgres/R2, anonymous
+  release-membership boundary, shipped-static retention, full checks + route
+  bundle gates green; public-route `untrack` fix deployed as `f46e8f3`);
+  next is **P23 Foundation Gate F0**. P23 wall-first reconciliation was
+  owner-ratified 2026-09-09 after H1/H2/H3/H5. F0 is one gate across P23.0 +
+  P23.8: schema/compat scaffolding → topology/Room reconciliation →
+  migration/compiler/editor-adapter cutover → compatibility acceptance →
+  enable wall-first writers. Current product code remains Room-owned/Room-local
+  until F0 ships.
+- Long-term tiers renumbered 2026-09-05 (owner): P23 Layout Depth, P24
+  Scene/Staging Depth, P25 Experience Foundation, P26+ platform expansion;
+  typed DB is conditional infrastructure, not a tier. Owner reconciliation
+  2026-09-06: P23/P24 are staged (minimum useful slices first, optional
+  depth tails later); P25 may follow the minima before the tails; a bounded
+  agent/reuse proof follows the first complete visitor-authoring slice. P24
+  umbrella registered 2026-09-08 with internal P24A asset-supply/canonical-
+  ingest and P24B rich-3D-staging subtracks. Phase 2 was reviewed 2026-09-08
+  and the detailed P24A annex is registered; Phase 4 compact research is now
+  reviewed directionally for P24B, with deeper code/reference studies still
+  required before its minimum freezes. P24 must consume the spatial
+  coordinate/ownership model actually shipped by P23; its current room-local
+  references describe the pre-P23 baseline, not a future invariant. P25 umbrella
+  registered 2026-09-08 after Phase 5 external capability review; it remains
+  research/reconciliation only until E0–E6 close. See Long-term roadmap.
+- Deferred / non-blocking: P3B.7b (incl. the P3.4/P3.5 acceptance tail).
+- Proposed / unscheduled: P13, branch rejoin.
+- Shipped baseline: P12 + core P3B gate 2026-08-28; P14–P18 extraction slice;
+  P19 live smoke 2026-09-03; P20 local-vs-R2 smoke 2026-09-04
+  (production-topology smoke deferred); P21 acceptance gate 2026-09-08.
 
 ## Archived plans (recent 5 only)
 
-- `archived → [2026-09-07-P22-basic-publish-visitor-runtime.md](../archive/plans/2026-09-07-P22-basic-publish-visitor-runtime.md)` (shipped 2026-09-08)
-- `archived → [2026-09-04-P21-unified-project-shell-spatial-reconciliation.md](../archive/plans/2026-09-04-P21-unified-project-shell-spatial-reconciliation.md)` (shipped 2026-09-08)
-- `archived → [2026-08-19-P20-Project-assets-registry-R2.md](../archive/plans/2026-08-19-P20-Project-assets-registry-R2.md)` (shipped 2026-09-04)
-- `archived → [2026-08-30-P19-project-persistence.md](../archive/plans/2026-08-30-P19-project-persistence.md)` (shipped 2026-09-03)
-- `archived → [2026-09-06-scope-decision-roadmap-reconciliation.md](../archive/plans/2026-09-06-scope-decision-roadmap-reconciliation.md)` (scope decision; ratified 2026-09-06)
+- `archived → [2026-09-07-P22-basic-publish-visitor-runtime.md](../archive/plans/2026-09-07-P22-basic-publish-visitor-runtime.md)` (shipped 2026-09-08 — P22.1–P22.5 + hosted acceptance incl. public-route untrack fix)
+- `archived → [2026-09-04-P21-unified-project-shell-spatial-reconciliation.md](../archive/plans/2026-09-04-P21-unified-project-shell-spatial-reconciliation.md)` (shipped 2026-09-08 — P21.1–P21.6 + final acceptance gate; set includes P21.4, P21.5, P21.6, slice-2B annex)
+- `archived → [2026-08-19-P20-Project-assets-registry-R2.md](../archive/plans/2026-08-19-P20-Project-assets-registry-R2.md)` (shipped 2026-09-04 — local live smoke vs real R2; set includes S2/S3/S4 briefs)
+- `archived → [2026-08-30-P19-project-persistence.md](../archive/plans/2026-08-30-P19-project-persistence.md)` (shipped 2026-09-03 — live smoke passed; set includes P19.4 annex)
+- `archived → [2026-09-06-scope-decision-roadmap-reconciliation.md](../archive/plans/2026-09-06-scope-decision-roadmap-reconciliation.md)` (scope decision — audit-review roadmap reconciliation: broad category, staged P23/P24, narrow P25 after minima, early bounded agent/reuse proof; ratified 2026-09-06)
 
-Older history remains under `docs/archive/plans/` and
-`docs/archive/plans/pre-h1-letters/` per the pruning rule.
+Older history — P14 and earlier, the letter-era A–H tracks, prior scope
+decisions — lives on disk under `docs/archive/plans/` (renewal era) and
+`docs/archive/plans/pre-h1-letters/` (letter era), unlisted by owner decision
+2026-09-05. When a plan ships, its stub enters this list and the oldest stub
+drops off (Rule 4).
 
-## Long-term roadmap
+## Long-term roadmap (registered plans above; future tiers are direction only)
 
-Direction lives in [`../north-star.md`](../north-star.md); this section records
-registered sequencing tiers.
+Ratified 2026-08-31 with the north-star amendment: the project shell has two
+primary creative modes — **Spatial** (the current editor) and **Experience**
+(future) — plus project-level **Assets** and **Publish** surfaces, all
+operating on one portable project truth. Direction lives in
+[`../north-star.md`](../north-star.md) and its final conceptual hierarchy;
+this section records the sequencing tiers. The Active table owns registered
+P-numbers; future numbered tiers below are next-free-number reservations
+(direction only) that become registered only when their plan docs are filed
+(owner roadmap revised 2026-09-03; tiers renumbered 2026-09-05 — authoring
+depth owns the P23/P24 slots, Experience moved to P25, typed DB demoted to
+conditional infrastructure):
 
-- **P20 — Project Asset Registry + R2.** Shipped 2026-09-04.
+- **Now — Design track in parallel** (no P-number; design only — no major
+  implementation yet): product flow / IA / shell / Hub / editor UX concepts
+  running alongside the implementation tiers. Concepts and specs land in
+  [`../Design-specs`](../Design-specs/); nothing commits to implementation
+  until its plan doc is filed.
+- **P20 — Project Asset Registry + R2.** Shipped 2026-09-04 (local live smoke
+  vs real R2 passed; production-topology smoke deferred).
 - **P21 — Product shell + Project Hub + core editor UX polish.** Shipped
-  2026-09-08.
-- **P22 — Basic Publish + visitor runtime.** Shipped 2026-09-08. Established the
-  reusable cold visitor-safe execution target and immutable publication/version
-  boundary.
-- **P23 — Layout Depth family (approved, staged).** The minimum is now explicitly
-  wall-first: first-class Junctions/Walls/Openings; persistent Rooms reconciled
-  over derived boundary-Wall faces; `boundary | partition` Wall semantics;
-  deterministic Room identity/history; exact dimensions/snapping/sketching;
-  Wall-hosted openings; duplicate/repeat/presets; architectural Plan polish;
-  and legacy Save/Publish compatibility. Scene/Camera target project/world-local
-  physical transforms, with trusted legacy Room-frame conversion and no implicit
-  movement when architecture changes. `LayoutObject[]` stays document-level and
-  project/world-local. One `compileLayoutGeometry()` family remains the Plan/3D/
-  visitor geometry authority. Optional stairs/railings/richer curves/constraints/
-  roof/advanced CAD depth remains evidence-gated later work.
-- **P24 — Scene / Staging Depth umbrella (registered, staged).** P24A remains
-  Asset Supply + Canonical Ingest; P24B remains Rich 3D Scene/Staging. P24
-  preserves `SceneDocument` ownership, one project asset registry, canonical
-  selection/history, the existing transform authority, Threlte patterns and
-  visitor/editor isolation. Its implementation must consume the spatial
-  coordinate model shipped by P23; current room-local code is baseline evidence,
-  not a permanent future contract. P24B's exact minimum remains TBD until its
-  B0–B6 current-code/reference studies close.
-- **P25 — Experience Foundation umbrella.** Remains research/reconciliation until
-  E0–E6 close; composes existing Spatial/Camera/Assets meaning and must reuse the
-  canonical Camera route/motion system.
-- **Bounded agent/reuse proof.** After the first complete P23/P24/P25
-  visitor-authoring slice, test a small semantic operation set through the same
-  canonical human/agent behavior before broad platform expansion.
-- **P26+ — evidence-led platform expansion.** Richer P23/P24/P25 tails,
-  templates/kits/provider adapters, richer asset workflows, collaboration,
-  Publish/domain/embed depth and eventual runtime SDK/headless runtime are
-  separately registered only when justified.
-- **Typed DB layer — conditional infrastructure, not a numbered milestone.**
-  Revisit only when pressure on raw parameterized SQL justifies it.
+  2026-09-08 (P21.1–P21.6 + final acceptance gate; see the archive).
+- **P22 — Basic Publish + visitor runtime.** Registered above. Publish an owned project, resolve
+  project assets, hosted visitor-safe output, and basic preview/publish
+  status. Brief written assuming P21 complete (owner 2026-09-07); implementation
+  depends on P21 closeout. Strategic rationale: P22 establishes the
+  reusable execution target for every human- or agent-authored project
+  (canonical project → deterministic asset resolution → cold visitor-safe
+  runtime → published version → URL) while protecting visitor/editor
+  isolation. The eventual proof is a cold boot in a fresh browser without
+  `EditorApp`, editor stores, selection, history, gizmos, or editor-only
+  asset setup. No Experience authoring, no agent API, no general Assets
+  workspace, no collaboration, no generic SDK.
+- **P23 — Layout Depth family (staged, wall-first reconciliation ratified
+  2026-09-09).** The minimum useful Build set begins with a coupled Foundation
+  Gate: first-class Junctions/Walls/Wall-hosted Openings; `boundary | partition`
+  semantics; robust straight-wall topology and persistent Room correspondence;
+  explicit Layout/Scene format compatibility; trustworthy legacy Room-frame
+  conversion; project/world-local Scene/Camera physical placement; compiler/
+  query/editor-adapter cutover; and old Save/Publish compatibility before new
+  writers enable. It then adds precise Wall/Junction dimensions, deterministic
+  snapping/alignment, continuous Wall/Partition sketching, openings, repeat/
+  isolated-room duplicate, small presets and drafting visual polish. Layout
+  objects stay document-level/project-world-local. Optional depth tail (stairs,
+  railings, richer parametric components, curved-wall topology, profile/extrude,
+  sweep/revolve, roof helpers, general constraint sophistication) remains
+  demand/evidence-gated and never blocks Experience. Everything continues through
+  one `LayoutDocument` → `compileLayoutGeometry()` → Plan/3D/visitor geometry
+  authority, with Layout and Scene ownership kept separate.
+- **P24 — Scene / Staging Depth umbrella (registered, staged).** The umbrella
+  is registered above and split internally into **P24A — Asset Supply +
+  Canonical Ingest** and **P24B — Rich 3D Scene / Staging Editor**. Phase 2
+  research is reviewed and P24A has a linked detailed annex. Its minimum
+  proves a rights/provenance gate, deterministic canonical ingest, a bounded
+  10–12 asset cross-source proof set (Poly Haven + Kenney + Sweet Home 3D),
+  PlanProxy output into the existing `AssetFootprint`, an explicit canonical
+  model Scene/Save/Load/P22 visitor-resolution path, and bounded material/HDRI
+  supply. The research JSON's 32-object Wave 1 remains acquisition backlog,
+  not a P24/P25 gate. P24B Phase 4 compact research is reviewed directionally
+  and now drives bounded B0–B6 maturity/reference studies rather than a copied
+  feature list. Its exact minimum and combined P24 sequencing/acceptance remain
+  **TBD until those current-code/reference studies close**. Material/texture/
+  HDRI assets originate in P24A while assignment/editing/light/environment
+  operations belong to P24B. Both preserve one project asset registry,
+  `SceneDocument` ownership, canonical selection/history, existing
+  gizmo/transform authority, Threlte patterns and visitor/editor isolation;
+  they consume the spatial coordinate model shipped by P23. Current room-local
+  transforms are pre-P23 baseline evidence, not a future P24 invariant. P25
+  waits only for the accepted useful minimum from both subtracks, never for
+  catalogue/DCC depth tails. See [P24 umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md)
+  and [P24A annex](2026-09-08-P24A-asset-supply-canonical-ingest-annex.md).
+- **P25 — Experience Foundation umbrella (registered, research/reconciliation).**
+  Phase 5 external capability research is reviewed directionally. The leading
+  hypothesis is **Destination + reusable Content + bounded semantic Interaction**,
+  composed over existing Spatial/Camera/Assets meaning. The first guided journey
+  should preferentially reuse the existing Camera Sequence; the strongest minimum
+  event/action candidates are `Activate`, `DestinationReached`, `ShowContent`,
+  `NavigateTo` and `OpenUrl`. Exact persistence ownership, Destination target
+  semantics, repeated-Destination/occurrence behavior, Narration scope and schema
+  remain unfrozen. E0–E6 in the [P25 umbrella](2026-09-08-P25-experience-foundation-umbrella.md)
+  must reconcile live Camera/visitor behavior, Content/Interaction semantics,
+  accessibility, authoring UX, Preview/Publish and persistence/operations before
+  implementation tickets exist. P25 still begins after the accepted P23/P24
+  useful minima, before optional depth tails, and must prove one complete
+  visitor journey rather than a generic app-builder feature set.
+- **Bounded agent/reuse proof (after first complete visitor-authoring
+  slice, before broad expansion).** Test whether a strong agent can inspect,
+  semantically edit, stage, author camera/experience changes, validate,
+  preview, publish, and revise through the same canonical behavior as human
+  authoring. Small useful operation set only; no custom planner, chat UI,
+  generic agent framework, four transports, or large MCP surface. Transport
+  stays replaceable per client need. Registered as its own brief when due;
+  no P-number is consumed by this direction entry.
+- **P26+ — Evidence-led platform expansion.** Later expansion arrives as
+  several separately registered slices rather than one milestone, scheduled
+  only against measured reuse/delivery/adoption needs: richer P23/P24/P25
+  depth tails, templates / camera kits / provider adapters, richer asset
+  workflows / My Assets, collaboration / teams, richer Publish / domains /
+  embeds, runtime SDK / headless runtime. No permanent P-numbers now —
+  direction until individual plan docs are filed, starting at P26.
+- **Typed DB layer — conditional infrastructure, not a numbered milestone**
+  (owner decision 2026-09-05, demoted from the former P23). A typed database
+  layer (Drizzle/Kysely-style schema-owned types, typed query access) is
+  adopted only when code pressure on the raw-parameterized-SQL surface from
+  P19–P22 proves it — as a small technical slice inside or before a later
+  tier, never as a product milestone owning a P-number. The P19/P20 no-ORM
+  pins hold until then.
+- **Cross-cutting planning rules (apply from P23 authoring work):**
+  operation-first — UI is one client of domain behavior: separate semantic
+  intent → validation → deterministic mutation → transaction/history →
+  rendering from button/toolbar/gesture/Inspector presentation, extracting
+  only the abstraction current code pressure justifies (see north-star
+  Shared authoring operations). Validation/observability — establish
+  domain-level checks incrementally as primitives grow (broken refs,
+  constraint validity, room membership, route integrity, shot
+  visibility/clipping, perf signals); structured facts first, render
+  inspection as complement, no giant validator subsystem now.
 
-## Cross-cutting planning rules
+- **Current / near-term platform work** (grounded in active rows): core
+  extraction / app boundaries (P15–P17 shipped), backend provisioning (P18
+  shipped), project Save/Load + first Google OIDC + app-owned secure-session
+  integration + single-user ownership (P19 shipped 2026-09-03 — live smoke
+  passed), then the numbered tier sequence above:
+  R2-backed project assets with Spatial integration (P20, shipped 2026-09-04 —
+  local live smoke vs real R2; production-topology smoke deferred), the
+  product shell + Project Hub + editor UX polish (P21, shipped 2026-09-08 —
+  P21.1–P21.6 plus the P21.5 presentation-only polish pass, closed by the
+  six-reference + axe/contrast acceptance gate), the basic
+  publish/visitor-runtime boundary (P22, shipped 2026-09-08 — the first
+  complete product loop: author → preview → publish → visitor sees it, closed
+  by hosted cold-boot acceptance through the deployed proxy/API/Postgres/R2),
+  then minimum useful authoring
+  slices split by document ownership (P23 Layout Depth minimum, P24 Scene /
+  Staging minimum split internally into P24A asset supply/ingest + P24B rich
+  3D staging), the registered P25 Experience research/reconciliation umbrella,
+  a bounded agent/reuse proof, then evidence-led depth tails and expansion
+  (P26+). The design track runs in parallel from Now. Auth UX/hardening and
+  richer permissions ride with the P26+ collaborative tier, not P19/P20.
+- **Medium-term product infrastructure** (possible direction, unscheduled):
+  hosted project loading and published project versions ride with P22;
+  portable project/export hardening, project asset management, and generic
+  visitor/player extraction when genuinely needed.
+- **Long-term Experience work** (unscheduled beyond the P25 foundation):
+  Narration/transcripts, richer wayfinding, bounded first-visit state,
+  semantic hotspots where no existing Scene identity exists, attention/reveal
+  behaviors, deep-linked destinations, multiple tours/occurrence semantics,
+  derived visitor maps, reusable Experience templates/presets, localization,
+  analytics, richer visitor-state persistence, XR-specific behavior, developer
+  runtime SDK, headless runtime, and community/gallery surfaces. Experience
+  remains composed of **Navigation · Content · Interactions**; Interactions are
+  an authoring lens within Experience (an `Event → Target → Action` semantic
+  model), never a separate mode — ratified 2026-08-31
+  ([scope decision](../archive/plans/2026-08-31-scope-decision-experience-interaction-boundary.md)).
 
-- **Operation-first:** semantic intent → explicit inputs → validation →
-  deterministic candidate → transaction/history → rendering/runtime. UI is one
-  client, not sole owner of domain behavior.
-- **Ownership stays explicit:** Layout and Scene remain separate documents even
-  as P23 changes Scene/Camera coordinate storage.
-- **Compatibility is a product gate:** new writers do not strand old saved or
-  published data. Read-only legacy compatibility may use explicit adapters but
-  cannot create a second renderer/compiler truth.
-- **Current versus target must be labeled:** planning/North-Star direction does
-  not rewrite component docs before implementation lands.
-- **Validation/observability grows incrementally:** structured semantic facts and
-  deterministic diagnostics first; no giant validator subsystem.
+Constraints: no Experience implementation tickets are created merely by
+registering the P25 research umbrella, and Experience work must not displace
+persistence or Spatial completion. `ExperienceDocument` is now a P25
+architecture hypothesis to study, not a ratified schema: no codecs, migrations
+or backend endpoints exist until the E6 implementation-ready gate closes. P19
+includes the first Google OIDC (Authorization Code + PKCE) + app-owned
+secure-session integration and single-user ownership required for Save/Load;
+broader auth UX/hardening and richer permissions remain later. P19 has no
+Experience schema and no R2.
 
-## Current / near-term platform sequence
-
-P19 persistence → P20 assets → P21 shell → P22 publish/visitor are shipped.
-Next is P23 wall-first Layout Depth, then P24 Stage minimum, then P25 Experience
-foundation, then the bounded agent/reuse proof and evidence-led P26+ expansion.
-
-No Experience implementation ticket is created merely by roadmap direction.
-P25 persistence ownership remains unfrozen until its own implementation-ready
-gate. P19–P22 remain raw parameterized SQL; typed DB adoption remains conditional
-infrastructure rather than a product milestone.
+P19–P22 stay raw parameterized SQL: the no-ORM pins in the P19/P20 plans are
+scope-limited to those tiers and are revisited only when code pressure on
+that surface justifies a typed layer — conditional infrastructure (owner
+decision 2026-09-05), never a numbered milestone. P21/P22 hold no Experience
+authoring or Experience schema; P25 schema/persistence ownership remains
+unfrozen until the P25 E6 gate, and P25 may follow the accepted minimum P23/P24
+slices without waiting for their optional depth tails. No Experience
+implementation tickets or codecs are created by roadmap direction or external
+research alone.
