@@ -1,19 +1,27 @@
-import type { AssetFootprint } from '$lib/types/assets';
+import type { AssetFootprint } from '../../src/lib/types/assets';
 
 /**
- * P24A.2 `generated-obb` pipeline strategy (evidence spike, P24 reconciliation R1).
+ * P24A.2 `generated-obb` pipeline strategy (disposable evidence spike, P24
+ * reconciliation R1). Lives under `assets-source/` — the pipeline-owned side —
+ * on purpose: it must not establish "asset pipeline code belongs under editor
+ * `$lib/content`". Promote it into a real pipeline package only when R1 selects
+ * the canonical ingest seam; until then the existing hand-authored
+ * `validateAssetFootprint` gate stays authoritative and the P24A annex stays
+ * `seed — evidence pending`.
  *
  * Pure, dependency-free minimum-area oriented bounding rectangle over
  * ground-projected (X/Z) mesh points. The caller projects mesh vertices to the
  * ground plane first (a glTF Transform pipeline step, not app runtime); this
  * module only fits the rectangle.
  *
- * Output honors the canonical `AssetFootprint` contract: pivot-relative metres,
- * `width`/`depth` finite and positive, `outline` a 4-corner simple polygon with
- * non-zero area and no repeated closing point, wound counter-clockwise in X/Z.
- * It is intentionally **not wired into runtime footprint consumption** — the
- * existing hand-authored `validateAssetFootprint` gate stays authoritative until
- * the P24A annex leaves `seed — evidence pending`.
+ * Output honors the canonical `AssetFootprint` contract ("canonical
+ * floor-plane bounds, relative to an asset placement pivot"): `width`/`depth`
+ * are the X/Z bounds of the final canonical outline — not the rotated OBB
+ * frame extents — so they stay consistent with `outline` for consumers that
+ * fall back to the width/depth rect when no outline is present. The tight
+ * oriented rectangle itself is the `outline` (4 corners, simple polygon,
+ * non-zero area, no repeated closing point, counter-clockwise in X/Z).
+ * `yawRadians` is pipeline diagnostic metadata only.
  */
 
 export type ObbInputPoint = readonly [number, number];
@@ -24,29 +32,6 @@ export type GenerateObbFootprintResult =
 
 const POINT_EPSILON = 1e-9;
 
-function pointsEqual(
-  a: readonly [number, number],
-  b: readonly [number, number]
-): boolean {
-  return (
-    Math.abs(a[0] - b[0]) <= POINT_EPSILON &&
-    Math.abs(a[1] - b[1]) <= POINT_EPSILON
-  );
-}
-
-function deduplicate(points: readonly ObbInputPoint[]): [number, number][] {
-  const unique: [number, number][] = [];
-  for (const point of points) {
-    if (!Number.isFinite(point[0]) || !Number.isFinite(point[1])) {
-      continue;
-    }
-    if (!unique.some((seen) => pointsEqual(seen, point))) {
-      unique.push([point[0], point[1]]);
-    }
-  }
-  return unique;
-}
-
 function cross(
   origin: readonly [number, number],
   a: readonly [number, number],
@@ -55,20 +40,52 @@ function cross(
   return (a[0] - origin[0]) * (b[1] - origin[1]) - (a[1] - origin[1]) * (b[0] - origin[0]);
 }
 
+/**
+ * Reject non-finite input instead of silently repairing it — an ingest
+ * pipeline validates deterministically. Returns the count of bad points.
+ */
+function countNonFinite(points: readonly ObbInputPoint[]): number {
+  let bad = 0;
+  for (const point of points) {
+    if (!Number.isFinite(point[0]) || !Number.isFinite(point[1])) {
+      bad += 1;
+    }
+  }
+  return bad;
+}
+
+/** Sort once (O(n log n)) then single-pass dedup — never O(n^2) on mesh input. */
+function deduplicate(points: readonly ObbInputPoint[]): [number, number][] {
+  const sorted = points
+    .map((point) => [point[0], point[1]] as [number, number])
+    .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  const unique: [number, number][] = [];
+  for (const point of sorted) {
+    const last = unique[unique.length - 1];
+    if (
+      last === undefined ||
+      Math.abs(point[0] - last[0]) > POINT_EPSILON ||
+      Math.abs(point[1] - last[1]) > POINT_EPSILON
+    ) {
+      unique.push(point);
+    }
+  }
+  return unique;
+}
+
 /** Andrew monotone chain; returns hull counter-clockwise without a repeated endpoint. */
 function convexHull(points: [number, number][]): [number, number][] {
-  const sorted = [...points].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
-  if (sorted.length < 3) return sorted;
+  if (points.length < 3) return [...points];
   const lower: [number, number][] = [];
-  for (const point of sorted) {
+  for (const point of points) {
     while (lower.length >= 2 && cross(lower[lower.length - 2]!, lower[lower.length - 1]!, point) <= POINT_EPSILON) {
       lower.pop();
     }
     lower.push(point);
   }
   const upper: [number, number][] = [];
-  for (let index = sorted.length - 1; index >= 0; index -= 1) {
-    const point = sorted[index]!;
+  for (let index = points.length - 1; index >= 0; index -= 1) {
+    const point = points[index]!;
     while (upper.length >= 2 && cross(upper[upper.length - 2]!, upper[upper.length - 1]!, point) <= POINT_EPSILON) {
       upper.pop();
     }
@@ -95,6 +112,13 @@ export function generateObbFootprint(
   if (input.length === 0) {
     return { success: false, error: 'OBB footprint requires at least one input point' };
   }
+  const bad = countNonFinite(input);
+  if (bad > 0) {
+    return {
+      success: false,
+      error: `OBB footprint input contains ${bad} non-finite point(s); refusing to repair`
+    };
+  }
   const points = deduplicate(input);
   if (points.length < 3) {
     return { success: false, error: 'OBB footprint requires at least three distinct points' };
@@ -104,10 +128,15 @@ export function generateObbFootprint(
     return { success: false, error: 'OBB footprint input is collinear or degenerate' };
   }
 
-  // Rotating calipers over hull edges. Smallest area wins; ties within epsilon
-  // prefer the smallest absolute yaw (normalized to [-90deg, 90deg)) so
-  // axis-aligned inputs keep width on X / depth on Z like hand-authored
-  // footprints. First candidate still wins full ties: deterministic.
+  // Exhaustive minimum-area scan over hull edges: O(h^2) in hull size, not
+  // input size. Ground-projected furniture hulls are tens of points (measured:
+  // ~100k-point synthetic cloud fits in well under a second; dedup dominates
+  // at O(n log n)). True O(h) rotating calipers deferred until a real corpus
+  // proves the edge scan is a bottleneck.
+  // Smallest area wins; ties within epsilon prefer the smallest absolute yaw
+  // (normalized to [-90deg, 90deg)) so axis-aligned inputs keep the tight box.
+  // First candidate still wins full ties: deterministic for a sorted hull,
+  // hence independent of input order.
   const normalizeYaw = (angle: number): number => {
     const turn = Math.PI;
     return ((((angle + turn / 2) % turn) + turn) % turn) - turn / 2;
@@ -158,11 +187,23 @@ export function generateObbFootprint(
   if (signedDoubledArea(corners) < 0) {
     corners.reverse();
   }
+  // Canonical bounds come from the final outline — never the rotated frame —
+  // so width/depth stay consistent with outline for rect-fallback consumers.
+  let boundMinX = Infinity;
+  let boundMaxX = -Infinity;
+  let boundMinZ = Infinity;
+  let boundMaxZ = -Infinity;
+  for (const [x, z] of corners) {
+    if (x < boundMinX) boundMinX = x;
+    if (x > boundMaxX) boundMaxX = x;
+    if (z < boundMinZ) boundMinZ = z;
+    if (z > boundMaxZ) boundMaxZ = z;
+  }
   return {
     success: true,
     footprint: {
-      width: winner.maxX - winner.minX,
-      depth: winner.maxZ - winner.minZ,
+      width: boundMaxX - boundMinX,
+      depth: boundMaxZ - boundMinZ,
       outline: corners
     },
     yawRadians: winner.angle
