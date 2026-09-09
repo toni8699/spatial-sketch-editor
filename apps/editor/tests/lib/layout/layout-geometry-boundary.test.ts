@@ -61,13 +61,22 @@ describe('G1 geometry boundary', () => {
 	});
 
 	it('keeps the compiler graph free of editor, Svelte, Three, and browser imports', () => {
+		// H3 §3/§4: `robust-predicates` is the single approved external runtime
+		// dependency, quarantined to exactly the one `orientXZ` adapter module;
+		// every other layout-core file must be dependency-free.
+		const approvedExternalByFile = new Map<string, ReadonlySet<string>>([
+			['layout-robust-orientation.ts', new Set(['robust-predicates'])]
+		]);
 		for (const file of PACKAGE_SOURCE_FILES) {
+			const fileName = file.slice(layoutDir.length + 1);
+			const approvedExternal = approvedExternalByFile.get(fileName) ?? new Set<string>();
 			const source = sourceOf(file);
 			for (const specifier of importSpecifiers(source)) {
 				expect(specifier.startsWith('$lib/editor')).toBe(false);
 				expect(specifier.startsWith('$lib/museum')).toBe(false);
 				expect(specifier).not.toMatch(/^(svelte|three|@threlte|\$app)/);
-				expect(specifier.startsWith('.') || specifier.startsWith('$lib/types')).toBe(true);
+				if (specifier.startsWith('.') || specifier.startsWith('$lib/types')) continue;
+				expect(approvedExternal.has(specifier)).toBe(true);
 			}
 		}
 	});

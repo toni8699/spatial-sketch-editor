@@ -9,12 +9,17 @@
       "default": "./src/index.ts"
     }
   },
-  "files": ["src"],
+  "files": [
+    "src"
+  ],
   "scripts": {
     "check": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
     "@portfolio/tsconfig": "*",
     "typescript": "^5.8.0"
+  },
+  "dependencies": {
+    "robust-predicates": "^3.0.3"
   }
 }
