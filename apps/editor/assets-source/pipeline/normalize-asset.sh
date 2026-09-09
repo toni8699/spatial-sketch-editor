@@ -44,10 +44,13 @@ fi
 case "$UNIT_SCALE" in
   '' | *[!0-9.]*) echo "unit scale must be numeric: $UNIT_SCALE" >&2; exit 2;;
 esac
-node -e '
-const n = Number(process.argv[1]);
-if (!Number.isFinite(n) || n <= 0) process.exit(1);
-' "$UNIT_SCALE" || {
+UNIT_SCALE_JSON="$(
+  node -e '
+    const n = Number(process.argv[1]);
+    if (!Number.isFinite(n) || n <= 0) process.exit(1);
+    process.stdout.write(JSON.stringify(n));
+  ' "$UNIT_SCALE"
+)" || {
   echo "unit scale must be finite and > 0: $UNIT_SCALE" >&2
   exit 2
 }
@@ -71,9 +74,20 @@ if [ ! -d "$STAGE_PARENT" ]; then
   echo "output parent directory does not exist: $STAGE_PARENT" >&2
   exit 2
 fi
-STAGE="$(mktemp -d "$STAGE_PARENT/.p24a-stage.XXXXXX")"
-BACKUP="$OUTDIR.p24a-backup"
-trap 'rm -rf "$STAGE" "$BACKUP"' EXIT INT TERM
+TXN="$(mktemp -d "$STAGE_PARENT/.p24a-txn.XXXXXX")"
+STAGE="$TXN/stage"
+BACKUP="$TXN/backup"
+mkdir "$STAGE"
+# Restore-then-clean: if a signal lands after the good output moved aside but
+# before the candidate installs, the previous output comes back first — the
+# trap never deletes a good destination.
+cleanup() {
+  if [ ! -e "$OUTDIR" ] && [ -e "$BACKUP" ]; then
+    mv "$BACKUP" "$OUTDIR"
+  fi
+  rm -rf "$TXN"
+}
+trap 'cleanup' EXIT INT TERM
 
 SOURCE_SHA="$(shasum -a 256 "$INPUT" | cut -d' ' -f1)"
 BYTES_IN="$(file_bytes "$INPUT")"
@@ -112,14 +126,13 @@ cat > "$STAGE/provenance.json" <<EOF
   "recipeHash": "$RECIPE_HASH",
   "steps": ["prune", "dedup", "center --pivot below"],
   "sourceUnitPolicy": "recorded-not-baked",
-  "unitScaleToMeters": $UNIT_SCALE,
+  "unitScaleToMeters": $UNIT_SCALE_JSON,
   "sourceSha256": "$SOURCE_SHA",
   "contentSha256": "$CONTENT_SHA",
   "input": "$INPUT"
 }
 EOF
 
-rm -rf "$BACKUP"
 if [ -e "$OUTDIR" ]; then
   mv "$OUTDIR" "$BACKUP"
 fi
@@ -132,6 +145,7 @@ else
   echo "atomic install failed; previous output restored" >&2
   exit 1
 fi
+rm -rf "$TXN"
 trap - EXIT INT TERM
 
 echo "source=$SOURCE_SHA"

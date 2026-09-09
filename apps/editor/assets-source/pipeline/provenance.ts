@@ -50,27 +50,25 @@ export function classifyRights(evidence: Partial<RightsEvidence>): RightsGateRes
   if (!evidence.licenseId) {
     return { decision: 'reject', confidence: 'D', reason: 'missing license identity' };
   }
-  if (
-    isUnknown(evidence.commercialUse) ||
-    isUnknown(evidence.redistribution) ||
-    isUnknown(evidence.attributionRequired)
-  ) {
-    return { decision: 'manual-review', confidence: 'C', reason: 'unresolved use/redistribution/attribution terms' };
-  }
-  // Explicit prohibitions first: known-unsuitable evidence rejects, even when
-  // other fields are also incomplete.
+  // Known prohibitions first: unsuitable evidence rejects even when other
+  // fields are also incomplete, so D always dominates C.
   if (evidence.commercialUse === false || evidence.redistribution === false) {
     return { decision: 'reject', confidence: 'D', reason: 'rights forbid bundled redistribution' };
   }
   if (evidence.derivatives === false) {
     return { decision: 'reject', confidence: 'D', reason: 'rights forbid derivatives' };
   }
-  // Incomplete evidence second: recoverable via manual/legal review.
+  // Unresolved evidence second: recoverable via manual/legal review.
+  if (
+    isUnknown(evidence.commercialUse) ||
+    isUnknown(evidence.redistribution) ||
+    isUnknown(evidence.attributionRequired) ||
+    isUnknown(evidence.derivatives)
+  ) {
+    return { decision: 'manual-review', confidence: 'C', reason: 'unresolved use/redistribution/attribution/derivative terms' };
+  }
   if (evidence.attributionRequired === true && !evidence.attributionText) {
     return { decision: 'manual-review', confidence: 'C', reason: 'attribution required but text not recorded' };
-  }
-  if (isUnknown(evidence.derivatives)) {
-    return { decision: 'manual-review', confidence: 'C', reason: 'unresolved derivative rights (pipeline creates derivatives)' };
   }
   if (!evidence.acquiredAt) {
     return { decision: 'manual-review', confidence: 'C', reason: 'missing acquisition date' };

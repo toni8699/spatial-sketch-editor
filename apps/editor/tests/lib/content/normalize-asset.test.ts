@@ -79,6 +79,16 @@ describe.runIf(hasTools())('normalize-asset.sh (P24A.1 pipeline fixture)', () =>
     ).toEqual([]);
   }, 120000);
 
+  it('canonicalizes loose-but-finite scales to valid JSON numbers', () => {
+    const base = mkdtempSync(path.join(tmpdir(), 'p24a-canon-'));
+    for (const loose of ['01', '1.']) {
+      const dest = path.join(base, `out-${loose.replace(/[^a-zA-Z0-9]/g, '_')}`);
+      expect(runJob([piano, 'furniture-floor', loose, dest], repoRoot).status).toBe(0);
+      const provenance = JSON.parse(readFileSync(path.join(dest, 'provenance.json'), 'utf8'));
+      expect(provenance.unitScaleToMeters).toBe(1);
+    }
+  }, 120000);
+
   it('rejects unknown recipes and missing inputs without touching the destination', () => {
     const base = mkdtempSync(path.join(tmpdir(), 'p24a-reject-'));
     const dest = path.join(base, 'out');

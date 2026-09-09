@@ -108,6 +108,26 @@ describe('classifyRights (P24A.0 rights gate evidence)', () => {
     expect(gateApproved(result)).toBe(false);
   });
 
+  it('rejects known commercial prohibition even with other terms unresolved (D dominates C)', () => {
+    const result = classifyRights({
+      sourceUrl: 'https://example.com/model',
+      sourceProvider: 'Example',
+      assetOrPackId: 'model-1',
+      licenseId: 'CC-NC-4.0',
+      commercialUse: false,
+      derivatives: true,
+      redistribution: 'unknown',
+      attributionRequired: false,
+      acquiredAt: '2026-09-09'
+    });
+    expect(result).toEqual({
+      decision: 'reject',
+      confidence: 'D',
+      reason: 'rights forbid bundled redistribution'
+    });
+    expect(gateApproved(result)).toBe(false);
+  });
+
   it('rejects missing license identity (D) — never silently Approved', () => {
     const result = classifyRights({
       sourceUrl: 'https://example.com/model',
