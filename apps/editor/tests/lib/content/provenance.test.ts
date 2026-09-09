@@ -72,7 +72,7 @@ describe('classifyRights (P24A.0 rights gate evidence)', () => {
     expect(gateApproved(result)).toBe(false);
   });
 
-  it('rejects explicitly forbidden derivatives (D)', () => {
+  it('rejects forbidden derivatives even when evidence is also incomplete (D dominates C)', () => {
     const result = classifyRights({
       sourceUrl: 'https://example.com/model',
       sourceProvider: 'Example',
@@ -82,7 +82,6 @@ describe('classifyRights (P24A.0 rights gate evidence)', () => {
       derivatives: false,
       redistribution: true,
       attributionRequired: true,
-      attributionText: 'By Example.',
       acquiredAt: '2026-09-09'
     });
     expect(result).toEqual({

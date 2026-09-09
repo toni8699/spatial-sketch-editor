@@ -1,5 +1,5 @@
 import { execFileSync, execSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -55,6 +55,29 @@ describe.runIf(hasTools())('normalize-asset.sh (P24A.1 pipeline fixture)', () =>
     expect(existsSync(path.join(first, 'model.glb'))).toBe(true);
     expect(existsSync(path.join(first, 'metrics.json'))).toBe(true);
   }, 240000);
+
+  it('rejects non-numeric, non-positive, and malformed unit scales', () => {
+    const base = mkdtempSync(path.join(tmpdir(), 'p24a-scale-'));
+    for (const bad of ['0', '.', '1.2.3', '-2', 'NaN', 'Infinity']) {
+      const dest = path.join(base, `out-${bad.replace(/[^a-zA-Z0-9]/g, '_')}`);
+      expect(runJob([piano, 'furniture-floor', bad, dest], repoRoot).status).not.toBe(0);
+      expect(existsSync(dest)).toBe(false);
+    }
+  }, 120000);
+
+  it('replaces a pre-existing destination on success with no backup litter', () => {
+    const base = mkdtempSync(path.join(tmpdir(), 'p24a-replace-'));
+    const dest = path.join(base, 'out');
+    mkdirSync(dest, { recursive: true });
+    writeFileSync(path.join(dest, 'stale.txt'), 'stale');
+    expect(runJob([piano, 'furniture-floor', '0.032', dest], repoRoot).status).toBe(0);
+    expect(existsSync(path.join(dest, 'model.glb'))).toBe(true);
+    expect(existsSync(path.join(dest, 'stale.txt'))).toBe(false);
+    expect(existsSync(`${dest}.p24a-backup`)).toBe(false);
+    expect(
+      readdirSync(base).filter((entry) => entry.startsWith('.p24a-stage.'))
+    ).toEqual([]);
+  }, 120000);
 
   it('rejects unknown recipes and missing inputs without touching the destination', () => {
     const base = mkdtempSync(path.join(tmpdir(), 'p24a-reject-'));

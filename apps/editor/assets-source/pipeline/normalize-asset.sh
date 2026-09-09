@@ -14,9 +14,9 @@
 # Metre-baking joins the recipe only with a per-source calibration record
 # (Kenney pack-level rule per the annex).
 #
-# Failure atomicity: every generated file stages in a temp sibling directory
-# and installs into OUTDIR only after input validation, output validation,
-# metrics, and provenance all succeed — a failed run never touches OUTDIR
+# Failure atomicity: every generated file stages in a temp sibling directory on
+# the same filesystem and installs via rename with rollback — a failed run
+# (including a failed replacement) never loses a previous good OUTDIR
 # (P24A proof acceptance: no half-approved state).
 #
 # Usage: normalize-asset.sh <input.glb> <recipe> <unit-scale-to-meters> <outdir>
@@ -44,6 +44,13 @@ fi
 case "$UNIT_SCALE" in
   '' | *[!0-9.]*) echo "unit scale must be numeric: $UNIT_SCALE" >&2; exit 2;;
 esac
+node -e '
+const n = Number(process.argv[1]);
+if (!Number.isFinite(n) || n <= 0) process.exit(1);
+' "$UNIT_SCALE" || {
+  echo "unit scale must be finite and > 0: $UNIT_SCALE" >&2
+  exit 2
+}
 if [ ! -f "$INPUT" ]; then
   echo "missing input: $INPUT" >&2
   exit 2
@@ -59,8 +66,14 @@ RECIPE_HASH="$(shasum -a 256 "$0" | cut -d' ' -f1)"
 
 file_bytes() { stat -f%z "$1" 2>/dev/null || stat -c%s "$1" 2>/dev/null; }
 
-STAGE="$(mktemp -d "${TMPDIR:-/tmp}/p24a-stage.XXXXXX")"
-trap 'rm -rf "$STAGE"' EXIT INT TERM
+STAGE_PARENT="$(dirname "$OUTDIR")"
+if [ ! -d "$STAGE_PARENT" ]; then
+  echo "output parent directory does not exist: $STAGE_PARENT" >&2
+  exit 2
+fi
+STAGE="$(mktemp -d "$STAGE_PARENT/.p24a-stage.XXXXXX")"
+BACKUP="$OUTDIR.p24a-backup"
+trap 'rm -rf "$STAGE" "$BACKUP"' EXIT INT TERM
 
 SOURCE_SHA="$(shasum -a 256 "$INPUT" | cut -d' ' -f1)"
 BYTES_IN="$(file_bytes "$INPUT")"
@@ -106,8 +119,19 @@ cat > "$STAGE/provenance.json" <<EOF
 }
 EOF
 
-rm -rf "$OUTDIR"
-mv "$STAGE" "$OUTDIR"
+rm -rf "$BACKUP"
+if [ -e "$OUTDIR" ]; then
+  mv "$OUTDIR" "$BACKUP"
+fi
+if mv "$STAGE" "$OUTDIR"; then
+  rm -rf "$BACKUP"
+else
+  if [ -e "$BACKUP" ]; then
+    mv "$BACKUP" "$OUTDIR"
+  fi
+  echo "atomic install failed; previous output restored" >&2
+  exit 1
+fi
 trap - EXIT INT TERM
 
 echo "source=$SOURCE_SHA"

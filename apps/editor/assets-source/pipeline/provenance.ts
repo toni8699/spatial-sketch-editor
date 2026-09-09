@@ -57,17 +57,20 @@ export function classifyRights(evidence: Partial<RightsEvidence>): RightsGateRes
   ) {
     return { decision: 'manual-review', confidence: 'C', reason: 'unresolved use/redistribution/attribution terms' };
   }
+  // Explicit prohibitions first: known-unsuitable evidence rejects, even when
+  // other fields are also incomplete.
   if (evidence.commercialUse === false || evidence.redistribution === false) {
     return { decision: 'reject', confidence: 'D', reason: 'rights forbid bundled redistribution' };
   }
+  if (evidence.derivatives === false) {
+    return { decision: 'reject', confidence: 'D', reason: 'rights forbid derivatives' };
+  }
+  // Incomplete evidence second: recoverable via manual/legal review.
   if (evidence.attributionRequired === true && !evidence.attributionText) {
     return { decision: 'manual-review', confidence: 'C', reason: 'attribution required but text not recorded' };
   }
   if (isUnknown(evidence.derivatives)) {
     return { decision: 'manual-review', confidence: 'C', reason: 'unresolved derivative rights (pipeline creates derivatives)' };
-  }
-  if (evidence.derivatives === false) {
-    return { decision: 'reject', confidence: 'D', reason: 'rights forbid derivatives' };
   }
   if (!evidence.acquiredAt) {
     return { decision: 'manual-review', confidence: 'C', reason: 'missing acquisition date' };
