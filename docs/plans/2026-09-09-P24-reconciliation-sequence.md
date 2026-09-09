@@ -138,14 +138,18 @@ Use the completed Pascal harvest only as supplemental evidence for the principle
 
 **Output:** update the P24A annex from `seed — evidence pending` only when its concrete readiness questions are closed. Do not expand the 32-object acquisition backlog into a ship gate.
 
-### R1 evidence — 2026-09-09 dry-run (branch `p24-reconciliation-evidence`)
+### R1 evidence — 2026-09-09 dry-run + finish pass (branch `p24-reconciliation-evidence`)
 
-- Pinned `@gltf-transform/cli 4.4.1` + embedded validator on `assets-source/models/grand-piano.glb`: validates clean (0 errors, 1 unused-`TEXCOORD_0` info); source bbox uncentered and centimetre-scale, confirming per-asset fudge factors (`defaultScale: 0.032`) instead of baked metres.
-- Production `/museum/models/piano/grand-piano.glb` still centimetre-scale (grounded `minY ≈ 0`, `±23 × ±39` XZ) — pivot grounding done ad hoc, unit normalization not baked.
-- `generated-obb` spike: `apps/editor/assets-source/plan-proxy/footprint-generator.ts` (pure, dependency-free, disposable pipeline-side evidence — not editor runtime) + 7 unit tests; recovers the hand-authored piano 1.48 × 1.59 box from its outline points, reports canonical X/Z bounds for rotated outlines, rejects non-finite input, and passes the existing `validateAssetFootprint` gate. Not wired to runtime.
-- Open before the annex leaves seed: structured provenance/rights gate, deterministic CLI job (hash-in/hash-out + recipe pinning), `gltfpack` KEEP/REJECT measurement, Kenney/SH3F oracle harness, `kind: 'model'` registry + P22 pinning decision, bounded material/HDRI bytes.
+Closed now (pipeline-side evidence, no runtime changes):
 
-Annex stays `seed — evidence pending`.
+- Deterministic normalization job: `apps/editor/assets-source/pipeline/normalize-asset.sh` wraps pinned `@gltf-transform/cli 4.4.1` (`prune → dedup → center --pivot below`, recipe `furniture-floor`) with hash-in/hash-out + output validation + metrics + provenance JSON. Three runs on `grand-piano.glb` → identical content `c8669154…b60b` from source `09627e34…6778` (matches the recorded license evidence); 1,180,076 → 1,164,508 bytes, grounded bbox, cm-scale preserved + recorded (metre-baking needs per-source calibration, not silent rescale). `gltfpack` KEEP/REJECT still unmeasured — open, not blocking.
+- Rights gate: `assets-source/pipeline/provenance.ts` (`classifyRights` A/B/C/D + `gateApproved`; unknown never Approved) + 5 tests over the piano (B) / sofa (A) / unresolved (C/D) shapes.
+- `generated-obb`: recovers the piano 1.48 × 1.59 box, reports canonical X/Z bounds for rotated outlines, rejects non-finite input, ~50ms on a 100k-point cloud; round + thin-leg oracle archetypes benchmarked (real Kenney/SH3F corpus acquisition is P24A.3 execution, not readiness).
+- Proof set frozen (12, from the manifest — rest is backlog): Poly `ArmChair_01`, `round_wooden_table_01`, `Shelf_01`, `painted_wooden_table`, `folding_wooden_stool`; Kenney `chair`, `loungeDesignChair`, `table`, `cabinetBedDrawer`; SH3D `Mid-century-chair`, `Cafe-table`, `Futon-couch` (attribution-survival proof). Covers round + irregular, top-down oracle, planIcon, OBB + silhouette, CC0 + CC-BY-3.0.
+- Supply pointers (no new survey): 42 material rows + 9 HDRI rows in `museum-editor-phase2-acquisition-manifest.json`, all CC0 with source URLs; bytes acquired at P24A.3+ execution.
+- Registry decision: Wave-1 ships static-only via the shipped-static compat path first (registry appends + retention proof per asset); `kind: 'model'` P20/R2 + P22 pinning extension is designed but implemented after F0 — `scene-codec` is in active P23.0b flux.
+
+Open items requiring the post-F0 recheck (R9): placement/proxy seams against world-local Scene, Save/Load + cold-visitor model resolution, P22 model pinning. Annex stays `seed — evidence pending` until that recheck; flipping it is an R9-gate decision, not this track.
 
 ## R2 — P24B B0 capability-maturity baseline
 
