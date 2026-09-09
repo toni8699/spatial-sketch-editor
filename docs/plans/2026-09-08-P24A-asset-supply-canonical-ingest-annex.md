@@ -1,6 +1,7 @@
 # P24A — Asset Supply + Canonical Ingest annex
 
-**Ratified cross-view direction:** [Unified Plan / 3D authoring addendum](2026-09-09-P23-P24-unified-plan-3d-authoring-addendum.md) — read alongside this plan for entity-owned mutations, selection continuity, gesture cancellation and PlanProxy/placement ownership. Existing scope, status and dependency gates remain unchanged.
+**Ratified cross-view direction:** [Unified Plan / 3D authoring addendum](2026-09-09-P23-P24-unified-plan-3d-authoring-addendum.md) — read alongside this plan for entity-owned mutations, selection continuity, gesture cancellation and PlanProxy/placement ownership. Existing scope, status and dependency gates remain unchanged.  
+**P24 reconciliation sequence:** [2026-09-09-P24-reconciliation-sequence.md](2026-09-09-P24-reconciliation-sequence.md)
 
 **Created:** 2026-09-08  
 **Parent:** [P24 — Scene / Staging Depth umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md)  
@@ -18,6 +19,10 @@ Reviewed against live `main`:
 - current `Asset`, `AssetFootprint`, manifest and placement seams;
 - P22 publish/visitor-runtime resource-resolution contract.
 
+Supplemental closed evidence for the Plan/3D representation seam:
+
+- `docs/Deep-research/P24-3D-assets-staging/Pascal-editor-harvest.md` — CLOSED at pinned revision `32c3c8a24dae17c55beaabf45029148900a3b409`; useful for same-identity 2D/3D representation and Plan-eligibility fixtures only. It does not authorize Pascal's generic node registry, scene model, history model or per-instance proxy ownership.
+
 Phase 2 is specific enough to stop broad asset-source discovery. It recommends a first acquisition wave from **Poly Haven + Kenney Furniture Kit + a small attribution-aware Sweet Home 3D subset**, with a coherent **Poly Haven + ambientCG material set**, **Poly Haven HDRIs**, glTF normalization around **glTF Transform** plus measured `gltfpack`/meshoptimizer use, and **Kenney + Sweet Home 3D** as the first PlanProxy benchmark corpus.
 
 The research JSON's 32-object Wave 1 is an **acquisition backlog**, not the P24A ship gate.
@@ -27,6 +32,8 @@ The research JSON's 32-object Wave 1 is an **acquisition backlog**, not the P24A
 The **broad source-discovery gate is closed**. P24A does not need another general survey of asset sites, model repositories, material libraries or HDRI providers before planning can continue.
 
 That does **not** mean every pipeline choice below is automatically implementation-ready. Before P24A.0–P24A.6 become implementation tickets, run a bounded implementation-readiness reconciliation against the exact current repository and the exact upstream tools/resources selected from Phase 2.
+
+This readiness work may run in parallel with P23 implementation. It must distinguish today's Room-local baseline from the ratified P23 world-local target and mark any placement/proxy seam that requires a targeted post-P23-F0 recheck before implementation-ready P24 child plans freeze.
 
 The readiness pass must inspect the current end-to-end asset path, including:
 
@@ -92,7 +99,8 @@ Furniture/models remain Scene assets. Downloadable doors, windows, stairs and ot
 - Do not persist Three.js objects, GPU resources, provider URLs, signed URLs, R2 keys or conversion-session handles as authored truth.
 - Do not turn the current `Asset` catalogue type into a dump of registry/database/acquisition state.
 - Preserve visitor/editor isolation and P22 cold-runtime resolution.
-- Preserve current room-local transforms, Scene selection/history, Threlte patterns and one transform authority.
+- Preserve Scene selection/history, Threlte patterns and one transform authority.
+- Consume the coordinate/ownership model actually shipped by P23; current Room-local Scene transforms are baseline evidence, not a permanent P24 invariant.
 
 ## P24A.0 — Acquisition and provenance contract
 
@@ -181,6 +189,8 @@ existing Scene Plan / Arrange rendering
 Use the Kenney + Sweet Home 3D benchmark corpus for thin-leg, round, irregular, storage and authored-plan-icon cases. Raster/top-down assets may be reference or source hints, but do not become a parallel persistent Plan truth.
 
 Wall art and ceiling/hanging assets may remain Plan-ineligible when a floor footprint would mislead.
+
+The completed Pascal harvest may be used only for fixture-level evidence that one semantic item can expose derived 2D/3D representations and eligibility-specific affordances. Museum's `AssetDefinition`/`SceneEntity` split remains authority: PlanProxy belongs to asset definition metadata, not a duplicate per-instance Scene record.
 
 ## P24A.3 — Cross-source proof set
 
