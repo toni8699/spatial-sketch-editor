@@ -13,7 +13,7 @@
 
 Reviewed against live `main`:
 
-- `docs/Deep-research/P24-3D-assets-staging/museum-editor-phase2-exact-asset-harvest-P24.md`
+- `docs/Deep-research/P24-3D-assets-staging/deep-research-exact-asset-compact.md`
 - `docs/Deep-research/P24-3D-assets-staging/museum-editor-phase2-acquisition-manifest.json`
 - shipped P20 project asset registry/R2 contracts;
 - current `Asset`, `AssetFootprint`, manifest and placement seams;

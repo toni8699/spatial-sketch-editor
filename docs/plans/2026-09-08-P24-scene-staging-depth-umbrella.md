@@ -40,7 +40,7 @@ implementation tickets.
 
 Checked-in research:
 
-- `docs/Deep-research/P24-3D-assets-staging/museum-editor-phase2-exact-asset-harvest-P24.md`
+- `docs/Deep-research/P24-3D-assets-staging/deep-research-exact-asset-compact.md`
 - `docs/Deep-research/P24-3D-assets-staging/museum-editor-phase2-acquisition-manifest.json`
 
 These are the primary research inputs for P24A. They provide source ranking,

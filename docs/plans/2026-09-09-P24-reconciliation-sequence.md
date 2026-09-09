@@ -62,7 +62,7 @@ If current code already answers the question, close it from Museum evidence rath
 | R1 | P24A readiness (no B equivalent) |
 | R2 | B0 capability-maturity baseline |
 | R3 | B2 shared Plan/3D placement |
-| R4 | B5 behavioral contract (ship-gate-relevant only) |
+| R4 | B5 behavioral constraints (not a ship gate; R9/B6 decides inclusion) |
 | R5 | B1 transform + arrangement |
 | R6 | B3 material |
 | R7 | B4 lighting + environment |
@@ -97,6 +97,28 @@ irrelevant to P24
 
 R0 prevents P24 from freezing around code that P23 is already scheduled to replace.
 
+### R0 result — 2026-09-09 audit
+
+R0 audit baseline:
+remote parent: `e030038fa3708f578baf97a6bc4f8b6c77b5f689`
+local Museum commit: `f0f1f6380a26a535bf3c50b37404fd1ff0bca42e`
+P23 F0 scaffolding: uncommitted dirty tree at audit time (no F0 commit to pin).
+
+F0 scaffolding decodes nothing wall-first yet; authoring stays Room-owned/Room-local until the F0 gate.
+
+| Seam | Class |
+|---|---|
+| Scene transform storage + world conversion (`packages/project-model/src/scene.ts`) | changes in F0 / requires post-F0 recheck (world-local migration is P23.0b) |
+| Plan footprint/proxy (`plan-scene-footprint.ts`) | logic stable / requires recheck (`rooms` source becomes wall-first registry) |
+| Plan translate/rotate adapters (`plan-scene-transform.ts`) | stable / requires recheck (inverse-resolve disappears under world-local) |
+| Placement + floor assumptions (`editor-placement.ts`, `placement-cluster-mutator.svelte.ts`) | stable / requires recheck (no stacked/support choice, no Layout-query lookup) |
+| Selection identity (`selection-store.svelte.ts`) | stable / recheck for R4 continuity only |
+| History/gesture (`history-controller.svelte.ts`) | stable / recheck operation-owner tags |
+| Camera records in Scene | changes in F0 where touching shared resolver; pure tour routing irrelevant |
+| Layout/Scene ownership boundary | changes in F0 (Layout side) / recheck — no persistent support dep without contract |
+| `compileLayoutGeometry()` / query / editor-adapter | changes in F0 / recheck — support resolution source |
+| Save/Load + P22 visitor | stable / recheck after world migration; Project Save/Load codec has no active Scene schema discriminator (package export versioning is a separate seam); `/museum` isolation holds |
+
 ## R1 — P24A implementation-readiness reconciliation
 
 Run the bounded readiness pass already required by the P24A annex.
@@ -124,20 +146,22 @@ Required matrix:
 
 | Capability | Current Museum behavior | Canonical owner | Proven gap | Evidence needed? | Disposition |
 |---|---|---|---|---|---|
-| Selection / multi-select | audit | existing selection | TBD | TBD | TBD |
-| Transform / pivot | audit | single transform authority | TBD | TBD | TBD |
-| Duplicate | audit | existing mutator/history | TBD | TBD | TBD |
-| Groups / clusters | audit | existing cluster model | TBD | TBD | TBD |
-| Plan Scene staging | audit | Scene entity + derived Plan projection | TBD | TBD | TBD |
-| Placement / grounding | audit | existing placement pipeline | TBD | TBD | TBD |
-| Asset-library placement entry points | audit | existing asset picker → placement pipeline | TBD | TBD | TBD |
-| Snapping / guides | audit | existing Scene/Plan seams | TBD | TBD | TBD |
-| Materials | audit | current Scene material model | TBD | TBD | TBD |
-| Lights | audit | current Scene light model | TBD | TBD | TBD |
-| Environment | audit | renderer/Scene seams | TBD | TBD | TBD |
-| Outliner / Inspector | audit | existing editor surfaces | TBD | TBD | TBD |
-| History integration | audit | canonical history | TBD | TBD | TBD |
-| Editor-only vs visitor + asset-resolution boundary | audit | P20 registry / P22 resolver / visitor isolation | TBD | TBD | TBD |
+| Selection / multi-select | room-scoped ordered multi-select (pre-F0) | canonical ordered selection semantics | Room gating is not a future invariant; cross-view continuity open | code for baseline; R4 owns continuity evidence | KEEP selection identity/order; POST-F0 RECHECK room-gate removal + continuity |
+| Transform / pivot | one host, bounds-center pivot, world-space; scalar `scale?: number` persisted, per-axis session-only/lossy | single transform authority | no Local/World switch; no authored pivot options | code for baseline; bounded refs in R5 only if an unresolved maturity question remains | KEEP authority; DEPTH DECISION → R5 (Local/World, Selection-Center, scale, snap feedback) |
+| Duplicate | clones selection +0.5 XZ, one history entry | existing mutator/history | no collision/bounds/re-ground; partial clusters silently skipped | code for baseline; R5 decides depth | KEEP mechanism; DEPTH DECISION → R5 |
+| Groups / clusters | flat same-room cluster with required `roomId` (pre-F0) | flat non-nested grouping concept | Room ownership scheduled to disappear; no group pivot/Inspector | code for baseline; R5 decides UX depth | KEEP flat concept; do not preserve Room ownership; POST-F0 RECHECK before R5 |
+| Plan Scene staging | derived footprints, Y discarded, lights skipped | Scene entity + derived Plan projection | no height/support/stacked choice; eligibility implicit | code for baseline; R3 owns contract | KEEP derivation; contract per R3 |
+| Placement / grounding | tagged-floor-only, 5-ray, Drop/Keep-on-Floor, `GROUND_EPSILON` no-op guard | existing placement pipeline | single-surface only; no wall/ceiling/surface arming | code for baseline; later tracks decide depth | KEEP pipeline; DEPTH DECISION → later tracks, no persistent links |
+| Asset-library placement entry points | click-to-place 3D only; model Place via Inspector; no Plan entry, no drag | existing asset picker → placement pipeline | entry-point gaps only | code for baseline | POLISH entries; no new framework |
+| Snapping / guides | room-local steps, Shift-bypass; grid visual-only | existing Scene/Plan seams | no align/distribute; no guides/collision feedback | code for baseline; bounded refs in R5 only if open | KEEP seams; DEPTH DECISION → R5; REJECT generic framework |
+| Materials | 6-entry catalogue, single-select, roughness/metalness + one map override | current Scene material model | no tint/PBR-set/scale UI; no multi-apply; no P24A import path | code for baseline; bounded refs in R6 only if open | KEEP model; DEPTH DECISION → R6 |
+| Lights | point/spot/directional, 2.5m drop, 0.12m proxy, fixed -Z aim | `SceneLightEntity` authority | no handles; no cone/range viz; no presets | code for baseline; bounded refs in R7 only if open | KEEP authority; DEPTH DECISION → R7; REJECT second gizmo |
+| Environment | fixed ambient + directional rig, no authored env (missing/partial confirmed) | renderer/Scene seams | exposure/tonemap/IBL/HDRI absent (greenfield) | code for baseline; bounded refs in R7 only if open | DEPTH DECISION → R7 with renderer ownership + visitor parity |
+| Outliner / Inspector | single-select panels; multi has Duplicate/Delete + prefs only | existing editor surfaces | no bulk transform/material edit; commit-only sync by design | code for baseline | POLISH bulk + sync |
+| History integration | single stack, 1-gesture-1-entry, `documentsMatch` no-op guard | canonical history | cross-view fixture pins missing | code only | KEEP; fixtures per R3/R4 |
+| Editor-only vs visitor + asset-resolution boundary | zero editor imports in `apps/museum`; P20/P22 texture-only; models shipped-catalogue | P20 registry / P22 resolver / visitor isolation | GLB ingest absent (confirmed P24A.4 gap) | code only | KEEP boundary; P24A extends registry |
+
+R2 answers what exists and where the gap is. Exact ship scope is decided in R5/R6/R7 and frozen only in R9/B6.
 
 Do not create a generic Stage command framework merely to organize this matrix.
 
@@ -159,8 +183,8 @@ Required decisions:
 
 - one placement operation/result identity across views;
 - Plan authors supported X/Z/yaw only;
-- Plan preserves Y/elevation, pitch, roll and scale unless an explicit operation says otherwise;
-- Plan placement height = explicit active floor/support elevation + asset grounding offset;
+- new Plan placement: X/Z/yaw are direct Plan-authored components; Y is semantically resolved from the chosen floor/support elevation + asset grounding/contact offset;
+- existing placement edited in Plan: preserve Y/elevation, pitch, roll and scale unless the explicit operation owns one of those components;
 - ambiguous stacked/support surfaces require a choice;
 - Plan-ineligible assets remain selectable but do not expose misleading manipulation;
 - replacement preserves intended placement through normalized asset metadata;
@@ -168,6 +192,8 @@ Required decisions:
 - no persistent Layout/Scene support dependency is introduced without a separately specified ownership/delete/history contract (umbrella invariant: `LayoutDocument`/`SceneDocument` stay separate, P24 placement consults Layout geometry as transient calculation by default; addendum target: `LayoutObjects` vs `SceneEntity`).
 
 Pascal evidence to reuse here is fixture-level only: same-ID Plan/3D mutation, derived renderer, transient preview patterns, and negative counterexamples around fresh IDs, pitch/roll reset and clamping.
+
+**Ratified constraint (2026-09-09 reconciliation):** the decisions above constrain any P24 capability that participates in shared Plan/3D authoring. They do not by themselves require that capability to enter the P24 minimum. R9/B6 decides minimum inclusion. Placement consults Layout geometry as transient calculation by default.
 
 ## R4 — B5 cross-view interaction contract, then defer polish freeze
 
@@ -180,9 +206,11 @@ Freeze the **behavioral** B5 contract early:
 - PlanProxy/ghost presentation is derived editor state;
 - final displayed preview and committed result agree.
 
-Do not freeze the full B5 presentation/polish scope yet. Final visual density, affordances and staging polish should close only after B1–B4 determine what tools actually ship. R4 is the ship-gate-relevant behavioral freeze; R8 holds the remaining presentation/polish.
+Do not freeze the full B5 presentation/polish scope yet. Final visual density, affordances and staging polish should close only after B1–B4 determine what tools actually ship. R4 is the behavioral constraint set; R8 holds the remaining presentation/polish. Only R9/B6 freezes minimum inclusion.
 
 Pascal's mounted-pane behavior is a **negative reference** here: its view switch does not provide Museum's required cancel semantics.
+
+**Ratified constraint (2026-09-09 reconciliation):** the six behaviors above constrain any P24 capability that participates in cross-view interaction. They do not by themselves require that capability to enter the P24 minimum. R9/B6 decides minimum inclusion. Presentation/polish remainder stays in R8.
 
 ## R5 — B1 transform + arrangement maturity
 
