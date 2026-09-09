@@ -163,6 +163,7 @@ Geometry/topology may derive candidate faces. It must not allocate, regenerate, 
 
 Initial automatic correspondence is bounded **per affected correspondence component**:
 
+- `0 → new faces` first enclosure creation — foundation-owned, deterministic IDs/names and 0.1 m floor/ceiling defaults;
 - `1 → 1` lineage-preserving deformation — automatic;
 - `1 → 2` simple split — automatic;
 - `2 → 1` simple merge — automatic subject to metadata policy;
@@ -220,6 +221,8 @@ Simple `2 → 1`:
 - conflicting floor/ceiling thickness rejects until an explicit resolution flow exists.
 
 Room disappearance retires Room identity only after topology confirms no enclosed descendant face remains and all semantic references can be explicitly resolved.
+
+`LayoutObject.roomId?` remains an optional explicit semantic association, never containment or transform ownership. Migration preserves valid associations and world transforms. On 1→1 edits/subdivision retain it; on split retain the predecessor ID (the surviving Room), without choosing by object position; on merge remap retired IDs to the surviving Room; on disappearance clear the association. These Layout-only changes are part of the same candidate/history snapshot. Never move or delete an object because its associated Room changes. Unassociated objects stay unassociated; do not infer associations from containment. Validate every remaining reference before commit.
 
 ## Umbrella-level rejection policy
 
@@ -427,7 +430,7 @@ P23.8 consumes P23.0a schema scaffolding and must complete before P23.0b migrati
 
 [Child plan](2026-09-08-P23.1-precise-placement-and-dimensions.md)
 
-Retain exact numeric LayoutObject editing. Reinterpret architectural precision around Junction X/Z, exact straight-Wall length, fixed endpoint, bounded angle editing, Wall thickness where supported, and rectangle sizing as a multi-Wall/Junction operation. `LayoutRoom.frame` is not a target authoring primitive after world-space migration.
+Retain exact numeric LayoutObject editing. Reinterpret architectural precision around Junction X/Z, exact straight-Wall length, fixed endpoint, bounded angle editing, Wall thickness where supported, and rectangle sizing as a multi-Wall/Junction operation. `LayoutRoom.frame` is not a target authoring primitive after world-space migration. Rectangle resize fixes an explicit anchor Junction and incident width Wall; P23.1 defines stable defaults and corner mapping, including squares and rotated rectangles.
 
 ## P23.2 — Predictable Plan snapping and alignment
 
@@ -559,7 +562,8 @@ F0 must pass before new-schema writes:
 - legacy curves remain readable without flattening;
 - old active published release cold-loads without rewriting stored bytes;
 - legacy nonadjacent portal relation remains readable in compatibility mode and blocks new-schema Save until resolved;
-- Wall topology/Room fixtures cover 1→1, 1→2, 2→1, subdivision and rejected many↔many components;
+- Wall topology/Room fixtures cover first-enclosure creation (including Partition→boundary), 1→1, 1→2, 2→1, subdivision and rejected many↔many components;
+- Layout-object semantic associations preserve/remap/clear according to P23.8 without moving/deleting objects, with exact Undo/Redo;
 - editor selection/Inspector/gizmo/creation adapters either write new canonical records or are explicitly disabled;
 - one canonical compiler/query output remains the Plan/3D/visitor truth.
 
