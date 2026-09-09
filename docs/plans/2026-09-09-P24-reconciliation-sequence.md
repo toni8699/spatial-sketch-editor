@@ -247,7 +247,7 @@ Use Pascal only where its completed harvest already provides useful counter-fixt
 
 Evidence basis: one-host authority + bounds-center pivot + room-local/world conversion (`gizmo/scene-gizmo-adapter.svelte.ts`, `editor-cluster-transform.ts`); v6 scalar-scale loss (`editor-transform.ts`); Pascal lifecycle/counter-fixtures (completed harvest). No new direct-reference study needed unless a concrete interaction question survives the post-F0 recheck.
 
-- Local/World gizmo orientation: WIRE the existing toolbar switch (`EditorViewportToolbar` Local/World → `interactionStore.toggleSpace`) through to the scene gizmo policy, orientation-only, storage unchanged; default stays World. The switch UI exists but the scene/camera gizmo policies currently hardcode world with no reader of `interactionStore.space`.
+- Local/World gizmo orientation: WIRE the existing toolbar switch (`EditorViewportToolbar` Local/World → `interactionStore.toggleSpace`) through to the scene gizmo policy, orientation-only, storage unchanged; default stays World. The switch UI exists but the scene/camera gizmo policies currently hardcode world with no reader of `interactionStore.space`. Single-selection Local uses the selected object's orientation; the multi-selection Local frame (primary-object orientation vs another derived frame) must be resolved before R9 — do not create stored pivot/orientation state.
 - Selection-Center pivot alongside Active-Object bounds-center: ADOPT if post-F0 world frame keeps pivot math rigid; no new stored pivot.
 - Primary/active selection clarity + numeric Inspector ↔ gizmo sync: POLISH.
 - Snap winner feedback: POLISH; no new snap framework.
@@ -281,7 +281,7 @@ Evidence basis: 6-entry catalogue + `SceneMaterialInstance` shared/unique + Make
 - Minimum: base color/tint override, PBR map set on definitions, physical tile scale where the existing repeat path supports it, Apply-to-multiselection, shared/unique preview feedback, P24A import consumption.
 - Editor/visitor parity required per material addition.
 
-Code-verified on main: 6-entry catalogue (`materials.ts:3-63`); shared/unique + Make Unique (`material-resource-mutator.svelte.ts:193-231`); single-select Inspector (`EditorMaterialInspector.svelte:19-24`); no tint override; roughness/metalness + one map override only; repeat path read-only (`materials.ts:79-86`, `defaultTileSizeMeters`); parity via dual `scene-instance-material.ts:65` (editor + museum copies).
+Code-verified on main: 6-entry catalogue (`materials.ts:3-63`); shared/unique + Make Unique (`material-resource-mutator.svelte.ts:193-231`); single-select Inspector (`EditorMaterialInspector.svelte:19-24`); no tint override; roughness/metalness + one map override only; repeat path read-only (`materials.ts:79-86`, `defaultTileSizeMeters`); resolver copies currently byte-identical (`scene-instance-material.ts:65` editor + museum); parity remains an acceptance requirement.
 
 ## R7 — B4 lighting + environment maturity
 
@@ -301,10 +301,10 @@ Evidence basis: `SceneLightEntity` point/spot/directional + fixed -Z aim + 0.12m
 
 - Keep `SceneLightEntity` point/spot/directional authority; no second light-gizmo system — handles compose with the existing TransformControls.
 - Minimum: range visualization (point), cone/direction handles (spot), pick proxies, degree-presented spot angle (canonical storage unchanged), one gallery preset as ordinary Scene ops (no persistent rig), HDRI consumption only after P24A supply exists.
-- Exposure/tonemap/IBL only where the renderer owns them + visitor parity; shadow policy stays system-owned (safe defaults + warnings, no per-light map controls in the minimum).
+- Exposure/tonemap/IBL only where the renderer owns them + visitor parity; per-light `castShadow` remains authored Scene state, while shadow-map resolution/bias/quality policy stays renderer/system-owned with safe defaults and warnings — no per-light shadow-map tuning in the minimum.
 - Units: raw renderer-relative numbers stand unless new evidence shows authoring harm; color temperature deferred to follow-up.
 
-Code-verified on main: 3 light kinds, fixed -Z aim, 0.12m proxy (`EntityLight.svelte:17-54`); 2.5m drop (`editor-lights.ts:23`); radian-only angle UI (`EditorLightInspector.svelte:140-146`); ambient + directional rig only in both `MuseumScene.svelte` copies. Refinements: per-light `castShadow` already exists (`editor-lights.ts:91`) — only map-level controls are absent; existing lighting presets are session viewport-only (`editor-store.svelte.ts:181-197`), not Scene ops.
+Code-verified on main: 3 light kinds, fixed -Z aim, 0.12m proxy (`EntityLight.svelte:17-54`); 2.5m drop (`editor-lights.ts:23`); radian-only angle UI (`EditorLightInspector.svelte:140-146`); fixed ambient+directional environment rig in both `MuseumScene.svelte` copies (authored `SceneLightEntity` lights render in addition). Refinements: per-light `castShadow` already exists (`editor-lights.ts:91`) — only map-level controls are absent; existing lighting presets are session viewport-only (`editor-store.svelte.ts:181-197`), not Scene ops.
 
 ## R8 — B5 final presentation reconciliation
 
