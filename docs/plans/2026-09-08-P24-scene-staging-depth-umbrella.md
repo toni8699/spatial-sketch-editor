@@ -196,8 +196,10 @@ Stage capability must receive the same reconciliation pass:
 
 1. inspect the current implementation end-to-end;
 2. establish its actual current behavior and architectural owner;
-3. inspect mature reference implementations directly, including exact public
-   source modules/files where available;
+3. inspect mature reference implementations directly only where the current
+   Museum implementation, existing checked-in research, or completed bounded
+   harvests leave a concrete maturity, interaction, algorithmic, or architecture
+   question unresolved, including exact public source modules/files where available;
 4. compare operation semantics, UX, discoverability, edge cases and performance;
 5. identify concrete maturity gaps rather than feature-name parity gaps;
 6. classify the capability as:
@@ -217,21 +219,21 @@ The resulting maturity matrix should record at least:
 
 | Capability | Current behavior | Canonical authority | Reference evidence | Proven maturity gap | Disposition |
 |---|---|---|---|---|---|
-| Selection / multi-select | audit | existing selection system | direct study | TBD | TBD |
-| Transform / pivot | audit | single gizmo host + Scene adapter | direct study | TBD | TBD |
-| Duplicate | audit | existing Scene mutator/history | direct study | TBD | TBD |
-| Groups / clusters | audit | flat `SceneObjectCluster` model | direct study | TBD | TBD |
-| Outliner | audit | Unified Project Tree | direct study | TBD | TBD |
-| Placement / grounding | audit | existing placement ghost/pipeline | direct study | TBD | TBD |
-| Snapping | audit | existing transform/placement snap path | direct study | TBD | TBD |
-| Materials | audit | current material definition/instance path | direct study | TBD | TBD |
-| Lights | audit | `SceneLightEntity` + renderer/Inspector | direct study | TBD | TBD |
-| Environment | missing/partial TBD | must inspect renderer/Scene seams | direct study | TBD | TBD |
-| History integration | audit | one chronological history model | direct study | TBD | TBD |
+| Selection / multi-select | audit | existing selection system | as needed after current-code audit | TBD | TBD |
+| Transform / pivot | audit | single gizmo host + Scene adapter | as needed after current-code audit | TBD | TBD |
+| Duplicate | audit | existing Scene mutator/history | as needed after current-code audit | TBD | TBD |
+| Groups / clusters | audit | flat `SceneObjectCluster` model | as needed after current-code audit | TBD | TBD |
+| Outliner | audit | Unified Project Tree | as needed after current-code audit | TBD | TBD |
+| Placement / grounding | audit | existing placement ghost/pipeline | as needed after current-code audit | TBD | TBD |
+| Snapping | audit | existing transform/placement snap path | as needed after current-code audit | TBD | TBD |
+| Materials | audit | current material definition/instance path | as needed after current-code audit | TBD | TBD |
+| Lights | audit | `SceneLightEntity` + renderer/Inspector | as needed after current-code audit | TBD | TBD |
+| Environment | missing/partial TBD | must inspect renderer/Scene seams | as needed after current-code audit | TBD | TBD |
+| History integration | audit | one chronological history model | as needed after current-code audit | TBD | TBD |
 
 Do not pre-fill “maturity gap” simply because the Phase 4 research names a
-feature. Evidence from current Museum behavior plus reference study must justify
-it.
+feature. Evidence from current Museum behavior, plus reference study only where
+a concrete question remains, must justify it.
 
 ## Required direct-reference study
 
@@ -239,8 +241,11 @@ The Phase 4 compact artifact names useful reference systems including Three.js
 Editor, BabylonJS Editor, Godot, Blender, PlayCanvas, Blockbench, nunuStudio,
 A-Frame Inspector, Threlte/R3F examples and other web/editor projects.
 
-Before freezing each major P24B area, agents should inspect the relevant references
-**directly**, not rely only on the compact research's summarized comparison.
+Before freezing a major P24B area, directly inspect relevant references only
+for concrete unresolved questions. Do not repeat reference work when current
+Museum evidence or an already-completed bounded harvest is sufficient; do not
+rely only on the compact research's summarized comparison where a question
+remains open.
 For serious references record:
 
 ```text
@@ -405,7 +410,7 @@ pipeline end-to-end:
 - renderer exposure, tone mapping, environment/IBL ownership;
 - shadow defaults, costs and visitor behavior.
 
-Then inspect mature reference implementations directly, especially relevant
+Then inspect mature reference implementations directly only for concrete unresolved questions, especially relevant
 lighting/environment modules in:
 
 - Three.js Editor;
@@ -741,7 +746,7 @@ Next planning steps:
 1. retain the Phase 2 research files and P24A annex as the P24A planning basis;
 2. run B0 against the then-current live Scene/editor implementation;
 3. for B1–B5, directly inspect mature reference implementations and exact public
-   source modules rather than relying only on the compact Phase 4 comparison;
+   source modules only for concrete unresolved questions, rather than relying only on the compact Phase 4 comparison;
 4. build the capability maturity matrix and record evidence-backed
    KEEP/POLISH/DEEPEN/FOLLOW-UP/REJECT decisions;
 5. pay special attention to the current bare-bones lighting authoring experience,

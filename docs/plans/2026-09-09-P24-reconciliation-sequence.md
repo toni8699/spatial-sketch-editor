@@ -32,7 +32,7 @@ Read in this order:
 2. [Unified Plan / 3D addendum](2026-09-09-P23-P24-unified-plan-3d-authoring-addendum.md);
 3. [P24A annex](2026-09-08-P24A-asset-supply-canonical-ingest-annex.md);
 4. current Museum Editor code and tests for the capability being reconciled;
-5. checked-in Phase 2 / Phase 4 research — durable inputs are `../Deep-research/P24-3D-assets-staging/deep-research-exact-asset-compact.md` + `museum-editor-phase2-acquisition-manifest.json` (Phase 2) and `../Deep-research/P24-3D-assets-staging/deep-research-P24-3D-editing-compact.md` (Phase 4). The `museum-editor-phase2-exact-asset-harvest-P24.md` path cited in the umbrella/P24A annex is absent on disk; use the compact as authority until it is restored. The Phase 4 full source remains absent per the umbrella;
+5. checked-in Phase 2 / Phase 4 research — durable inputs are `../Deep-research/P24-3D-assets-staging/deep-research-exact-asset-compact.md` + `museum-editor-phase2-acquisition-manifest.json` (Phase 2) and `../Deep-research/P24-3D-assets-staging/deep-research-P24-3D-editing-compact.md` (Phase 4). The legacy `museum-editor-phase2-exact-asset-harvest-P24.md` path is absent on disk; the umbrella and P24A annex now use the compact artifact as the durable Phase 2 source. The Phase 4 full source remains absent per the umbrella;
 6. completed [Pascal harvest](../Deep-research/P24-3D-assets-staging/Pascal-editor-harvest.md) where relevant;
 7. additional direct reference inspection only where a concrete unresolved maturity question remains.
 
