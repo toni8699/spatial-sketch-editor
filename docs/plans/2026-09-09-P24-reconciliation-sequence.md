@@ -377,7 +377,7 @@ Consolidates the pre-F0 packet into freeze-ready input. Legend: [F0-FREE] resolv
 | Placement / grounding | Tagged-floor-only 5-ray Drop/Keep-on-Floor; no stacked/support choice, no Layout-query lookup | KEEP pipeline; wall/support direction one-time-placement-first | [F0-FREE]; support source + stacked choice [POST-F0 RECHECK] |
 | Replacement | No replace-asset path found | New op preserving placement via normalized metadata | [F0-FREE] direction; bounds/pivot variance [POST-F0 RECHECK] |
 | Placement entry points | Click-to-place 3D only; model Place via Inspector; no Plan entry/drag | POLISH entries, no new framework | [F0-FREE] |
-| Snapping | Room-local steps + Shift-bypass; no winner feedback | KEEP seams; winner feedback | [F0-FREE]; step values under world-local [POST-F0 RECHECK] |
+| Snapping | Room-local steps + Shift-bypass; no winner feedback | KEEP seams; winner feedback | [F0-FREE]; snap frame/application [POST-F0 RECHECK] |
 | Materials | 6-entry catalogue; shared/unique + Make Unique; single-select Inspector; roughness/metalness + one map override; read-only repeat path | KEEP model; tint + PBR set + tile scale + multi-apply + preview feedback | [F0-FREE]; import consumption [POST-F0 RECHECK / R1] |
 | Lights | Point/spot/directional + 0.12m proxy, -Z aim, 2.5m drop, radian UI, authored `castShadow` | KEEP authority; range viz + cone handles + degree angle + gallery Scene-op preset + raw units | [F0-FREE]; HDRI consumption pending supply |
 | Environment | Fixed ambient+directional rig, no authored env | Tonemap system-owned; global-vs-per-room + exposure/IBL/HDRI model pending supply + renderer inspection | Partly [F0-FREE]; model [POST-F0 RECHECK / R1] |
@@ -392,16 +392,17 @@ No new direct-reference study needed: every disposition above is grounded in cur
 
 One completed gesture = one history entry; cancel/no-op = none. All Scene ops target `SceneDocument`; acquisition workflow state never enters `SceneDocument` or editor undo.
 
-| Operation | Owner | Inputs | History | Sensitivity |
+| Semantic operation / current seam | Owner | Inputs | History | Sensitivity |
 |---|---|---|---|---|
-| `placeSceneAsset` | Placement pipeline (`pendingPlacement*` → commit) | asset id + pose intent | One entry on commit | Support/Y resolution [POST-F0 RECHECK] |
-| `commitPlacementTransform` (gizmo / Inspector numeric / staging gesture) | `editor-store.commitPlacementTransform` | entity ids + owned components | One entry; no-op none | Frames [POST-F0 RECHECK]; sync [F0-FREE] |
+| Place asset [conceptual]; current `beginAssetPlacement` / `createPendingPlacementAt` seam | Placement pipeline (`pendingPlacement*` → commit) | asset id + pose intent | One entry on commit | Support/Y resolution [POST-F0 RECHECK] |
+| Scene transform gesture → gizmo/Plan adapter → begin transaction → transient preview → `updatePlacementTransform*` at commit → one `commitDocumentTransaction` | Scene/camera/Plan gesture adapters + `editor-store` transaction | entity ids + owned components | One entry; no-op none | Frames [POST-F0 RECHECK] |
+| Inspector transform edit → `commitPlacementTransform(id, transform)` | `editor-store.commitPlacementTransform` | single entity id + transform | One entry | Sync [F0-FREE] |
 | `duplicateSelection` | `placement-cluster-mutator` | selection set | One entry; partial warns (fix directed) | Re-ground [POST-F0 RECHECK] |
-| `createCluster` / `deleteCluster` | `placement-cluster-mutator` on `SceneDocument.clusters` | member ids + roomId | One entry | Room-gate [POST-F0 RECHECK] |
+| `createCluster(name?)` / `deleteCluster` | `placement-cluster-mutator` on `SceneDocument.clusters` | member ids + optional name; current pre-F0 implementation derives/validates common room internally | One entry | Room constraint [POST-F0 RECHECK] |
 | Align / distribute (new) | Deterministic Scene ops | entity set + mode | One entry each | Exact set [R9-PICK]; frames [POST-F0 RECHECK] |
-| `replaceSceneAsset` (new) | Scene op via normalized metadata | entity id + asset id | One entry | Bounds behavior [POST-F0 RECHECK] |
+| `replaceSceneAsset` (new, no current seam) | Scene op via normalized metadata | entity id + asset id | One entry | Bounds behavior [POST-F0 RECHECK] |
 | `applyMaterialPatch` / `makeMaterialInstanceUnique` | `material-resource-mutator` via `store.requestMaterialEdit` | entity/material ids + patch | One entry (confirm at freeze) | [F0-FREE] |
-| `createLight` / `updateLight` / `deleteLight` + gallery preset op | Light mutators (`editor-lights.ts`, preset as ordinary Scene ops) | kind + props | One entry | [F0-FREE] |
+| Light authoring [conceptual]; current `beginLightPlacement` / `createPendingLightAt` / `updateLightFields` seam + gallery preset op | Light mutators (`editor-lights.ts`, preset as ordinary Scene ops) | kind + props | One entry | [F0-FREE] |
 | P24A acquire / normalize / approve | Pipeline-owned lifecycle, not editor undo | source + recipe + rights evidence | Promotion gated by acceptance, never half-approved | Boundary [F0-FREE]; registry/codec [POST-F0 RECHECK] |
 
 No mixed Layout/Scene transaction and no persistent cross-document support reference without a separately specified ownership/delete/history contract (umbrella invariant; addendum entity-ownership rule).
@@ -409,7 +410,7 @@ No mixed Layout/Scene transaction and no persistent cross-document support refer
 ### 3. Museum-owned acceptance fixtures (draft)
 
 - F1 same-ID Plan/3D mutation: place in 3D → move X/Z + yaw in Plan → Y/pitch/roll/scale preserved; one entity identity throughout. [POST-F0 RECHECK projection source]
-- F2 Plan-ineligible-but-selected: select light in Plan → stays selected, no transform handles, `Not editable in Plan` reason shown in viewport + Inspector badge.
+- F2 Plan-ineligible-but-selected: select a light in 3D or Outliner → switch to Plan → selection persists, no transform handles, `Not editable in Plan` reason shown in viewport + Inspector badge.
 - F3 view-switch cancel: mid-drag placement/transform + switch view → gesture cancelled, no history result, committed state untouched.
 - F4 preview/state consistency: ghost/proxy/overlay treatment never appears in serialized `SceneDocument`.
 - F5 preview/commit agreement: final displayed preview equals committed result for one staging gesture.
