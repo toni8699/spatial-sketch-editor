@@ -5,7 +5,7 @@ history lives on disk under `docs/archive/plans/`, not in this file).
 **Status enum:** `proposed | approved | in-progress | shipped | archived`.
 The tracker is authoritative when a plan doc's `**Status:**` drifts.
 
-**Active P23/P24 direction:** [Unified Plan / 3D authoring addendum](2026-09-09-P23-P24-unified-plan-3d-authoring-addendum.md) (ratified 2026-09-09; existing statuses and gates unchanged).
+**Active P23/P24 direction:** [Unified Plan / 3D authoring addendum](2026-09-09-P23-P24-unified-plan-3d-authoring-addendum.md) (ratified 2026-09-09; existing statuses and gates unchanged). Pascal direct-reference harvest is closed; [P24 reconciliation sequence](2026-09-09-P24-reconciliation-sequence.md) is the active P24 planning route.
 
 ## Rules
 
@@ -76,9 +76,13 @@ shipped / archived
 
 Applied: P23 umbrella + implementation-ready child plans P23.0–P23.9,
 informed by completed H1/H2/H3/H5; H4 remains deferred until bounded
-offset/trim/curve follow-up is actually scheduled. P24 umbrella with the P24A
-annex as its child seed; P25 umbrella (child plans form after its E-studies
-close).
+offset/trim/curve follow-up is actually scheduled. P23 proceeds independently;
+the completed Pascal harvest is optional bounded evidence, not an execution
+gate. P24 umbrella has the P24A annex as its child seed plus the active
+[P24 reconciliation sequence](2026-09-09-P24-reconciliation-sequence.md);
+Pascal direct-reference evidence is closed and P24 may reconcile in parallel
+with P23, while P24 implementation remains dependent on the accepted P23
+minimum. P25 umbrella forms child plans after its E-studies close.
 
 ## Model routing
 
@@ -106,8 +110,8 @@ Policy rules:
 | # | Plan | Status | Depends on | Doc |
 |---|------|--------|------------|-----|
 | P13 | Sequence stop-at-node playback | proposed — nice-to-have, unscheduled (owner 2026-08-27) | P12 | [2026-08-27-P13-stop-at-node-playback.md](2026-08-27-P13-stop-at-node-playback.md) |
-| P23 | Layout Depth — minimum useful Build set | approved — owner-ratified wall-first reconciliation 2026-09-09; H1/H2/H3/H5 complete; next is coupled Foundation Gate `P23.0a → P23.8 → P23.0b`; no new-schema writes before full F0 acceptance | P22 | [umbrella](2026-09-07-P23-layout-depth-minimum-build.md) |
-| P24 | Scene / Staging Depth umbrella — P24A asset supply + P24B rich 3D staging | proposed — umbrella/research reconciliation; P24A Phase 2 reviewed + annex registered (child seed, evidence pending); P24B Phase 4 compact reviewed directionally, deeper code/reference studies required; consume the coordinate/ownership model actually shipped by P23 rather than treating current room-local storage as a future invariant | P23 | [umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md) |
+| P23 | Layout Depth — minimum useful Build set | approved — owner-ratified wall-first reconciliation 2026-09-09; H1/H2/H3/H5 complete; Pascal harvest closed and optional only; P23 proceeds independently; next is coupled Foundation Gate `P23.0a → P23.8 → P23.0b`; no new-schema writes before full F0 acceptance | P22 | [umbrella](2026-09-07-P23-layout-depth-minimum-build.md) |
+| P24 | Scene / Staging Depth umbrella — P24A asset supply + P24B Rich Scene / Staging Authoring | proposed — umbrella/research reconciliation; Pascal direct-reference harvest closed; active reconciliation sequence is R0–R9/B0–B6; planning may run in parallel with P23, implementation still depends on P23; P24A remains child seed/evidence pending; targeted post-F0 seam recheck required before implementation-ready child plans freeze | P23 | [umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md) · [reconciliation](2026-09-09-P24-reconciliation-sequence.md) |
 | P25 | Experience Foundation umbrella | proposed — Phase 5 external capability research reviewed directionally; E0–E6 reconciliation required before implementation brief; P25.x child plans form after the studies close (owner 2026-09-08) | P24 | [umbrella](2026-09-08-P25-experience-foundation-umbrella.md) |
 | — | Branch rejoin — experiment, no schedule | proposed | P8 conceptually | [2026-08-21-branch-rejoin-experiment.md](2026-08-21-branch-rejoin-experiment.md) |
 | … | future work re-registers here | | | |
@@ -152,7 +156,8 @@ gate) now lives in the archived docs, not here.
   P23.8: schema/compat scaffolding → topology/Room reconciliation →
   migration/compiler/editor-adapter cutover → compatibility acceptance →
   enable wall-first writers. Current product code remains Room-owned/Room-local
-  until F0 ships.
+  until F0 ships. The Pascal harvest is closed optional evidence and does not
+  delay F0 or any P23 child whose documented dependencies are otherwise met.
 - Long-term tiers renumbered 2026-09-05 (owner): P23 Layout Depth, P24
   Scene/Staging Depth, P25 Experience Foundation, P26+ platform expansion;
   typed DB is conditional infrastructure, not a tier. Owner reconciliation
@@ -160,14 +165,17 @@ gate) now lives in the archived docs, not here.
   depth tails later); P25 may follow the minima before the tails; a bounded
   agent/reuse proof follows the first complete visitor-authoring slice. P24
   umbrella registered 2026-09-08 with internal P24A asset-supply/canonical-
-  ingest and P24B rich-3D-staging subtracks. Phase 2 was reviewed 2026-09-08
-  and the detailed P24A annex is registered; Phase 4 compact research is now
-  reviewed directionally for P24B, with deeper code/reference studies still
-  required before its minimum freezes. P24 must consume the spatial
-  coordinate/ownership model actually shipped by P23; its current room-local
-  references describe the pre-P23 baseline, not a future invariant. P25 umbrella
-  registered 2026-09-08 after Phase 5 external capability review; it remains
-  research/reconciliation only until E0–E6 close. See Long-term roadmap.
+  ingest and P24B Rich Scene / Staging Authoring subtracks. Phase 2 was reviewed
+  2026-09-08 and the detailed P24A annex is registered; Phase 4 compact research
+  is reviewed directionally, and the Pascal direct-reference harvest is now
+  closed. The active [P24 reconciliation sequence](2026-09-09-P24-reconciliation-sequence.md)
+  runs current-code maturity audit → cross-view placement/selection contract →
+  transform/material/light/environment reconciliation → B6 minimum freeze.
+  P24 planning may run in parallel with P23, but P24 implementation remains
+  dependent on P23 and any seam changed by F0 receives a targeted post-F0 recheck
+  before implementation-ready child plans freeze. P25 umbrella registered
+  2026-09-08 after Phase 5 external capability review; it remains research/
+  reconciliation only until E0–E6 close. See Long-term roadmap.
 - Deferred / non-blocking: P3B.7b (incl. the P3.4/P3.5 acceptance tail).
 - Proposed / unscheduled: P13, branch rejoin.
 - Shipped baseline: P12 + core P3B gate 2026-08-28; P14–P18 extraction slice;
@@ -237,29 +245,38 @@ conditional infrastructure):
   sweep/revolve, roof helpers, general constraint sophistication) remains
   demand/evidence-gated and never blocks Experience. Everything continues through
   one `LayoutDocument` → `compileLayoutGeometry()` → Plan/3D/visitor geometry
-  authority, with Layout and Scene ownership kept separate.
+  authority, with Layout and Scene ownership kept separate. P23 implementation
+  proceeds from its own umbrella/child dependencies; completed Pascal evidence is
+  optional and should be read only for a materially overlapping slice, never as a
+  prerequisite.
 - **P24 — Scene / Staging Depth umbrella (registered, staged).** The umbrella
   is registered above and split internally into **P24A — Asset Supply +
-  Canonical Ingest** and **P24B — Rich 3D Scene / Staging Editor**. Phase 2
+  Canonical Ingest** and **P24B — Rich Scene / Staging Authoring**. Phase 2
   research is reviewed and P24A has a linked detailed annex. Its minimum
   proves a rights/provenance gate, deterministic canonical ingest, a bounded
   10–12 asset cross-source proof set (Poly Haven + Kenney + Sweet Home 3D),
   PlanProxy output into the existing `AssetFootprint`, an explicit canonical
   model Scene/Save/Load/P22 visitor-resolution path, and bounded material/HDRI
   supply. The research JSON's 32-object Wave 1 remains acquisition backlog,
-  not a P24/P25 gate. P24B Phase 4 compact research is reviewed directionally
-  and now drives bounded B0–B6 maturity/reference studies rather than a copied
-  feature list. Its exact minimum and combined P24 sequencing/acceptance remain
-  **TBD until those current-code/reference studies close**. Material/texture/
-  HDRI assets originate in P24A while assignment/editing/light/environment
-  operations belong to P24B. Both preserve one project asset registry,
-  `SceneDocument` ownership, canonical selection/history, existing
-  gizmo/transform authority, Threlte patterns and visitor/editor isolation;
-  they consume the spatial coordinate model shipped by P23. Current room-local
-  transforms are pre-P23 baseline evidence, not a future P24 invariant. P25
-  waits only for the accepted useful minimum from both subtracks, never for
-  catalogue/DCC depth tails. See [P24 umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md)
-  and [P24A annex](2026-09-08-P24A-asset-supply-canonical-ingest-annex.md).
+  not a P24/P25 gate. P24B Phase 4 compact research is reviewed directionally;
+  the pinned Pascal direct-reference harvest is closed and is now evidence,
+  not another research gate. The active
+  [P24 reconciliation sequence](2026-09-09-P24-reconciliation-sequence.md)
+  runs R0–R9 over current Museum code: P23 delta map, P24A readiness, B0 maturity
+  matrix, B2 shared Plan/3D placement, B5 cross-view behavioral contract, B1/B3/B4
+  depth decisions, final B5 presentation, then B6 minimum freeze. P24 planning may
+  run in parallel with P23; implementation still depends on P23, and seams changed
+  by F0 get a targeted post-F0 recheck before implementation-ready child plans
+  freeze. Material/texture/HDRI assets originate in P24A while assignment/editing/
+  light/environment operations belong to P24B. Both preserve one project asset
+  registry, `SceneDocument` ownership, canonical selection/history, existing
+  gizmo/transform authority, Threlte patterns and visitor/editor isolation; they
+  consume the spatial coordinate model shipped by P23. Current room-local
+  transforms are pre-P23 baseline evidence, not a future P24 invariant. P25 waits
+  only for the accepted useful minimum from both subtracks, never for catalogue/
+  DCC depth tails. See [P24 umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md),
+  [P24A annex](2026-09-08-P24A-asset-supply-canonical-ingest-annex.md), and
+  [P24 reconciliation](2026-09-09-P24-reconciliation-sequence.md).
 - **P25 — Experience Foundation umbrella (registered, research/reconciliation).**
   Phase 5 external capability research is reviewed directionally. The leading
   hypothesis is **Destination + reusable Content + bounded semantic Interaction**,
@@ -322,11 +339,12 @@ conditional infrastructure):
   by hosted cold-boot acceptance through the deployed proxy/API/Postgres/R2),
   then minimum useful authoring
   slices split by document ownership (P23 Layout Depth minimum, P24 Scene /
-  Staging minimum split internally into P24A asset supply/ingest + P24B rich
-  3D staging), the registered P25 Experience research/reconciliation umbrella,
-  a bounded agent/reuse proof, then evidence-led depth tails and expansion
-  (P26+). The design track runs in parallel from Now. Auth UX/hardening and
-  richer permissions ride with the P26+ collaborative tier, not P19/P20.
+  Staging minimum split internally into P24A asset supply/ingest + P24B Rich
+  Scene / Staging Authoring), the registered P25 Experience research/
+  reconciliation umbrella, a bounded agent/reuse proof, then evidence-led
+  depth tails and expansion (P26+). The design track runs in parallel from Now.
+  Auth UX/hardening and richer permissions ride with the P26+ collaborative
+  tier, not P19/P20.
 - **Medium-term product infrastructure** (possible direction, unscheduled):
   hosted project loading and published project versions ride with P22;
   portable project/export hardening, project asset management, and generic
