@@ -82,7 +82,10 @@ gate. P24 umbrella has the P24A annex as its child seed plus the active
 [P24 reconciliation sequence](2026-09-09-P24-reconciliation-sequence.md);
 Pascal direct-reference evidence is closed and P24 may reconcile in parallel
 with P23, while P24 implementation remains dependent on the accepted P23
-minimum. P25 umbrella forms child plans after its E-studies close.
+minimum. P25 focused research now closes E1–E4 product semantics and the main
+E5 authoring direction; P25.x child plans still wait for targeted E0 post-F0/
+P24 seam rechecks, E5 reference-integrity reconciliation and E6 persistence/
+operations closure.
 
 ## Model routing
 
@@ -112,7 +115,7 @@ Policy rules:
 | P13 | Sequence stop-at-node playback | proposed — nice-to-have, unscheduled (owner 2026-08-27) | P12 | [2026-08-27-P13-stop-at-node-playback.md](2026-08-27-P13-stop-at-node-playback.md) |
 | P23 | Layout Depth — minimum useful Build set | approved — owner-ratified wall-first reconciliation 2026-09-09; H1/H2/H3/H5 complete; coupled Foundation Gate **P23.0a → P23.8 → P23.0b shipped** (commits `13a96a0`, `7d9df94`, `41a5cde` on main); remaining: F0 acceptance per the execution-order addendum in the P23.0 doc — writers stay disabled until every checklist item passes | P22 | [umbrella](2026-09-07-P23-layout-depth-minimum-build.md) |
 | P24 | Scene / Staging Depth umbrella — P24A asset supply + P24B Rich Scene / Staging Authoring | proposed — umbrella/research reconciliation; Pascal direct-reference harvest closed; active reconciliation sequence is R0–R9/B0–B6; planning may run in parallel with P23, implementation still depends on P23; P24A remains child seed/evidence pending; targeted post-F0 seam recheck required before implementation-ready child plans freeze | P23 | [umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md) · [reconciliation](2026-09-09-P24-reconciliation-sequence.md) |
-| P25 | Experience Foundation umbrella | proposed — Phase 5 external capability research reviewed directionally; E0–E6 reconciliation required before implementation brief; P25.x child plans form after the studies close (owner 2026-09-08) | P24 | [umbrella](2026-09-08-P25-experience-foundation-umbrella.md) |
+| P25 | Experience Foundation umbrella | proposed — focused research reconciled 2026-09-09: Destination + guided Stop/occurrence + Content/Info Panel + bounded Interaction + visitor/a11y product semantics closed; implementation remains blocked on targeted post-F0/P24 seam rechecks, E5 reference integrity and E6 persistence/operations; no P25.x implementation-ready child plans yet | P24 | [umbrella](2026-09-08-P25-experience-foundation-umbrella.md) |
 | — | Branch rejoin — experiment, no schedule | proposed | P8 conceptually | [2026-08-21-branch-rejoin-experiment.md](2026-08-21-branch-rejoin-experiment.md) |
 | … | future work re-registers here | | | |
 
@@ -173,9 +176,10 @@ gate) now lives in the archived docs, not here.
   transform/material/light/environment reconciliation → B6 minimum freeze.
   P24 planning may run in parallel with P23, but P24 implementation remains
   dependent on P23 and any seam changed by F0 receives a targeted post-F0 recheck
-  before implementation-ready child plans freeze. P25 umbrella registered
-  2026-09-08 after Phase 5 external capability review; it remains research/
-  reconciliation only until E0–E6 close. See Long-term roadmap.
+  before implementation-ready child plans freeze. P25 focused research was
+  reconciled into the umbrella 2026-09-09: E1–E4 product semantics and E5
+  authoring direction are closed; P25 remains research/reconciliation only until
+  targeted E0 seam rechecks, E5 reference integrity and E6 close. See Long-term roadmap.
 - Deferred / non-blocking: P3B.7b (incl. the P3.4/P3.5 acceptance tail).
 - Proposed / unscheduled: P13, branch rejoin.
 - Shipped baseline: P12 + core P3B gate 2026-08-28; P14–P18 extraction slice;
@@ -278,19 +282,23 @@ conditional infrastructure):
   [P24A annex](2026-09-08-P24A-asset-supply-canonical-ingest-annex.md), and
   [P24 reconciliation](2026-09-09-P24-reconciliation-sequence.md).
 - **P25 — Experience Foundation umbrella (registered, research/reconciliation).**
-  Phase 5 external capability research is reviewed directionally. The leading
-  hypothesis is **Destination + reusable Content + bounded semantic Interaction**,
-  composed over existing Spatial/Camera/Assets meaning. The first guided journey
-  should preferentially reuse the existing Camera Sequence; the strongest minimum
-  event/action candidates are `Activate`, `DestinationReached`, `ShowContent`,
-  `NavigateTo` and `OpenUrl`. Exact persistence ownership, Destination target
-  semantics, repeated-Destination/occurrence behavior, Narration scope and schema
-  remain unfrozen. E0–E6 in the [P25 umbrella](2026-09-08-P25-experience-foundation-umbrella.md)
-  must reconcile live Camera/visitor behavior, Content/Interaction semantics,
-  accessibility, authoring UX, Preview/Publish and persistence/operations before
-  implementation tickets exist. P25 still begins after the accepted P23/P24
-  useful minima, before optional depth tails, and must prove one complete
-  visitor journey rather than a generic app-builder feature set.
+  Focused research is now canonical at
+  [`../Deep-research/P25-research/P25-research-compact.md`](../Deep-research/P25-research/P25-research-compact.md)
+  and has been reconciled into the umbrella. The minimum product vocabulary is
+  **Destination + guided Stop/occurrence + reusable Content/Info Panel + bounded
+  semantic Interaction**, composed over existing Spatial/Camera/Assets meaning.
+  Stop is Sequence-relative only: it owns no pose/path/timing/connectivity or
+  second next/previous graph. Core interaction remains `Activate`,
+  `DestinationReached`, `ShowContent`, `NavigateTo`, `OpenUrl`; one rule owns one
+  action and multiple independent non-conflicting rules may share an event.
+  Narration is first-depth, not a minimum gate. Semantic DOM companion navigation,
+  keyboard/touch equivalence and same-Destination reduced/no-motion behavior are
+  platform contracts. Product semantics are closed; exact persistence ownership,
+  durable Stop/Sequence representation, Destination/Scene reference forms, media
+  resolution, reference integrity and operation/codecs remain unfrozen pending
+  targeted post-F0/P24 rechecks and E6. P25 still begins after the accepted
+  P23/P24 useful minima, before optional depth tails, and must prove one complete
+  occurrence-aware visitor journey rather than a generic app-builder feature set.
 - **Bounded agent/reuse proof (after first complete visitor-authoring
   slice, before broad expansion).** Test whether a strong agent can inspect,
   semantically edit, stage, author camera/experience changes, validate,
@@ -350,26 +358,28 @@ conditional infrastructure):
   portable project/export hardening, project asset management, and generic
   visitor/player extraction when genuinely needed.
 - **Long-term Experience work** (unscheduled beyond the P25 foundation):
-  Narration/transcripts, richer wayfinding, bounded first-visit state,
-  semantic hotspots where no existing Scene identity exists, attention/reveal
-  behaviors, deep-linked destinations, multiple tours/occurrence semantics,
-  derived visitor maps, reusable Experience templates/presets, localization,
-  analytics, richer visitor-state persistence, XR-specific behavior, developer
-  runtime SDK, headless runtime, and community/gallery surfaces. Experience
-  remains composed of **Navigation · Content · Interactions**; Interactions are
-  an authoring lens within Experience (an `Event → Target → Action` semantic
-  model), never a separate mode — ratified 2026-08-31
+  Narration/transcripts, transient Highlight, bounded first-visit state,
+  richer wayfinding/resume, richer media, semantic hotspots where no existing
+  Scene identity exists, deep-linked destinations, derived visitor maps,
+  multiple tours/richer story structures, reusable Experience templates/presets,
+  localization, analytics, richer visitor-state persistence, XR-specific behavior,
+  developer runtime SDK, headless runtime, and community/gallery surfaces.
+  **Guided Stop/occurrence semantics are no longer deferred here; they are part
+  of the P25 minimum product vocabulary.** Experience remains composed of
+  **Navigation · Content · Interactions**; Interactions are an authoring lens
+  within Experience (an `Event → Target → Action` semantic model), never a
+  separate mode — ratified 2026-08-31
   ([scope decision](../archive/plans/2026-08-31-scope-decision-experience-interaction-boundary.md)).
 
 Constraints: no Experience implementation tickets are created merely by
-registering the P25 research umbrella, and Experience work must not displace
-persistence or Spatial completion. `ExperienceDocument` is now a P25
-architecture hypothesis to study, not a ratified schema: no codecs, migrations
-or backend endpoints exist until the E6 implementation-ready gate closes. P19
-includes the first Google OIDC (Authorization Code + PKCE) + app-owned
-secure-session integration and single-user ownership required for Save/Load;
-broader auth UX/hardening and richer permissions remain later. P19 has no
-Experience schema and no R2.
+registering or product-reconciling the P25 umbrella, and Experience work must
+not displace persistence or Spatial completion. `ExperienceDocument` remains
+a P25 architecture hypothesis to study, not a ratified schema: no codecs,
+migrations or backend endpoints exist until the E6 implementation-ready gate
+closes. P19 includes the first Google OIDC (Authorization Code + PKCE) +
+app-owned secure-session integration and single-user ownership required for
+Save/Load; broader auth UX/hardening and richer permissions remain later. P19
+has no Experience schema and no R2.
 
 P19–P22 stay raw parameterized SQL: the no-ORM pins in the P19/P20 plans are
 scope-limited to those tiers and are revisited only when code pressure on
