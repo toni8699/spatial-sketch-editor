@@ -69,6 +69,11 @@ success percentages.
 | **P22.4** | 68 | Sol medium | shipped 2026-09-08 — publish surface; dirty/stale/revision gates, switch-safety, axe; hosted owner lifecycle (publish/rename/update/unpublish/republish + stale-ABA conflict) passed on production |
 | **P22.5** | 64 | Sol medium | shipped 2026-09-08 — hosted acceptance + closeout; production cold-browser loop, anonymous release-membership boundary (76,488-byte asset), shipped-static retention in deployed output, full gate (Vitest 2570, API 39, checks/builds/bundles green) |
 
+| **P23.0a** | 68 | Sol medium | shipped 2026-09-09 — wall-first schema + explicit format identification scaffolding; schema design with version-policy consequences but bounded blast radius (no writers, read-only identification) |
+| **P23.8** | 84 | Sol high | shipped 2026-09-09 — straight-wall topology + persistent Room regions; robust orientation, deterministic noding/faces/reconciliation with provenance rules; highest complexity in the Foundation Gate |
+| **P23.0b** | 80 | Sol high | shipped 2026-09-09 — legacy→wall-first migration + compiler/runtime/editor cutover; three.js-exact transform preservation, ~87-site adapter ripple, byte-identical legacy compile (golden-protected); 26 new tests flushed 4 latent bugs |
+| **P23.0 F0** | 72 | Sol medium | in progress — acceptance gate per the execution-order addendum in the P23.0 doc; six ordered stages, mutator inventory dominates; escalation on demonstrated failure |
+
 Pre-P20 numbers still proposed/unscheduled (P13 stop-at-node, branch-rejoin
 experiment) are assessed when scheduled — no standing rows. P23+ entries are
 added here when scheduled.
