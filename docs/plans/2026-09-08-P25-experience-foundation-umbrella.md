@@ -3,6 +3,7 @@
 **Created:** 2026-09-08 · **Status:** proposed (tracker authoritative)  
 **Depends on:** accepted minimum useful P24 Stage set; P24 itself depends on the P23 minimum useful Build set.  
 **Detail status:** P25 is an umbrella/research-reconciliation plan, not an implementation-ready brief. Phase 5 external capability research has been reviewed directionally and is strong enough to narrow the product thesis, but exact persistence ownership, Destination semantics, guided-occurrence semantics, Narration scope, and the minimum implementation contract remain unfrozen pending focused studies and live-code reconciliation.
+**Planning model:** progressive — this umbrella owns the WHAT/WHY/BOUNDARIES/ORDER/RESEARCH GATES/high-level acceptance. Evidence here is primarily **product/UX/experience research** (E0–E6), not code harvest. The directional conclusions and leading minimum hypothesis preserved in this document are seed material for the future P25.x child plans: they stay here (challenged/refined by the studies) rather than being copied into speculative child files — child seeds are created only when their owning study closes. A P25.x child plan may not be marked implementation-ready while the hypothesis it depends on is unfrozen. Child status vocabulary lives in the [tracker rules](README.md).
 
 ## Outcome
 
@@ -563,6 +564,21 @@ The exact P23/P24→P25 acceptance gate remains owned by those plans until their
 # Closeout rule
 
 P25 does not become implementation-ready because the external research identified attractive capabilities.
+
+### Progressive-planning migration accounting (2026-09-08 restructure)
+
+| Existing detail | Old location | New owner | Class | Notes |
+|---|---|---|---|---|
+| Outcome, product model, hard architecture boundaries (one nav system, Spatial ownership, same runtime, visitor isolation, deterministic authoring) | this umbrella | this umbrella | umbrella contract | durable; unchanged |
+| Phase 5 accepted directional conclusions (Destination+Content+Interaction, Activate, reuse Camera Sequence, etc.) | §Research basis | this umbrella | evidence context (hypotheses) | seed material for future P25.x children; stays under study until frozen |
+| E0–E6 study definitions, open questions, rejection lists, persistence options A–C | this umbrella | this umbrella | evidence gates | RESEARCH GATES are umbrella-owned; P25.x children inherit their study's conclusions at reconciliation |
+| Leading minimum hypothesis + one-level-deeper candidates + product boundary | this umbrella | this umbrella | evidence context / deferred | explicitly not frozen scope; P25.x seeds form from these after E0–E5 |
+| Camera canonical contracts (one graph, topology ≠ Sequence, Plan/3D authority split) | this umbrella + architecture docs | this umbrella | umbrella contract | Experience extends, never replaces |
+
+Explicitly deferred: P25.x child seeds — the roadmap's own rule (no Experience
+implementation tickets from research alone; schema unfrozen until E6) means
+creating child files now would violate the umbrella's own gate. The first
+child plans form from the minimum hypothesis once E0–E5 close.
 
 The sequence is:
 

@@ -7,7 +7,15 @@ This registers future work; it does not mark P22 or preceding work shipped.
 **Plan review:** 2026-09-08 ground-truth pass against the working tree — all
 named seams verified (centroid-pivot `transformLayoutRoomUnit`, meter-offset
 openings, codec-enforced door relations); path convention, P23.3 relation
-contract and fixture-first notes folded below.
+contract and fixture-first notes folded below. Reviewer harvest-workflow
+proposal folded same day: capability-split harvest passes (H1–H4) producing
+implementation artifacts with license/disposition/file/fixture provenance,
+consumed per increment via the READ FIRST table in the references section.
+**Progressive planning:** 2026-09-08 restructure into umbrella + child-plan
+seeds (P23.1–P23.7) + evidence artifacts (H1–H4); migration accounting at
+§Progressive-planning migration accounting. This document is the Layout Depth
+umbrella: durable product contract, boundaries, order and evidence gates.
+Implementation detail lives in the child seeds until reconciled.
 
 ## User outcome
 
@@ -65,7 +73,7 @@ dimension semantics rather than treating every kind as a generic scale vector.
 ### Capability-maturity recheck before each touched increment
 
 P23 has already completed the broad Phase 3 research → live-repository
-reconciliation needed to write this implementation-ready brief. Do **not** reopen
+reconciliation needed to define this umbrella's contract and evidence gates. Do **not** reopen
 a general CAD/floor-planner research phase before implementation.
 
 However, the same maturity rule used by P24 applies to every capability P23
@@ -76,7 +84,8 @@ touches:
 > capable, discoverable, precise or polished for the P23 Build goal.**
 
 Before implementing a P23 increment, re-inspect the exact current code path for
-that capability after P22 and directly recheck the most relevant public reference
+that capability after P22, read the increment's harvest artifact (READ FIRST
+table in the references section), and directly recheck the most relevant public reference
 modules where the plan relies on them. The bounded recheck should answer:
 
 1. what behavior actually ships now and which module/document owns it;
@@ -120,6 +129,84 @@ Highest-value precedents for this slice:
 | Room topology diagnostics | JTS `Polygonizer` | Follow-up reference for derived candidate faces/dangles/cut edges while explicit Room identity stays authored |
 | Bounded offset | CavalierContours JS / `clipper2-ts` | Follow-up spike only, not P23 minimum |
 
+### Open-source harvest passes — implementation artifacts, not essays
+
+The research artifact above stays the **discovery layer**: it answers which
+projects matter, why, and their PORT vs ADAPT vs STUDY vs REJECT disposition.
+No broad deep research is re-run for P23. What discovery does not give the
+implementer is *exactly which code, tests and fixtures to harvest*. That is a
+separate, targeted **harvest pass** per capability group over the
+already-selected repos — a bounded inspection pass, not a new research phase.
+
+A harvest pass produces an implementation artifact (not an essay) under
+`docs/Deep-research/P23-Staging-Research/harvest/`, one per group:
+
+- `P23-H1-wall-room-geometry.md` — wall/room/opening semantics: openPlan3D,
+  Blueprint3D, Sweet Home 3D
+- `P23-H2-snapping-selection-guides.md` — snapping/selection/guides + Plan
+  visual grammar: LibreCAD, openPlan3D
+- `P23-H3-robust-geometry.md` — predicates/intersections/topology diagnostics:
+  `robust-predicates`, Flatten.js, JTS
+- `P23-H4-offsets-trims-curves.md` — offset/trim/curve operations:
+  CavalierContours JS, `clipper2-ts`, LibreCAD. **Runs only when the bounded
+  offset/trim follow-up is scheduled**, matching the disposition table above.
+
+Every artifact uses the same fixed contract:
+
+- Repo, license (rechecked live), disposition: `PORT | ADAPT | STUDY | REJECT`;
+- Relevant files, functions/classes, tests/fixtures (exact paths);
+- Algorithm/interaction being harvested; what can be copied/ported, what must
+  be rewritten, what architecture must **not** come over;
+- Mapping into Museum Editor seams: `LayoutDocument` (authored truth),
+  `compileLayoutGeometry()` (single geometry boundary), compiled query
+  records / `PlanRenderModel` (only Plan geometry source), `SceneDocument`,
+  session/history/transaction adapters;
+- Required acceptance fixtures with **provenance**: the upstream failure each
+  fixture guards (e.g. openPlan3D's generous-tolerance multi-room failures,
+  timestamp IDs, resampled length measurement);
+- License obligations and an explicit not-to-import list.
+
+License rules for every pass: verify the upstream LICENSE file before relying
+on anything; `PORT` (code + tests may be ported with license/attribution
+retained) applies only to permissive licenses (MIT/Unlicense/Apache/Boost);
+GPL/LGPL rows (LibreCAD, Sweet Home 3D, FreeCAD, SolveSpace) stay `STUDY` —
+concepts, fixture ideas and behavior described in our own words, never
+transcribed code; MPL-2.0 rows stay adapter-isolated. Always recheck upstream
+file/version/license at harvest time and record it in the artifact.
+
+Harvest artifacts are implementation aids like the research artifact: they
+never override plan contracts, and a finding that conflicts with a plan
+boundary goes to owner review instead of into the code.
+
+Implementation consumption per increment — the flow is: required harvest
+artifact completed and reviewed → child plan reconciled against the artifact
+and the live repository → child plan marked `implementation-ready` → the
+implementer reads **plan + the finalized child plan + current Museum Editor
+code** and implements only that slice. A harvest artifact is never a signal to
+implement directly.
+
+**Harvest sequencing rule:** a required READ FIRST harvest artifact must be
+completed and reviewed, and the child plan reconciled to `implementation-ready`,
+before implementation of that increment begins. Harvest, reconciliation and
+implementation are separate passes; do not discover/port upstream code ad
+hoc while writing the increment.
+
+| Increment | Required pre-implementation harvest (READ FIRST) |
+|---|---|
+| P23.1 | Complete `P23-H1` (openPlan3D `wallEditing.ts` + its tests first) → reconcile/finalize P23.1 to `implementation-ready` → implement P23.1 |
+| P23.2 | Complete `P23-H2` (LibreCAD snapper concepts; openPlan3D `hitTesting.ts`, `alignment.ts`) → reconcile/finalize P23.2 → implement P23.2 |
+| P23.3 | Complete `P23-H1` (Sweet Home 3D wall-relative opening semantics; openPlan3D opening tests) → reconcile/finalize P23.3 → implement P23.3 |
+| P23.4 | No gating harvest. Optional context: `P23-H1` clone/remap lessons once complete. Reconcile against the live repository → mark `implementation-ready` → implement P23.4 |
+| P23.5 | No gating harvest. Optional context: `P23-H1` (`roomPresets.ts`) once complete. Reconcile against the live repository → mark `implementation-ready` → implement P23.5 |
+| P23.6 | Complete `P23-H2` (Plan visual-language rows in the table above) → reconcile/finalize P23.6 → implement P23.6 |
+| P23.7 | Complete `P23-H3` (degeneracy fixture provenance from the T-fixture set) → reconcile/finalize P23.7 → implement P23.7 |
+| Offset/trim follow-up | Complete `P23-H4` (only when scheduled) → finalize the follow-up plan → implement |
+
+The same discovery/harvest split applies to later plans' research artifacts as
+separate streams (P23 harvest = CAD/layout code; a P24 harvest would separately
+inspect 3D scene/material/lighting/asset-editor implementations) — registering
+that pattern here creates no P24 tickets.
+
 ## Operation and ownership contract
 
 Each capability below has an explicit document/target input, deterministic
@@ -151,233 +238,220 @@ are rejected; never cascade-delete Scene or camera content to make them pass.
 
 ## Minimum capability contract
 
+Progressive-planning structure: each slice below keeps its durable product
+contract here (harvest findings must not change these semantics without owner
+review); implementation detail migrated to the linked child-plan seed. A child
+plan becomes implementation-ready only after its required evidence is completed
+and reconciled (harvest sequencing rule in the references section).
+
 ### P23.1 — Precise placement and dimensions
 
-Extend existing numeric controls with explicit meters/degrees, finite-number and
-positive-dimension checks, inline rejection reasons and consistent Apply/Escape
-behavior. Blank input is invalid, not zero. Keep radians in canonical documents.
-Manual numeric values are exact and bypass gesture snapping.
+**Outcome:** the creator authors exact architectural dimensions numerically —
+object position/rotation/dimensions, room frames, straight-wall length, and
+rectangular-room width/depth — with explicit validation and atomic rejection.
 
-- Layout objects: position X/Y/Z, supported rotation and kind-appropriate full
-  dimensions/radius; preserve current world-center and room ownership semantics.
-  Arrange keeps its X/Z/Yaw contract and read-only dimensions; dimension editing
-  belongs to Layout. Reuse the existing 3D gizmo path where already supported.
-- Rooms: numeric frame origin X/Z and yaw using `transformLayoutRoomUnit` and
-  its existing pivot semantics. Compute the delta needed to reach the requested
-  frame; do not mistake frame origin for the transform's centroid pivot.
-- **Selected straight wall:** expose exact length in meters with an explicit
-  `Start | End` fixed-endpoint choice. A semantic candidate moves only the
-  opposite endpoint along the existing line direction, preserves the segment ID,
-  updates the closed room boundary through the canonical room-editing path, keeps
-  opening offsets in meters, validates adjacent segments/openings/topology, and
-  rejects the whole change if the result is invalid. `auto-bezier` arc length is
-  a readout only in P23; no numeric curved-wall length mutation or general wall-
-  angle command is added here.
-- Rectangular rooms: width/depth along room-local axes, anchored at the current
-  local minimum corner, with frame unchanged. Enable only for a verified
-  four-line rectangle, including rotated rectangles; no bounding-box resize of
-  arbitrary polygons/curves. Preserve segment IDs and connectivity. Owned objects
-  and Scene contents do not scale or move on room resize. Keep opening offsets
-  in meters and reject a resize that makes them invalid.
+**Must:** extend the existing numeric controls (explicit meters/degrees,
+finite/positive checks, inline rejection reasons, consistent Apply/Escape;
+blank input is invalid, not zero; radians stay canonical); manual numeric
+values are exact and bypass gesture snapping; publish a clear reason when an
+operation is unsupported. Straight-wall sizing exposes exact length with an
+explicit `Start | End` fixed-endpoint choice, preserves the segment ID, updates
+the closed room boundary through the canonical room-editing path, keeps opening
+offsets in meters, validates adjacent segments/openings/topology, and rejects
+the whole change if invalid. Rectangular-room sizing works along room-local
+axes anchored at the current local minimum corner, only for a verified
+four-line rectangle (rotated included), preserving segment IDs, connectivity
+and ownership; owned objects and Scene contents do not scale or move on room
+resize. Room frame edits use `transformLayoutRoomUnit` and its existing pivot
+semantics. Reuse the existing 3D gizmo path where already supported.
 
-No floor-wide height/elevation expansion is required. Existing thickness/height
-fields keep their current owning scope and validation. Publish a clear reason
-when an operation is unsupported rather than presenting a nonfunctional field.
+**Must not:** introduce a general persistent geometric-constraint system
+(FreeCAD/SolveSpace-class solver state, DOF/conflict UX and constraint graphs
+are outside P23/product scope); create a second geometry pipeline; mutate Scene
+to compensate for Layout edits; add numeric curved-wall length mutation or a
+general wall-angle command (`auto-bezier` arc length is a readout only);
+expand floor-wide height/elevation semantics (existing thickness/height fields
+keep their owning scope); replace Arrange's X/Z/Yaw contract or make its
+dimensions editable (dimension editing belongs to Layout).
 
-Research precedent: direct numeric precision is intentionally **not** a general
-persistent geometric-constraint system. FreeCAD/SolveSpace-class solver state,
-DOF/conflict UX and constraint graphs remain outside P23/product scope.
+→ Implementation detail, verified seams, fixtures and evidence plan:
+[P23.1 child plan](2026-09-08-P23.1-precise-placement-and-dimensions.md)
+(status `seed — pre-evidence`; requires P23-H1).
 
 ### P23.2 — Predictable Plan snapping and alignment
 
-Extend the existing Plan snap controls, not global editor preferences. Keep the
-current 0.25 m default; expose a finite positive grid step with the existing
-input-validation pattern. Reconcile current hard-coded quarter-meter paths so
-the selected step applies to affected Layout placement and translation gestures.
-Do not silently change Scene/Camera snapping or existing angle modifiers.
+**Outcome:** Plan drafting snaps predictably — a configurable grid plus
+semantic reference snapping (endpoints, midpoints, intersections, nearest-span,
+orthogonal, opening edges, object bounds) and one-to-one alignment — all
+derived from compiled geometry.
 
-New semantic snap candidates derive from **`CompiledLayoutGeometry.queries` plus
-transient gesture guides**. Plan/SVG code must not independently reconstruct or
-resample authored geometry to create another snap truth. Keep a linear scan first;
-a spatial index is added only after measured project-size evidence.
+**Must:** extend the existing Plan snap controls, not global editor preferences
+(keep the 0.25 m default; expose a finite positive grid step with the existing
+validation pattern); reconcile the hard-coded quarter-meter paths so the
+configured step reaches affected placement/translation gestures; derive snap
+candidates from **`CompiledLayoutGeometry.queries` plus transient gesture
+guides**; linear scan first (spatial index only on measured evidence); choose
+winners deterministically (tool/context validity → semantic priority → screen
+distance → stable ID) within a fixed CSS-pixel acquisition radius stable
+across zoom; reference snap wins over grid; a visible guide/marker identifies
+the winner; snap-off disables both; guides clear on cancel; alignment is one
+selected supported object to one reference (object world AABB, room compiled
+Plan bounds, or straight-wall reference with bounded **Center on wall**),
+translating only the selected object; the Inspector reference picker keeps the
+active selection intact; no-op alignment adds no history.
 
-Add reference snapping for room drafting/vertex edits and supported object/room
-translation:
+**Must not:** silently change Scene/Camera snapping or existing angle
+modifiers; let Plan/SVG code independently reconstruct or resample authored
+geometry into a second snap truth; serialize persistent constraints; invent a
+multi-selection owner; add Flatten.js for feature parity or `robust-predicates`
+except behind a layout-core adapter proven necessary by degeneracy fixtures
+(P23.7).
 
-- existing boundary endpoints / room corners;
-- straight-wall midpoints;
-- wall/reference-span intersections where valid;
-- nearest point on a wall/reference span;
-- an orthogonal guide relative to the active drafting/editing anchor;
-- opening edges while editing an opening;
-- rotation-aware object bounds edges/centers in X/Z where already supported.
-
-Exclude the moving target and its owned members. Choose within a fixed CSS-pixel
-acquisition radius, stable across zoom; use tool/context validity, semantic
-feature priority, then screen distance, then stable ID/key. Reference snap wins
-over grid when acquired. A visible guide/marker identifies the winner; snap-off
-disables both. Reject invalid geometry rather than silently moving to a different
-candidate. No persistent constraints are serialized. Pointer acquisition radius
-is interaction state in CSS pixels; model-space geometry tolerances are a
-separate canonical policy.
-
-Alignment is initially **one selected supported layout object to one reference**:
-another supported layout object's world AABB, a room's compiled Plan bounds, or a
-selected straight-wall reference. Choose X or Z and minimum/center/maximum for
-bounds references; wall reference adds a bounded **Center on wall** action using
-compiled/query geometry. Translate only the selected object, preserving height,
-rotation, dimensions and ownership. The Inspector reference picker keeps the
-active selection intact. This delivers useful alignment without inventing a
-multi-selection owner. General distribution/group alignment is later.
-
-Research precedent: LibreCAD informs the bounded snap vocabulary and preview
-behavior, but P23 remains purpose-built around Museum's compiled query records.
-Do not add Flatten.js merely for feature parity; introduce `robust-predicates`
-behind a layout-core adapter only if near-collinear/intersection acceptance
-fixtures demonstrate a real classification weakness in current math.
+→ Implementation detail, verified seams, fixtures and evidence plan:
+[P23.2 child plan](2026-09-08-P23.2-snapping-and-alignment.md)
+(status `seed — pre-evidence`; requires P23-H2).
 
 ### P23.3 — Openings that fit
 
-Build on existing door/window offset, width, height, sill and profile controls.
-Expose segment length and remaining clearance; make clear that offset is the
-opening's start measured in **meters along the segment**. Add Center on segment
-and distance-from-end placement by converting to the existing offset
-representation. No schema migration to normalized `t` is required. Reuse current
-rectangular/rounded/pointed profiles; no new door-leaf meshes or interactive
-opening/closing behavior.
+**Outcome:** openings fit their walls predictably — numeric center/
+clearance placement plus straight-segment direct manipulation (body drag,
+width handles) — without changing the meter-based attachment model.
 
-For **straight segments**, add direct Plan manipulation:
+**Must:** build on existing door/window offset, width, height, sill and
+profile controls; expose segment length and remaining clearance; make explicit
+that offset is the opening's start measured in **meters along the segment**;
+add Center on segment and distance-from-end placement by converting to the
+existing offset representation; for straight segments add body drag (slides
+along its owning segment only) and left/right width handles, with the gesture
+keeping `segmentId`/height/sill/profile unchanged unless the edited field owns
+the value, transient preview, one history commit on pointer-up, and clean
+cancellation; validate the whole candidate (finite positive dimensions,
+segment limits, vertical fit, overlapping intervals) using canonical geometry
+rules; expose the existing optional door `connectsRoomIds` through an explicit
+room choice (codec-enforced doors-only/existing-members/owner-first invariants
+mean the picker offers only valid non-owner rooms); show the actual compiled
+result.
 
-- dragging the opening body slides it along its owning segment only;
-- left/right width handles resize the opening along that same segment;
-- the gesture keeps `segmentId`, height, sill and profile unchanged unless the
-  specific edited field owns that value;
-- preview is transient, pointer-up commits one Layout history entry, and Escape/
-  pointer cancellation restores the immutable baseline with no history.
+**Must not:** migrate the schema to normalized `t`; add door-leaf meshes or
+open/close behavior; clamp overflow silently (numeric and direct edits
+reject); change curved-segment behavior (the body-drag/width-handle assistance
+may be straight-only with a stated reason); infer relations from adjacency,
+create camera edges, or promise a relation cuts a second wall; leave kind
+changes silently resetting fields (preserved-only-valid-fields with explicit
+UI); two physical wall openings remain explicit authored openings.
 
-Validate the whole candidate for finite positive dimensions, segment limits,
-vertical fit and overlapping opening intervals using the canonical geometry
-rules/tolerances. Numeric and direct edits reject overflow rather than clamp
-silently. Changing door/window kind preserves only valid fields; any necessary
-reset is explicit in the UI. Existing curved-segment behavior remains supported
-as-is; the new body-drag/width-handle assistance may be limited to straight
-segments with a stated reason.
-
-Expose the existing optional door `connectsRoomIds` relation through an explicit
-room choice, using current codec/portal semantics. Windows remain unpaired;
-unrelated/self/missing-room targets are rejected. The codec already enforces the
-invariants this relies on — doors-only relations, existing room IDs on both
-members, and the owning room as the first relation member — so the picker offers
-only valid non-owner room choices instead of relying on post-hoc rejection. Do
-not infer a relationship
-because two walls look adjacent, create camera edges, or promise that a relation
-cuts a second wall automatically. Show the actual compiled result. Two physical
-wall openings, where required, remain explicit authored openings.
-
-Research precedent: mature floor planners reinforce wall-relative opening
-semantics, but Museum's current meter-based `segmentId + offset + width` model is
-already the preferred P23 base. Extend it rather than replacing it.
+→ Implementation detail, verified seams, fixtures and evidence plan:
+[P23.3 child plan](2026-09-08-P23.3-openings-that-fit.md)
+(status `seed — pre-evidence`; requires P23-H1, shared with P23.1).
 
 ### P23.4 — Duplicate and linear repeat
 
-Supported targets are one authored non-profile layout object, one opening on its
-current segment, or one room with its owned supported layout objects. Copies are
-independent canonical records. Duplicate uses the same operation as repeat with
-one copy. The creator supplies translation X/Z for objects/rooms, or spacing in
-meters along the segment for openings. Repeat adds an integer 1–50 copies;
-the cap is a deliberate first-slice bound, raised only with measured evidence.
+**Outcome:** the creator duplicates or linearly repeats supported structure —
+one object, one opening, or one room with its owned Layout structure — as
+independent canonical records in one atomic, undoable operation.
 
-Generate all copies from the original using `index × delta`, not accumulated
-rounded offsets. Allocate unique room/object/segment/interior-anchor/opening IDs
-and remap internal references. Preserve object Y/rotation/dimensions and room
-floor/frame/shape. Room copies include owned Layout structure, never furniture,
-Scene entities or camera tours; state this beside the action. Reject room-copy
-requests containing read-only profile objects or external door relations until
-the creator removes those relations explicitly; never silently strip them or
-link cloned rooms back to originals. Standalone opening copies likewise reject
-linked doors. This bounds duplication without corrupting connection meaning.
+**Must:** support one authored non-profile layout object, one opening on its
+current segment, or one room with its owned supported layout objects; copies
+are independent canonical records; duplicate is repeat with one copy; the
+creator supplies translation X/Z (objects/rooms) or spacing in meters along
+the segment (openings); repeat adds an integer 1–50 copies (deliberate cap,
+raised only with measured evidence); generate from `index × delta`, not
+accumulated rounded offsets; allocate unique IDs and remap internal
+references; preview and validate the whole batch once — any invalid copy
+rejects the operation with the failing target/reason; one commit and one Undo
+cover the batch; select the first new top-level target after success.
 
-Preview the entire candidate and validate it once as a batch. Any invalid copy
-rejects the whole operation with the failing target/reason. One commit and one
-Undo cover the whole batch. Select the first new top-level target after success;
-do not create multi-selection merely because repeat creates several records.
+**Must not:** copy furniture, Scene entities or camera tours with a room
+(state it beside the action); silently strip read-only profile objects or
+external door relations from room copies (reject until the creator removes
+them; never link clones back to originals); allow linked doors on standalone
+opening copies; add persistent array relations, definition/instance overrides
+or a component framework (research precedent: bake independent normal
+entities); create multi-selection because repeat creates several records.
 
-Research precedent: first repeat/array behavior should bake independent normal
-entities. Do not add persistent array relations, definition/instance overrides,
-or a component framework to P23.
+→ Implementation detail, verified seams, fixtures and evidence plan:
+[P23.4 child plan](2026-09-08-P23.4-duplicate-and-linear-repeat.md)
+(status `evidence complete — reconciliation pending`; no gating harvest —
+reconcile against the live repository, mark `implementation-ready`, implement).
 
 ### P23.5 — Small architectural preset set
 
-Offer three labeled Layout presets using existing shapes: **Column** (cylinder),
-**Platform** (box) and **Plinth** (box). Each starts with editable dimensions and
-floor-relative placement, then becomes an ordinary Layout object. Reuse primitive
-placement, preview, validation and cancellation. Presets are creation defaults,
-not linked prefab instances or new serialized object kinds.
+**Outcome:** three labeled creation presets — **Column** (cylinder),
+**Platform** (box), **Plinth** (box) — that drop in as ordinary Layout objects
+with sensible editable dimensions.
 
-Do **not** ship a generic box preset called `Partition` in this minimum slice. A
-wall-like box cannot own openings or participate in room-boundary semantics and
-would create a misleading second-class wall concept. If a freestanding display
-partition becomes a repeated need, register it later as an explicit fixture or
-template with truthful semantics.
+**Must:** use existing shapes and primitive placement/preview/validation/
+cancellation paths; presets are creation defaults with editable dimensions and
+floor-relative placement; use existing native number inputs and
+toolbar/Inspector placement; Plan, 3D and the published runtime consume the
+exact same objects through the compiler.
 
-Use existing native number inputs and toolbar/Inspector placement. No preset
-editor, library service, dependency or metadata schema is needed. Plan, 3D and
-the published runtime consume the exact same objects through the compiler.
+**Must not:** ship a generic box preset called `Partition` in this minimum
+slice (a wall-like box cannot own openings or participate in room-boundary
+semantics — a misleading second-class wall concept; register a display
+partition later as an explicit fixture/template with truthful semantics if it
+becomes a repeated need); create linked prefab instances, new serialized
+object kinds, a preset editor, library service, dependency or metadata schema.
+
+→ Implementation detail, verified seams, fixtures and evidence plan:
+[P23.5 child plan](2026-09-08-P23.5-architectural-presets.md)
+(status `evidence complete — reconciliation pending`; no gating harvest —
+reconcile against the live repository, mark `implementation-ready`, implement).
 
 ### P23.6 — Architectural drafting visual pass
 
-After the semantic CAD behaviors above are stable, make Scene → Plan → Layout
-read like a deliberate architectural drafting surface rather than a generic SVG
-editor. This increment is **presentation/interaction projection only**. It does
-not add durable Layout fields, a second Plan geometry model, a new selection
-system, or consumer-owned geometry. `PlanRenderModel`/compiled query data remain
-the source and `PlanSvg.svelte`/existing Plan chrome remain the renderer.
+**Outcome:** Scene → Plan → Layout reads like a deliberate architectural
+drafting surface — wall/room/opening hierarchy, architectural dimensions, snap
+markers and distinct invalid/preview states — across shipped themes and
+working zooms.
 
-The visual language should make authored hierarchy and current interaction state
-obvious at normal working zooms:
+**Must:** run **after** the semantic behaviors (P23.1–P23.5) are stable;
+remain **presentation/interaction projection only**; keep
+`PlanRenderModel`/compiled query data as the source and `PlanSvg.svelte`/
+existing Plan chrome as the renderer; make authored hierarchy and interaction
+state obvious (walls, rooms, openings with selected-only body/width handles
+matching P23.3, selected straight-wall/rectangular-room dimensions, snap
+winner markers, object footprint hierarchy, grid major/minor readability,
+distinguishable invalid/preview states); reuse P21 theme tokens and Plan paper
+identity; maintain keyboard focus visibility and contrast across all shipped
+editor themes; bound label/dimension placement to simple offset/collision
+avoidance.
 
-- **Walls:** strengthen the authored wall/room boundary hierarchy; selected and
-  hovered walls become unmistakable without changing hit authority or geometry.
-  Avoid decorative centerlines that imply a second editable wall representation.
-- **Rooms:** use a restrained room fill/boundary hierarchy and the existing room
-  name where legible. Selected-room emphasis must not overpower wall/opening
-  editing. Room labels are derived presentation, never persisted layout text.
-- **Openings:** doors/windows read as intentional gaps/symbols in the wall, with
-  selected-only body/width handles matching P23.3. Do not invent door swing,
-  hinge or handedness graphics until those semantics exist in authored data.
-- **Dimensions:** selected straight-wall length and rectangular-room dimensions
-  use a consistent architectural dimension treatment: extension lines/ticks,
-  concise meter labels and edit affordance where the value is editable. Avoid a
-  persistent annotation/documentation system; nonselected dimensions may be
-  suppressed when density would obscure geometry.
-- **Snapping/guides:** endpoint, midpoint, intersection, nearest-span and
-  orthogonal winners receive distinct but compact markers/guide language. The
-  marker describes the semantic winner visually; it does not become selection.
-- **Objects:** Layout footprints keep clear authored/selected/hover hierarchy.
-  Passive Scene footprints visible in Layout remain quieter than Layout-owned
-  editable objects and never gain Layout hit authority.
-- **Grid:** preserve the configured metric step while improving major/minor
-  hierarchy and zoom readability. Visual density may adapt to zoom, but authored
-  snap step and world coordinates do not change with the drawing treatment.
-- **Invalid/preview states:** invalid wall/opening candidates, direct-manipulation
-  previews and snap/alignment previews must be visually distinguishable from
-  committed authored geometry without mutating documents.
+**Must not:** add durable Layout fields, a second Plan geometry model, a new
+selection system, or consumer-owned geometry; invent door swing/hinge/
+handedness graphics until those semantics are authored; introduce a new CAD
+theme, hard-coded per-theme palettes, decorative gradients/shadows or a second
+visual system; build a general annotation-layout solver or persistent
+annotation/dimension state; let visual density/zoom change snap coordinates,
+world coordinates or documents.
 
-Reuse existing P21 theme tokens and Plan paper identity. Do not introduce a new
-CAD theme, hard-coded per-theme palettes, gradients/shadows for decoration, or a
-second visual system. Prefer structural hierarchy through stroke weight, opacity,
-pattern/dash and existing semantic tokens. Maintain keyboard focus visibility and
-contrast across all shipped editor themes.
+→ Implementation detail, verified seams, fixtures and evidence plan:
+[P23.6 child plan](2026-09-08-P23.6-architectural-drafting-visual-pass.md)
+(status `seed — pre-evidence`; requires P23-H2, after P23.1–P23.5).
 
-Keep label/dimension placement bounded: simple offset/collision avoidance is fine,
-but do not build a general annotation-layout solver in P23. If labels conflict in
-a dense drawing, selection/context priority wins and lower-priority presentation
-may hide rather than rewriting geometry or adding persistent annotation state.
+### P23.7 — Integration, robustness and closeout
 
-Research precedent: inspect LibreCAD, Sweet Home 3D and openPlan3D for drafting
-hierarchy, dimensions, opening readability and snap feedback. Reproduce only the
-useful visual grammar through Museum's existing SVG/render-model architecture;
-do not transplant their Canvas/controller/render ownership.
+**Outcome:** the new CAD-like behavior is proven deterministic under geometric
+degeneracy and the whole slice passes end-to-end integration, regression and
+bundle gates with contracts updated.
+
+**Must:** cover degeneracy fixtures — near-collinear intersections, nearly
+coincident endpoints, zero/tiny wall length, endpoint intersection,
+deterministic snap ties, opening-invalidating wall resize; keep interaction
+tolerance separate from authored-geometry validity (four separated classes per
+the robustness policy); run the end-to-end author/save/preview/publish checks,
+regression/bundle gates and contract updates; record actual command results.
+
+**Must not:** introduce a general geometry kernel; adopt a broad geometry
+framework; let a single magic `EPSILON` control both pointer UX and topology.
+If fixtures prove current math insufficient, prefer a focused
+`robust-predicates` adapter in `layout-core` (the one permitted focused
+dependency) before anything broader.
+
+→ Implementation detail, verified seams, fixtures, manual integration flow and
+evidence plan: [P23.7 child plan](2026-09-08-P23.7-integration-closeout.md)
+(status `seed — pre-evidence`; requires P23-H3 for fixture provenance; may be
+consulted earlier if P23.2 fixtures expose a genuine robustness problem).
 
 ## UI, state and lifetime
 
@@ -422,13 +496,40 @@ bounded missing capability earns them.
 ## Acceptance and sequencing
 
 Implement P23.1 → P23.2 → P23.3 → P23.4 → P23.5 → P23.6, then P23.7
-integration/closeout. For each semantic capability, demonstrate a headless call
+integration/closeout — each slice only after its required evidence is complete
+and its child plan is reconciled to `implementation-ready` (child-plan statuses
+and the harvest sequencing rule live in the references section). Evidence
+ordering, per the evidence-selection rule (no research for research's sake):
+
+```text
+Approve P23 umbrella
+→ complete H1 → reconcile/finalize P23.1 → implement P23.1
+→ complete H2 → reconcile/finalize P23.2 → implement P23.2
+→ reuse H1 + current repo → finalize P23.3 → implement P23.3
+→ finalize P23.4 → implement P23.4
+→ finalize P23.5 → implement P23.5
+→ use H2 → finalize P23.6 → implement P23.6
+→ complete/reconcile H3 → finalize P23.7 → integration closeout
+```
+
+H3 may be consulted earlier if P23.2 degeneracy/intersection fixtures reveal a
+genuine robustness problem. H4 remains demand/schedule gated — do not run it
+merely because its artifact path is registered. P23.4/P23.5 need no gating
+harvest; their child plans record the explicit no-evidence-required decision.
+
+For each semantic capability, demonstrate a headless call
 over a plain document with explicit target IDs, then its UI adapter. Existing
 helpers count as headless operations; no transport or command registry is
 required. For P23.1, author the straight-wall-length and rotated-rectangle
-acceptance fixtures before implementation; the wall-editing path is the
+acceptance fixtures before implementation — starting from the harvest
+artifact's provenance-tagged fixtures (research T1/T2 lineage) and the
+openPlan3D wall-editing tests — the wall-editing path is the
 highest-risk candidate in this set. P23.6 is rendering/presentation acceptance and must prove it introduces
 no authored document or history changes.
+
+The acceptance table below is the umbrella's **high-level acceptance gate**;
+the detailed test/fixture lists per slice live in the child plans and must
+agree with it. Conflicts resolve toward the umbrella contract.
 
 | Increment | Exact focused acceptance |
 |---|---|
@@ -469,6 +570,35 @@ package checks, `npm run build`, existing visitor/preview/public-route bundle
 gates, and P22 API tests. Use the scripts present after P22; record actual results.
 Smoke `/museum`, `/museum/editor`, Scene Arrange and Camera Plan/3D for regressions.
 No commits or live publication are performed merely by writing this plan.
+
+## Progressive-planning migration accounting
+
+The 2026-09-08 progressive-planning restructure moved implementation detail
+from this umbrella into child-plan seeds. Classification of every substantive
+pre-existing detail (umbrella contract / child seed / evidence context /
+deferred with reason) — nothing was discarded:
+
+| Existing detail | Old location | New owner | Class | Notes |
+|---|---|---|---|---|
+| User outcome, scope, exclusions, dependencies | §User outcome / intro | this umbrella | umbrella contract | unchanged |
+| Path convention, seam table, maturity recheck | §Existing implementation | this umbrella (+ child seeds carry their slice's seams) | umbrella contract | children quote verified seams |
+| Harvest passes H1–H4, artifact contract, license rules, READ FIRST table, sequencing rule | §External research references | this umbrella | evidence context | governance stays central |
+| Operation/ownership contract, transaction rules | §Operation and ownership | this umbrella | umbrella contract | unchanged |
+| P23.1 numeric input semantics, wall-length candidate steps, rectangle rules, room-frame pivot warning, openPlan3D port notes | §P23.1 | [P23.1 seed](2026-09-08-P23.1-precise-placement-and-dimensions.md) | child seed | umbrella keeps Must/Must-not |
+| P23.2 grid-step reconciliation, snap candidate list, acquisition/priority rules, alignment modes | §P23.2 | [P23.2 seed](2026-09-08-P23.2-snapping-and-alignment.md) | child seed | " |
+| P23.3 clearance/center/end placement, body-drag/width-handle gesture rules, relation picker guidance | §P23.3 | [P23.3 seed](2026-09-08-P23.3-openings-that-fit.md) | child seed | codec invariants kept in both |
+| P23.4 delta/remap mechanics, two-pass clone shape, restrictions | §P23.4 | [P23.4 seed](2026-09-08-P23.4-duplicate-and-linear-repeat.md) | child seed | " |
+| P23.5 preset semantics, Partition exclusion rationale | §P23.5 | [P23.5 seed](2026-09-08-P23.5-architectural-presets.md) | child seed | Partition exclusion kept in both (durable) |
+| P23.6 eight-element visual language, token rules, collision policy | §P23.6 | [P23.6 seed](2026-09-08-P23.6-architectural-drafting-visual-pass.md) | child seed | " |
+| Robustness policy, tolerance classes, robust-predicates adapter rule | §Geometry robustness policy | this umbrella + [P23.7 seed](2026-09-08-P23.7-integration-closeout.md) | umbrella contract + child fixture targets | policy is durable; fixtures live in P23.7 |
+| UI/state/lifetime rules | §UI, state and lifetime | this umbrella | umbrella contract | unchanged |
+| Per-increment acceptance table, 50-copy fixture rule, test-location rules | §Acceptance and sequencing | this umbrella (high-level gate) + child seeds (detailed lists) | umbrella contract + child seeds | children must agree; conflicts resolve toward umbrella |
+| Manual integration fixture + final check commands | §Acceptance and sequencing | [P23.7 seed](2026-09-08-P23.7-integration-closeout.md) | child seed | umbrella keeps the gate list |
+| Follow-up ladder, boundaries/fallback, rollback | §Follow-up / §Boundaries | this umbrella | umbrella contract / deferred | unchanged |
+| Research reference table + precedents (openPlan3D, LibreCAD, SH3D, Blueprint3D, KittyCAD, robust-predicates, Flatten, JTS, Cavalier/clipper2) | §External research references | this umbrella → harvest artifacts at run time | evidence context | per-repo file/function/test detail moves into H-artifacts when produced |
+
+Nothing was deleted. Where a rule is durably architectural it intentionally
+appears in both umbrella and child (child restates, umbrella owns).
 
 ## Research-backed follow-up candidates — not P23 ship gates
 

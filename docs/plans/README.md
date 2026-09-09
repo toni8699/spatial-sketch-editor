@@ -7,10 +7,14 @@ The tracker is authoritative when a plan doc's `**Status:**` drifts.
 
 ## Rules
 
-1. **One flat namespace.** New plans are
+1. **One flat namespace.** New top-level plans are
    `docs/plans/YYYY-MM-DD-P<number>-<slug>.md` — the P-number is assigned on
    registration and written into the filename (e.g.
    `2026-08-18-P1-camera-overhaul.md`). No letter codes beyond the P-number.
+   **Child-plan exception (2026-09-08):** child slice plans and umbrella-internal
+   annexes may use parent-derived IDs — `P23.1`–`P23.7` style names and
+   `P24A`-style labels — without consuming tracker P-numbers; only umbrella/
+   top-level roadmap plans are registered in the Active table with a P-number.
 2. **Numbers live in filenames and this tracker.** Sequential numbers
    (`P1`, `P2`, …) are assigned on registration and carried in the filename;
    this tracker is the register that owns them (status, depends-on, order)
@@ -31,12 +35,52 @@ The tracker is authoritative when a plan doc's `**Status:**` drifts.
 8. **Collapse on ship.** Archiving a doc and collapsing its Active row happen
    in the same edit — shipped rows never linger in the table.
 
+## Progressive planning model (2026-09-08)
+
+Roadmap tiers follow one structure — umbrella plan → targeted research / code
+harvest / technical spike **where required** → implementation-ready child
+slice plan → implementation:
+
+- **Umbrella plans** define the durable product contract, architecture
+  boundaries, slice order and evidence gates (WHAT/WHY/BOUNDARIES/ORDER/
+  RESEARCH GATES/high-level acceptance).
+- **Evidence artifacts** (code harvest, product/UX research, technical spike,
+  feasibility investigation) answer what was learned; they inform
+  implementation but never silently override umbrella product/architecture
+  contracts — conflicts go to owner review.
+- **Child slice plans** carry implementation detail. Existing implementation
+  detail is preserved in child-plan seeds rather than discarded. Only
+  implementation-ready child plans may proceed to implementation.
+
+Evidence selection: do not reopen broad research when prior discovery already
+selected the relevant references — use bounded capability-specific
+harvest/recheck work. Do not impose research on slices whose implementation
+uncertainty is already sufficiently resolved.
+
+Maximum planning chain (avoid bureaucracy): umbrella → evidence artifact, only
+if required → implementation-ready child plan → implementation. A child seed is
+the preserved draft form of the future child plan, not an extra layer.
+
+Child-plan status vocabulary (a child plan existing ≠ implementation-ready):
+
+```text
+seed — pre-evidence
+seed — evidence pending
+evidence complete — reconciliation pending
+implementation-ready
+in progress
+shipped / archived
+```
+
+Applied: P23 umbrella + child seeds P23.1–P23.7 + harvest artifacts H1–H4;
+P24 umbrella with the P24A annex as its child seed; P25 umbrella (child plans
+form after its E-studies close).
+
 ## Model routing
 
 Per-increment difficulty (1–100) and model routing live in the living
 assessment doc — [`model-assessment.md`](model-assessment.md) — not in this
 tracker. Update it as increments ship.
-
 Policy rules:
 
 - **DeepSeek V4 Flash substitution (2026-08-20):** Luna max ≈ DeepSeek V4
@@ -58,9 +102,9 @@ Policy rules:
 | # | Plan | Status | Depends on | Doc |
 |---|------|--------|------------|-----|
 | P13 | Sequence stop-at-node playback | proposed — nice-to-have, unscheduled (owner 2026-08-27) | P12 | [2026-08-27-P13-stop-at-node-playback.md](2026-08-27-P13-stop-at-node-playback.md) |
-| P23 | Layout Depth — minimum useful Build set | proposed — brief written assuming P22 complete (owner 2026-09-07) | P22 | [plan](2026-09-07-P23-layout-depth-minimum-build.md) |
-| P24 | Scene / Staging Depth umbrella — P24A asset supply + P24B rich 3D staging | proposed — umbrella/research reconciliation; P24A Phase 2 reviewed + annex registered; P24B Phase 4 compact reviewed directionally, deeper code/reference studies required (owner 2026-09-08) | P23 | [plan](2026-09-08-P24-scene-staging-depth-umbrella.md) |
-| P25 | Experience Foundation umbrella | proposed — Phase 5 external capability research reviewed directionally; E0–E6 reconciliation required before implementation brief (owner 2026-09-08) | P24 | [plan](2026-09-08-P25-experience-foundation-umbrella.md) |
+| P23 | Layout Depth — minimum useful Build set | proposed — brief written assuming P22 complete (owner 2026-09-07); progressive structure in place: umbrella + child seeds P23.1–P23.7 + harvest artifacts H1–H4 (not yet run); P23.1 starts after H1 completes and reconciles | P22 | [umbrella](2026-09-07-P23-layout-depth-minimum-build.md) |
+| P24 | Scene / Staging Depth umbrella — P24A asset supply + P24B rich 3D staging | proposed — umbrella/research reconciliation; P24A Phase 2 reviewed + annex registered (child seed, evidence pending); P24B Phase 4 compact reviewed directionally, deeper code/reference studies required (owner 2026-09-08) | P23 | [umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md) |
+| P25 | Experience Foundation umbrella | proposed — Phase 5 external capability research reviewed directionally; E0–E6 reconciliation required before implementation brief; P25.x child plans form after the studies close (owner 2026-09-08) | P24 | [umbrella](2026-09-08-P25-experience-foundation-umbrella.md) |
 | — | Branch rejoin — experiment, no schedule | proposed | P8 conceptually | [2026-08-21-branch-rejoin-experiment.md](2026-08-21-branch-rejoin-experiment.md) |
 | … | future work re-registers here | | | |
 
@@ -72,6 +116,12 @@ Policy rules:
   the copy); 0-byte P12.2 live husk deleted (archive holds the content).
 - Reconcile-then-delete (live copy has **diverged** from the archived copy —
   diff before dropping either side): `2026-08-18-P1-camera-overhaul.md`.
+  Done 2026-09-08 (P22 closeout cleanup): reconciled — the archived copy holds
+  the evolved record (review amendments F1–F7, shipped status, compressed §D);
+  the live copy's 366 diverged lines were all pre-review text §D/F2 had
+  replaced with pointers. Live husk deleted; archive copy is canonical.
+  Also removed the `2026-08-29-backend-persistence-migration-review.md`
+  pointer husk (archive copy confirmed present, zero live inbound links).
 - Done 2026-09-05: `hand-off/designer-context-packet.md` moved to
   `docs/archive/designer-context-packet-2026-09-03.md` (one-off 2026-09-03
   packet; its output already landed as the P21.5 brief; `hand-off/` holds

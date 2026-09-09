@@ -3,6 +3,7 @@
 **Created:** 2026-09-08 · **Status:** proposed (tracker authoritative)
 **Depends on:** P23 minimum useful Build set complete.
 **Detail status:** P24 remains an umbrella/research-reconciliation plan, not an implementation-ready brief. P24A Phase 2 research has been reviewed and has a linked annex; the checked-in Phase 4 compact research has now been reviewed directionally for P24B, but P24B still requires deeper current-code audits and direct reference studies before its implementation contract/minimum can be frozen.
+**Planning model:** progressive — this umbrella owns WHAT/WHY/BOUNDARIES/ORDER/RESEARCH GATES/high-level acceptance. Evidence artifacts (Phase 2 research, the P24B B0–B6 studies) inform but never override the umbrella contract. Child plans carry implementation detail: the [P24A annex](2026-09-08-P24A-asset-supply-canonical-ingest-annex.md) is the P24A child seed (`seed — evidence pending`: Phase 2 research reviewed, its implementation-readiness reconciliation not yet run); the P24B child brief is deliberately **not written yet** — B0–B5 must close first, and no speculative P24B.x seeds are created to fill filenames. Child status vocabulary and the evidence-selection rule (no research for research's sake) live in the [tracker rules](README.md).
 
 ## Outcome
 
@@ -707,6 +708,23 @@ reference is introduced casually.
 
 P24 remains one registered **umbrella** roadmap tier. `P24A` and `P24B` remain
 internal scope labels rather than tracker numbers.
+
+### Progressive-planning migration accounting (2026-09-08 restructure)
+
+Classification of existing detail under the umbrella → evidence → child-plan
+model. Nothing was discarded or moved merely to shorten this document:
+
+| Existing detail | Old location | New owner | Class | Notes |
+|---|---|---|---|---|
+| Outcome, why-split, A/B ownership boundary, material/environment boundary, minimum gate before P25, shared architecture invariants | this umbrella | this umbrella | umbrella contract | durable; unchanged |
+| Phase 2 research basis + P24A accepted direction list | §Research basis / §P24A | this umbrella (contract) + P24A annex (implementation) | umbrella contract + child seed | annex already held the implementation detail |
+| P24A.0–P24A.6 slice definitions, readiness-pass seam list, reference verification rules, acceptance gate, deferred scope | P24A annex | P24A annex (child seed) | child seed | status updated to `seed — evidence pending` |
+| B0–B6 study definitions, maturity-audit matrix, live-baseline authority list, reference-study requirements, directional dispositions, sequencing diagram | this umbrella | this umbrella | evidence gates (RESEARCH GATES are umbrella-owned) | these define the evidence, not the implementation; P24B child brief gets implementation detail after B0–B5 close |
+| DCC/wrong-product boundary, follow-up candidates | this umbrella | this umbrella | umbrella contract / deferred | unchanged |
+
+Explicitly deferred: P24B child-plan seeds (B1–B5 topics) — created only when
+the corresponding study closes and produces reconcilable implementation
+decisions. Creating them now would be speculative filename-filling.
 
 Current detail state:
 

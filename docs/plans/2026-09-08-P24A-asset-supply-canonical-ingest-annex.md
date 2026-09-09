@@ -2,8 +2,9 @@
 
 **Created:** 2026-09-08  
 **Parent:** [P24 — Scene / Staging Depth umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md)  
-**Status:** proposed — Phase 2 research reviewed; implementation not started.  
-**Tracker:** P24 remains the registered plan number. `P24A` is an umbrella-internal label, not a new tracker number.
+**Status:** `seed — evidence pending` — Phase 2 research reviewed; the bounded implementation-readiness reconciliation below has not run, so this is not yet implementation-ready.  
+**Tracker:** P24 remains the registered plan number. `P24A` is an umbrella-internal label, not a new tracker number.  
+**Planning model:** child seed of the [P24 umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md) — implementation detail preserved here; evidence (Phase 2 research + the readiness reconciliation) informs but never overrides the umbrella contract.
 
 ## Research basis
 
