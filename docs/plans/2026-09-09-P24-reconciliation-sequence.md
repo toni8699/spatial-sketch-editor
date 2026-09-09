@@ -138,6 +138,15 @@ Use the completed Pascal harvest only as supplemental evidence for the principle
 
 **Output:** update the P24A annex from `seed — evidence pending` only when its concrete readiness questions are closed. Do not expand the 32-object acquisition backlog into a ship gate.
 
+### R1 evidence — 2026-09-09 dry-run (branch `p24-reconciliation-evidence`)
+
+- Pinned `@gltf-transform/cli 4.4.1` + embedded validator on `assets-source/models/grand-piano.glb`: validates clean (0 errors, 1 unused-`TEXCOORD_0` info); source bbox uncentered and centimetre-scale, confirming per-asset fudge factors (`defaultScale: 0.032`) instead of baked metres.
+- Production `/museum/models/piano/grand-piano.glb` still centimetre-scale (grounded `minY ≈ 0`, `±23 × ±39` XZ) — pivot grounding done ad hoc, unit normalization not baked.
+- `generated-obb` spike: `apps/editor/src/lib/content/footprint-generator.ts` (pure, dependency-free rotating-calipers OBB) + 6 unit tests; recovers the hand-authored piano 1.48 × 1.59 box from its outline points and passes the existing `validateAssetFootprint` gate. Not wired to runtime.
+- Open before the annex leaves seed: structured provenance/rights gate, deterministic CLI job (hash-in/hash-out + recipe pinning), `gltfpack` KEEP/REJECT measurement, Kenney/SH3F oracle harness, `kind: 'model'` registry + P22 pinning decision, bounded material/HDRI bytes.
+
+Annex stays `seed — evidence pending`.
+
 ## R2 — P24B B0 capability-maturity baseline
 
 Audit current Stage capabilities end-to-end before deciding depth.
@@ -229,6 +238,17 @@ Reconcile only proven gaps in the existing transform/arrangement system:
 
 Use Pascal only where its completed harvest already provides useful counter-fixtures or lifecycle evidence. Use other mature references only for unresolved concrete questions.
 
+### R5 provisional depth decision — 2026-09-09 (pending post-F0 recheck; frozen only in R9)
+
+- Local/World gizmo orientation: ADOPT as orientation-only switch, storage unchanged; default stays World (current behavior).
+- Selection-Center pivot alongside Active-Object bounds-center: ADOPT if post-F0 world frame keeps pivot math rigid; no new stored pivot.
+- Primary/active selection clarity + numeric Inspector ↔ gizmo sync: POLISH.
+- Snap winner feedback: POLISH; no new snap framework.
+- Align/distribute/equal-spacing as deterministic Scene ops (one history result each); exact op set frozen in R9.
+- Duplicate-then-move: ADOPT with collision/re-ground check (closes the R2 gap).
+- Cluster UX without nesting; Room-gate removal rechecked post-F0.
+- No second gizmo or transform authority.
+
 ## R6 — B3 material maturity
 
 Audit the existing material definition/instance path first. Decide the minimum for:
@@ -244,6 +264,12 @@ Audit the existing material definition/instance path first. Decide the minimum f
 
 Do not replace the existing material model merely because a reference editor has a richer panel.
 
+### R6 provisional depth decision — 2026-09-09 (pending post-F0 recheck; frozen only in R9)
+
+- Keep the `MaterialDefinition` / `SceneMaterialInstance` shared-vs-unique model; no slot/UV/graph scope.
+- Minimum: base color/tint override, PBR map set on definitions, physical tile scale where the existing repeat path supports it, Apply-to-multiselection, shared/unique preview feedback, P24A import consumption.
+- Editor/visitor parity required per material addition.
+
 ## R7 — B4 lighting + environment maturity
 
 Audit current Scene lights and renderer/environment seams. Decide the minimum for:
@@ -255,6 +281,13 @@ Audit current Scene lights and renderer/environment seams. Decide the minimum fo
 - HDRI/environment consumption from P24A;
 - exposure/environment semantics only where the current renderer can own them cleanly;
 - visitor parity and editor-only helper isolation.
+
+### R7 provisional depth decision — 2026-09-09 (pending post-F0 recheck; frozen only in R9)
+
+- Keep `SceneLightEntity` point/spot/directional authority; no second light-gizmo system — handles compose with the existing TransformControls.
+- Minimum: range visualization (point), cone/direction handles (spot), pick proxies, degree-presented spot angle (canonical storage unchanged), one gallery preset as ordinary Scene ops (no persistent rig), HDRI consumption only after P24A supply exists.
+- Exposure/tonemap/IBL only where the renderer owns them + visitor parity; shadow policy stays system-owned (safe defaults + warnings, no per-light map controls in the minimum).
+- Units: raw renderer-relative numbers stand unless new evidence shows authoring harm; color temperature deferred to follow-up.
 
 ## R8 — B5 final presentation reconciliation
 
