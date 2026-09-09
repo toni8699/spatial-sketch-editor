@@ -1,91 +1,104 @@
 # P23-H2 — Snapping / selection / guides / Plan visual grammar harvest
 
-**Status:** harvest complete — implementation evidence for P23.2 and P23.6  
+**Status:** harvest complete — audited implementation evidence for P23.2 and P23.6  
 **Scope:** P23-H2 only. No plan or product-code changes.  
 **Museum Editor baseline inspected:** `toni8699/spatial-sketch-editor@7492b4e6d4dc3bb6148b64e3b7327117f11b6b17` (`P23 plan subslices`)  
-**Upstream snapshots inspected:**
+**Upstream snapshots rechecked live:**
 
 - LibreCAD: `LibreCAD/LibreCAD@cf968cc77d1c8f0aa4ffebc660188061cfd4ac8c`
 - openPlan3D: `laanlabs/openPlan3D@511ff08f57526784c0bf3bc48466bfea04204bbc`
 
-This artifact records source-level findings, licensing/disposition, exact behavior, Museum mapping, acceptance-fixture provenance, and recommended refinements to the current seed plans. It does not broaden P23 into general CAD research.
+This artifact is the P23 umbrella's bounded H2 harvest. It records exact source/test seams, behavior, license/disposition, Museum mapping, fixture provenance and recommended child-plan refinements. It does not override the P23 umbrella, edit P23.2/P23.6, or broaden into general CAD research.
 
 ---
 
-## 1. Executive harvest result
+## 1. Executive result
 
-P23.2 is directionally correct but should tighten four things before implementation:
+P23.2 and P23.6 are directionally sound. H2 recommends tightening their implementation detail while preserving the umbrella's durable contracts.
 
-1. **Keep snap truth on the existing compiled-query path.** Build an editor-side pure snap resolver over `CompiledLayoutGeometry.queries` plus transient gesture guides. Do not create a second Plan geometry model and do not make `PlanSvg.svelte` discover geometry.
-2. **Make acquisition screen-space and tie resolution explicit.** Reference snapping should use one fixed CSS-pixel acquisition radius independent of grid step. If a valid reference candidate is acquired, it beats grid. Among reference candidates, choose nearest screen distance first, then a semantic tie rank, then a stable source key. Do not inherit upstream array/render-order accidents.
-3. **Treat guides as transient result data, not authored constraints.** A snap result should carry the winning point plus renderer-neutral marker/guide descriptors. `PlanRenderModel` projects them; `PlanSvg.svelte` only draws them. Clear them on snap-off, cancel, tool/mode switch, pointer loss, and commit.
-4. **Keep initial alignment narrower than openPlan3D.** P23.2 should remain one selected supported Layout object → one explicit reference, using compiled/world AABBs and Museum transactions. Do not import openPlan3D's multi-selection alignment/distribution/store mutation model.
+### P23.2
 
-P23.6 is also directionally correct. Harvest adds one important current-code reconciliation: **`PlanSvg.svelte` currently synthesizes a door leaf and swing arc despite the current render model carrying no handedness/swing semantics. P23.6 should remove/suppress that invented swing presentation until durable semantics exist.** Gap + jamb treatment is safe; invented handedness is not.
+1. Keep snap truth on `CompiledLayoutGeometry.queries` plus transient gesture context. Do not create a second geometry model and do not let `PlanSvg.svelte` reconstruct snap geometry.
+2. Keep the umbrella's deterministic winner order exactly:
 
-LibreCAD provides the strongest behavior model for snap candidate resolution, transient preview lifecycle, semantic snap feedback, and ordinary restriction guides, but its GPL license makes it **STUDY only**. openPlan3D is MIT and provides useful small pure hit/snap/alignment examples and tests, but its duplicated canvas logic, array-order tie behavior, consumer curve sampling, Svelte-store mutation, and persisted guide model should not become Museum architecture.
+   `tool/context validity → semantic feature priority → screen distance → stable ID/key`
+
+   A valid acquired reference beats grid. Do **not** replace the umbrella order with LibreCAD's nearest-first behavior or openPlan3D's source-array/categorical ordering.
+3. Use a fixed CSS-pixel reference acquisition radius, independent of grid spacing. H2 recommends **8 CSS px as the initial implementation default**, centralized and testable; visual QA may tune the value without changing the policy.
+4. Treat guides/markers as transient result data. Snap-off, cancel, pointer loss, tool/mode/view changes and commit clear them. They never enter `LayoutDocument`, `SceneDocument`, persistence or history.
+5. Keep alignment narrower than openPlan3D: one selected supported Layout object → one explicit reference, with rotation-aware compiled/world bounds and one Museum Layout transaction. Multi-selection and distribution stay deferred.
+
+### P23.6
+
+1. Reuse `PlanRenderModel` + `PlanInteractionProjection` + `PlanSvg.svelte`; no second SVG/canvas overlay authority.
+2. Add a small semantic snap/guide presentation vocabulary and show the **winner**, not a cloud of all candidates.
+3. Preserve one blue selection language; snap feedback must be visually distinct from hover, selection and invalid preview.
+4. Keep the current major/minor grid LOD approach and tune hierarchy only.
+5. **Current reconciliation required:** `PlanSvg.svelte` already synthesizes a door leaf and swing arc although the render model carries no authored hinge/handedness/swing state. P23.6 already forbids implying semantics that do not exist. The visual pass should suppress that invented swing/leaf direction until durable door semantics are explicitly designed; opening gap/jamb treatment remains valid.
 
 ---
 
-## 2. Disposition and license matrix
+## 2. License / disposition matrix
 
-| Repo / source | License verified at snapshot | Disposition | Use in P23-H2 | Do not import |
+| Source | License rechecked | H2 disposition | Useful harvest | Explicit not-to-import |
 |---|---|---|---|---|
-| LibreCAD `LICENSE` | GPLv2 for LibreCAD as a whole; inspected visual-snap file also carries GPL terms | **STUDY** | Snap candidate behavior, nearest-candidate model, free fallback, restriction ordering, snap marker/info cursor, preview/highlight lifecycle, visual guide grammar | Source, tests, class structure, overlay implementation, Qt action framework, visual-snap subsystem |
-| LibreCAD `librecad/src/lib/actions/rs_snapper.cpp` | GPL | **STUDY** | Exact ordinary snap order/tie behavior and acquisition policy | Code or translated line-for-line implementation |
-| LibreCAD `librecad/src/lib/actions/rs_previewactioninterface.cpp` | GPL | **STUDY** | Transient preview/highlight cleanup lifecycle and angle-guide behavior | Preview container/action inheritance architecture |
-| LibreCAD `librecad/src/lib/actions/visual_snap/lc_visual_snap_solution_visualizer.cpp` | GPL | **STUDY** | Distinct winner marks, guiding entities, projected marks, guide labels | Visual-snap classes, labels/constants, drawing code |
-| openPlan3D `LICENSE` | MIT, copyright 2026 theLodgeStudio | **ADAPT**, narrow **PORT** allowed with attribution | Pure hit-test/test ideas, fixed-screen tolerances, endpoint/nearest-wall snap behavior, alignment math, Plan visual grammar | Canvas/store architecture and product model |
-| openPlan3D `src/lib/utils/hitTesting.ts` | MIT | **ADAPT** | Rotated footprint hit shape, reverse/topmost behavior, opening pick extent, CSS-pixel tolerance | Brute sampled curve authority; per-type independent hit authority |
-| openPlan3D `src/lib/utils/canvasInteraction.ts` | MIT | **ADAPT** | Grid fallback + magnetic endpoint idea; zoom-normalized acquisition | Hardcoded duplicate snap path as Museum resolver |
-| openPlan3D `src/lib/utils/alignment.ts` | MIT | **ADAPT** | Min/center/max AABB alignment math vocabulary | Svelte-store reads/writes, multi-selection scope, equal-center distribution |
-| openPlan3D renderer/canvas | MIT | **ADAPT** | Wall hierarchy, dimensions, selection handles, major/minor grid LOD, transient guide style | Canvas renderer, persistent guides, hardcoded colors, consumer geometry reconstruction |
-| openPlan3D tests | MIT | **PORT/ADAPT** with attribution | Opening zoom fixture and wall/grid relation fixture concepts | Tests that assume openPlan document units/store architecture |
+| LibreCAD repository / `LICENSE` | GPLv2 for LibreCAD as a whole | **STUDY** | snap candidate behavior, restriction ordering, transient preview/highlight lifecycle, guide/marker grammar | any source/test text, Qt action architecture, entity/document model, overlay subsystem, full visual-snap subsystem |
+| LibreCAD `rs_snapper.cpp` / `.h` | GPL | **STUDY** | ordinary snap order, strict-nearer behavior, free fallback, screen-derived catch range | translated/ported implementation or implicit call-order ties |
+| LibreCAD preview / visual-snap files | GPL | **STUDY** | separate preview/highlight/guide/winner state, cleanup lifecycle, orthogonal guide presentation | preview container/action inheritance and visual-snap object graph |
+| openPlan3D repository / `LICENSE` | MIT, copyright 2026 theLodgeStudio | **ADAPT** overall | pure hit-test/snap helpers, test ideas, alignment vocabulary, Plan rendering grammar | store mutation, Canvas2D architecture, project model, render-order truth |
+| openPlan3D pure tests/helpers | MIT | **PORT/ADAPT** where useful | zoom-invariant opening fixture, rotated hit shape, wall/grid relation fixture intent | upstream units/store assumptions; retain MIT notice if substantial text is actually ported later |
 
 ### License obligations
 
-- **LibreCAD:** no source or test code is copied into Museum Editor by H2. Behavior and fixture intent below are rewritten independently in Museum terms. Keep provenance to the inspected GPL source.
-- **openPlan3D:** if implementation later ports any substantial MIT source/test text rather than independently reimplementing the behavior, retain the MIT copyright and license notice required by that project. H2 itself ports no code.
+- **LibreCAD:** STUDY only. H2 copies no GPL source or test code. Behavior and fixture intent are described independently in Museum terms.
+- **openPlan3D:** MIT permits reuse, but H2 itself ports no source. If implementation later copies substantial source/test text, retain the upstream copyright and MIT notice.
 
 ---
 
 ## 3. Museum Editor current ground truth
 
-### 3.1 Canonical geometry/query boundary
+### 3.1 Canonical query geometry
 
 Inspected:
 
 - `packages/layout-core/src/layout-geometry-types.ts`
 - `packages/layout-core/src/layout-geometry-queries.ts`
-- `apps/editor/src/lib/layout/plan-render-model.ts`
 - `apps/editor/src/lib/editor/layout/plan-hit.ts`
+- `apps/editor/src/lib/layout/plan-render-model.ts`
 
-`CompiledLayoutGeometry.queries` already exposes the renderer-neutral spatial vocabulary needed for P23.2:
+`CompiledLayoutGeometry.queries` already provides the renderer-neutral source H2 needs:
 
 - `CompiledQueryPoint`: `vertex | interior-anchor`
-- `CompiledQuerySpan`: `wall | opening | solid`, with source IDs and cumulative distances
+- `CompiledQuerySpan`: `wall | opening | solid`, with source IDs, segment identity, endpoints and cumulative distances
 - `CompiledQueryPolygon`: `room-floor | object-footprint`
 - `CompiledQueryAabb`: `room | wall | opening | object | floor | document`
 
-`projectPointToSpans()` already projects a world Plan point onto canonical compiled spans. It linearly scans spans and returns the nearest projection. `findPolygonContaining()` uses supplied polygon order and searches from the end.
+`projectPointToSpans()` linearly evaluates canonical compiled spans and returns the nearest projection. `findPolygonContaining()` resolves from the supplied compiled polygon set. `geometryId()` provides collision-safe stable tuple serialization for compiled identities.
 
-**H2 conclusion:** P23.2 does not need a new persistent `SnapPrimitive` geometry layer. If a snap-specific runtime type is useful, it should be a **pure editor/session candidate descriptor built from compiled query records**, not a new authored or compiled geometry source.
+**H2 conclusion:** do not add persistent snap geometry. A snap-specific runtime descriptor may exist in the editor, but its geometry comes from compiled query records plus transient gesture anchors.
 
-Recommended shape, conceptually:
+Conceptual shape only:
 
 ```ts
 type PlanSnapCandidate = {
-  kind: 'endpoint' | 'opening-edge' | 'intersection' | 'midpoint' |
-        'orthogonal' | 'nearest-span' | 'grid';
+  kind:
+    | 'endpoint'
+    | 'opening-edge'
+    | 'intersection'
+    | 'midpoint'
+    | 'orthogonal'
+    | 'nearest-span'
+    | 'grid';
   point: LayoutVec2;
+  semanticRank: number;
   stableKey: string;
   sourceIds: readonly string[];
 };
 ```
 
-This type belongs at the Plan interaction/query adapter boundary, not in `LayoutDocument`, JSON, history, SVG, or Three state.
+This is runtime/session data. It is not `LayoutDocument`, serialized JSON, history, SVG state or Three state.
 
-### 3.2 Current Plan selection already has explicit authority
+### 3.2 Existing selection authority is already stronger than upstream references
 
 Inspected:
 
@@ -95,95 +108,97 @@ Inspected:
 - `apps/editor/tests/lib/editor/layout/plan-hit.test.ts`
 - `apps/editor/tests/lib/editor/layout/arrange-hit.test.ts`
 
-Layout selection is already one explicit union:
+Current Layout Plan hit priority is explicitly locked in `resolvePlanHit()`:
 
-`none | room | wall | opening | interiorAnchor | object`.
+`vertex → interior anchor → opening → object → wall → room`
 
-`resolvePlanHit()` is pure and query-backed. Its locked cross-kind priority is:
+Current Arrange hit behavior is separately deterministic:
 
-`vertex → interior anchor → opening → object → wall → room`.
-
-`resolveArrangeHit()` is also pure and separately owns Arrange authority:
-
-1. polygon containment before Scene-only edge halo;
+1. polygon containment;
 2. active-owner selected member under pointer;
 3. Scene layer 6 over Layout layer 5;
-4. stable render/document order, last rendered on top.
+4. stable render/document order for same-priority ties;
+5. Scene-only edge halo only when no polygon contains the pointer.
 
-This is important precedent: **snapping must not become a second selection resolver.** A snap reference may point at a wall/object/room feature without changing selection or owner authority.
+**H2 rule:** snapping never becomes a second selection resolver. A wall/object/room may be used as a reference without changing the canonical selection slot, active Arrange owner, or history.
 
-The current Plan hit resolver does contain some order-dependent internal ties (`<=` for point records, reversed polygons/openings, first strictly-nearer wall in traversal). Those rules are existing **selection** behavior and are outside H2 unless P23 changes selection itself. H2 should not copy those order dependencies into the new snap resolver; P23.2 explicitly needs stable snap ties.
+The existing selection resolver has some intentionally order-based internal ties (`<=` point replacement, reverse traversal for some topmost content, first strictly-nearer wall). Those are current **selection** behavior. P23.2 must not copy those incidental traversal ties into snap winner resolution.
 
-### 3.3 Current snapping is grid-only and duplicated across gesture paths
+### 3.3 Existing snapping is grid-only and duplicated
 
 Inspected:
 
 - `apps/editor/src/lib/editor/layout/layout-plan-transform.ts`
-- `apps/editor/src/lib/editor/layout/layout-interaction.ts`
 - `apps/editor/src/lib/editor/layout/layout-object-editing.ts`
-- related Plan/gizmo callers referenced by P23.2
+- `apps/editor/src/lib/editor/layout/layout-interaction.ts`
+- Plan/Arrange/gizmo callers referenced by P23.2
 - `apps/editor/tests/lib/editor/layout/layout-plan-transform.test.ts`
+- `apps/editor/tests/lib/editor/layout/layout-object-editing.test.ts`
 
 Current facts:
 
 - `snapToGrid(point, spacing = 0.25)` rounds X/Z independently.
-- `buildPlanGrid(..., minorSpacing = 0.25, majorSpacing = 1)` has its own defaults.
-- Plan state already has `gridEnabled`, `snapEnabled`, and `angleSnapEnabled`.
-- current room/object/draft paths call grid snapping independently.
-- existing test pins quarter-meter grid + 15° angle behavior and grid LOD.
+- `snapLayoutPlanPoint(point, step = 0.25)` duplicates quarter-meter quantization.
+- `buildPlanGrid(..., minorSpacing = 0.25, majorSpacing = 1)` has another quarter-meter default.
+- `PlanViewportState` already carries `snapEnabled`, `gridEnabled`, `angleSnapEnabled`.
+- current tests pin quarter-meter grid behavior, 15° angle snapping and minor-grid LOD.
 
-**H2 conclusion:** first P23.2 implementation step should centralize the **effective grid step** and route all Plan placement/translation callers through one configuration value before adding reference candidates. The visible grid and the grid snap step may share a default but must not become coupled to the reference acquisition radius.
+**H2 recommendation:** P23.2 should first centralize one effective Layout Plan grid step and route all affected Layout placement/translation/drafting callers through it. Do not accidentally change Camera Plan snapping merely because shared transform helpers are imported there.
 
-### 3.4 Current Plan rendering boundary is suitable for snap overlays
+Reference acquisition radius is a separate screen-space policy and must not derive from grid step.
+
+### 3.4 Existing Plan render boundary is correct for H2
 
 Inspected:
 
 - `apps/editor/src/lib/layout/plan-render-model.ts`
 - `apps/editor/src/lib/editor/layout/PlanSvg.svelte`
-- `apps/editor/src/lib/editor/styles/plan.css`
+- `apps/editor/src/lib/editor/layout/plan-overlays.ts`
 - `apps/editor/src/lib/editor/layout/PlanCanvasChrome.svelte`
-- theme registry/test seams
+- `apps/editor/src/lib/editor/styles/plan.css`
+- `apps/editor/src/lib/editor/styles/tokens.css`
+- `apps/editor/src/lib/editor/theme.svelte.ts`
+- Plan render/theme tests referenced by P23.6
 
-`PlanRenderModel` is already pure/world-space and accepts a transient `PlanInteractionProjection` containing selection, handles, drafts, labels, and object/room overrides. `PlanSvg.svelte` applies world→screen transforms and style classes. This is the right insertion seam for H2 snap feedback.
+`PlanRenderModel` is pure and renderer-neutral. `PlanInteractionProjection` already owns transient selection/handles/drafts/labels/overrides. `PlanSvg.svelte` applies the view transform and styles primitives.
 
-No snap-specific `PlanStyleToken` exists yet. H2 recommends adding a small semantic set rather than hardcoding one generic blue circle:
+That is the H2 insertion seam:
 
-- `snap-guide`
-- `snap-marker-endpoint`
-- `snap-marker-opening-edge`
-- `snap-marker-intersection`
-- `snap-marker-midpoint`
-- `snap-marker-nearest`
-- `snap-marker-orthogonal`
-- optional `snap-label`
+`Plan snap result → plan-overlays.ts / interaction projection → PlanRenderModel → PlanSvg.svelte`
 
-The tokens can share ink/color while differing by compact geometry. Meaning should not depend on color alone.
+Do not create a second DOM/SVG guide layer with its own world transform.
 
-### 3.5 Current Plan visual-semantic mismatch: invented door swing
+### 3.5 Theme baseline
 
-`PlanRenderModel` currently gives opening primitives only:
+Current shipped theme registry contains seven themes, but the Plan paper/spatial interaction palette is intentionally invariant across themes. `plan.css` already centralizes Plan paper, grid, wall/object, hover, handle and selection tokens.
 
-- `kind: 'door' | 'window'`
-- `widthMeters`
-- `wallThicknessMeters`
-- room `inwardNormal`
+P23.6 should add shared Plan semantic tokens only where needed. Do not add a CAD-specific theme and do not hardcode per-theme snap colors in `PlanSvg.svelte`.
 
-`PlanSvg.svelte` nevertheless synthesizes a door leaf endpoint and a swing arc from those values.
+### 3.6 Current door-symbol semantic mismatch
 
-That is beyond the current authored semantics. P23.6 already says not to imply door swing/handedness if that state does not exist.
+Current `PlanRenderModel` opening metadata gives the SVG adapter:
 
-**H2 recommendation:** P23.6 should treat this as a required reconciliation, not optional polish:
+- opening kind (`door | window`)
+- opening width
+- wall thickness
+- inward room normal
 
-- retain the opening void/gap;
-- retain neutral jamb treatment;
-- suppress invented door leaf/swing direction until a durable handedness/swing field is explicitly designed;
-- keep hit testing on compiled opening spans, never on decorative SVG symbol geometry.
+`PlanSvg.svelte` nevertheless derives a door leaf and swing arc from that limited state.
+
+There is no authored hinge side/handedness/swing direction in that projection. This is precisely the presentation-state overclaim P23.6 says to avoid.
+
+**Required P23.6 reconciliation:**
+
+- keep the opening void/gap;
+- keep neutral jamb/window framing treatment;
+- suppress an invented directional door leaf/swing until authored semantics exist;
+- never use decorative SVG door geometry as snap/hit/mutation truth.
 
 ---
 
-## 4. LibreCAD harvest — snapping and guide lifecycle
+## 4. LibreCAD harvest — STUDY only
 
-### 4.1 Exact inspected sources
+### 4.1 Exact inspected source
 
 At `LibreCAD/LibreCAD@cf968cc77d1c8f0aa4ffebc660188061cfd4ac8c`:
 
@@ -191,14 +206,15 @@ At `LibreCAD/LibreCAD@cf968cc77d1c8f0aa4ffebc660188061cfd4ac8c`:
 - `librecad/src/lib/actions/rs_snapper.cpp`
 - `librecad/src/lib/actions/rs_snapper.h`
 - `librecad/src/lib/actions/rs_previewactioninterface.cpp`
+- `librecad/src/lib/actions/rs_actionselectbase.cpp`
+- `librecad/src/lib/actions/visual_snap/lc_visual_snap_solution_solver.cpp`
 - `librecad/src/lib/actions/visual_snap/lc_visual_snap_solution_visualizer.cpp`
-- supporting visual-snap manager/solution names found under `librecad/src/lib/actions/visual_snap/`
 
-No focused automated `RS_Snapper` unit-test suite was located by repository search at this snapshot. Therefore LibreCAD-derived Museum fixtures below are **behavior-derived fixtures**, independently authored from inspected implementation behavior, not ports of GPL tests.
+No focused automated `RS_Snapper` unit-test suite was located during this bounded harvest. LibreCAD-derived Museum fixtures below therefore use independently written behavior/edge-case provenance, never copied GPL tests.
 
-### 4.2 Ordinary snap candidate resolution
+### 4.2 Ordinary snap behavior and tie behavior
 
-When visual-snap mode does not produce a special solution, `RS_Snapper::snapPoint()` evaluates enabled ordinary candidates in this order:
+When the visual-snap path does not resolve a special solution, `RS_Snapper::snapPoint()` evaluates ordinary enabled snap families in this order:
 
 1. endpoint
 2. center
@@ -208,398 +224,338 @@ When visual-snap mode does not produce a special solution, `RS_Snapper::snapPoin
 6. on-entity
 7. grid
 
-Each candidate compares its distance to the mouse against the current best using a strict-nearer comparison. Therefore:
+Each family updates the current winner only when it is **strictly closer** than the prior best. Consequences:
 
-- ordinary snapping is primarily **nearest acquired candidate**;
-- exact-distance ties keep the earlier candidate type in the evaluation order;
-- grid is a fallback contender, not a separately authored geometric relation;
-- if no snap is valid, the result becomes free pointer position.
+- ordinary resolution is distance-driven;
+- an exact-distance tie stays with the family evaluated earlier;
+- grid is evaluated after reference families;
+- if nothing is acquired, free pointer position is available.
 
-This is useful behavior evidence, but the evaluation order is not a suitable Museum stable key. It is implementation order. H2 should make Museum's tie rule explicit and testable.
+This is useful evidence, but **Museum must not inherit the call order as semantics**. The P23 umbrella already defines the Museum order:
 
-### 4.3 Acquisition range and why Museum should not copy it
+`tool/context validity → semantic feature priority → screen distance → stable ID/key`
 
-LibreCAD computes a snap/free range from multiple factors. Its effective range can be constrained by:
+H2 therefore studies LibreCAD's behavior but keeps Museum's explicit semantic rank ahead of distance.
 
-- a screen-derived entity catch distance (default setting rooted in a 32 px constant), and
-- when grid snapping is on, a fraction of the current grid cell (default factor 25%).
+### 4.3 Acquisition range
 
-That means the effective acquisition range can change when the grid cell changes.
+LibreCAD uses a screen-derived entity catch range rooted in a default 32 px constant and can further bound snapping from current grid-cell size. The result mixes pointer ergonomics with grid density.
 
-**Museum disposition: REJECT this policy.** P23.2/T4 specifically needs a fixed CSS-pixel acquisition radius. Grid density is presentation/quantization; reference acquisition is pointer ergonomics. Changing `0.25 m → 0.10 m` grid spacing must not silently shrink or enlarge the mouse's reference-snap catch area.
+**Museum disposition: REJECT that coupling.**
 
-### 4.4 Restriction ordering
+P23.2 already requires one CSS-pixel acquisition radius stable across zoom. H2 recommends initial `8 px`, converted once per event:
 
-LibreCAD first selects an ordinary snap spot, then can apply horizontal, vertical, or orthogonal restriction relative to a base/relative-zero point. Orthogonal mode chooses the closer horizontal/vertical constrained result.
+`worldRadius = 8 / pixelsPerMeter`
+
+Changing `0.25 m` grid to `0.10 m` must not alter reference acquisition.
+
+### 4.4 Restriction ordering / orthogonal guides
+
+LibreCAD separates an acquired snap spot from horizontal/vertical/orthogonal restriction relative to a base/relative-zero point. Orthogonal restriction chooses between the horizontal and vertical constrained result.
 
 Useful Museum lesson:
 
-- **candidate resolution and directional restriction are separate stages**;
-- an orthogonal guide can be represented as a transient candidate/restriction generated from the active gesture anchor rather than as document geometry;
-- the UI can explain both the semantic snap and the directional restriction.
+- candidate/reference acquisition and directional relation are distinct concepts;
+- an orthogonal guide is transient gesture context, not document geometry;
+- guide feedback can explain the relation while the winning coordinate remains one deterministic result.
 
-Museum should not import LibreCAD's full restriction/action model. P23.2 only needs its own bounded orthogonal guide behavior.
+Museum does **not** need LibreCAD's UCS/relative-zero/action system.
 
-### 4.5 Visual snap / guide behavior
+### 4.5 Visual-snap solution behavior
 
-LibreCAD's visual-snap path can produce:
+The inspected visual-snap solver builds guide rays/lines from eligible reference points/entities and finds candidate intersections/special points inside its snap range. Its solution visualizer keeps separate concepts for:
 
-- an exact found point;
-- one or more guiding entities;
+- highlighted source/reference entity;
+- reference/vertex marks;
+- guiding entities;
 - projected candidate marks;
-- a line between a found and restricted point;
-- labels for guide types;
-- highlighting for source entities.
+- the found/restricted point relationship;
+- compact guide labels.
 
-When several guide entities are available, the inspected path chooses the closest guide to the mouse before further resolution. Exact ordinary endpoint/intersection/center snaps can supersede a guide ray when they are within range.
+This is strong visual-grammar evidence for P23.6: snap result, source emphasis, guide line and marker do not need to collapse into one generic selection-looking dot.
 
-The valuable product grammar is **not** the number of LibreCAD guide modes. It is the separation of:
+Museum should adapt only the bounded grammar. Tangent/normal/ray/distance visual-snap families remain outside P23.2.
 
-1. winning coordinate;
-2. source/reference highlight;
-3. guide line/ray;
-4. compact semantic marker/label;
-5. action preview.
+### 4.6 Preview / cleanup lifecycle
 
-Museum P23.2 only needs a small subset: endpoint/corner, midpoint, intersection, nearest span, orthogonal, opening edge, grid.
+`RS_PreviewActionInterface` keeps preview entities, highlights and snap feedback transient. Init/finish/suspend clear the transient containers; resume reconstructs; triggering clears transient visuals around commit/redraw.
 
-### 4.6 Preview lifecycle
+Museum mapping:
 
-`RS_PreviewActionInterface` keeps action preview, highlights, and snapper feedback transient. Init/finish/suspend clear preview/highlight state; trigger clears transient visuals before executing the committed action and redraws afterward. Resume reconstructs preview/highlight state.
+- snap winner/guides live in editor interaction/session state;
+- clear on Snap off, Esc/cancel, pointer cancel/loss, tool change, Layout↔Arrange authority change, Plan↔3D switch, commit, or invalidated reference;
+- no document mutation/history occurs from showing or clearing feedback.
 
-**Museum mapping:** snap guides and markers belong to `LayoutInteractionState` / local Svelte rune state and `PlanInteractionProjection`. They must never enter `LayoutDocument`, `SceneDocument`, persistence, or history.
+### 4.7 Selection lesson
 
-Required clear events for P23.2:
+`RS_ActionSelectBase` routes hover through a selection catch path and highlights the caught entity separately from committed selection. The useful lesson is **hover/reference emphasis is not selection identity**.
 
-- Snap off
-- `Esc`/cancel
-- pointer cancel/loss
-- active tool change
-- Scene Plan `Layout ↔ Arrange` authority change
-- `Plan ↔ 3D` view switch
-- completed commit
-- invalidated source/reference
-
-### 4.7 Snap feedback grammar
-
-LibreCAD can show a snap marker at the result coordinate and an info cursor naming the current snap type (`Endpoint`, `Intersection`, `Middle`, `Grid`, etc.) plus a restriction name (`Vertical`, `Horizontal`, `Orthogonal`).
-
-Museum should adapt the grammar, not the strings/UI:
-
-- winner marker at exact snapped point;
-- guide line only when the relation benefits from it;
-- short semantic label only where ambiguity exists or during early P23 validation;
-- selection stays blue selection; snap feedback must not look like a selected object;
-- reference source may get a quiet transient emphasis but no selection mutation.
+Museum already has a stronger canonical selection model. Do not import LibreCAD selection actions or entity classes.
 
 ---
 
-## 5. openPlan3D harvest — hit testing, snapping, alignment, rendering
+## 5. openPlan3D harvest — MIT, ADAPT selectively
 
-### 5.1 Exact inspected sources/tests
+### 5.1 Exact inspected source/tests
 
 At `laanlabs/openPlan3D@511ff08f57526784c0bf3bc48466bfea04204bbc`:
 
-**Core source**
+**Source**
 
+- `LICENSE`
 - `src/lib/utils/hitTesting.ts`
 - `src/lib/utils/canvasInteraction.ts`
 - `src/lib/utils/alignment.ts`
 - `src/lib/utils/furnitureGeometry.ts`
 - `src/lib/utils/canvasRenderer.ts`
 - `src/lib/components/editor/FloorPlanCanvas.svelte`
-- `src/lib/components/editor/AlignmentToolbar.svelte`
 
-**Tests**
+**Related tests**
 
 - `tests/opening-hit-testing.test.ts`
 - `tests/furniture-interactions.test.ts`
 
-No dedicated alignment test file was located by repository search at this snapshot.
+No dedicated alignment test file was located in the current tree during H2.
 
-### 5.2 Hit-test behavior worth keeping
+### 5.2 Hit testing
 
-`hitTesting.ts` is deliberately pure even though the larger canvas is not. Useful patterns:
+Useful patterns in `hitTesting.ts`:
 
-- common point-to-segment distance helper;
-- rotated furniture hit testing transforms the pointer into item-local coordinates;
-- furniture/columns/stairs/openings generally scan from the end so the last drawn eligible item wins within that type;
-- handle tolerance is converted from CSS pixels to world units (`8 / zoom`);
-- measurement and annotation tolerances similarly use fixed-screen thresholds;
-- opening pick shape follows the rendered wall-aligned opening extent instead of a large center-point circle.
+- pure point-in-polygon and point-to-segment helpers;
+- rotated furniture hit testing transforms pointer into item-local coordinates;
+- handles use a fixed screen tolerance converted to world (`8 / zoom`);
+- measurement/annotation/opening hit tolerances are also screen-normalized;
+- furniture/openings generally traverse from the end so last drawn wins inside the same category;
+- opening hit area follows the wall-aligned opening body, not a large center-point circle.
 
-The opening helper computes along-wall and across-wall components using the wall tangent. Its test proves a wide opening remains selectable over its physical width but does not capture distant empty space. It also tests the same relationship across multiple zoom levels.
+`tests/opening-hit-testing.test.ts` is especially useful provenance:
 
-**Museum mapping:** this directly supports P23.2 T4 and P23.6's “visual truth” rule, but Museum must keep source geometry canonical:
+- runs across zoom values `0.25, 0.5, 1, 2, 4`;
+- guards a regression where a wide opening captured empty space far from the opening body;
+- proves a screen-space edge tolerance while keeping full physical opening width selectable;
+- verifies wall tangent behavior for rotated/curved walls;
+- pins last-drawn opening priority and degenerate/missing-wall rejection.
 
-- opening reference/hit extent comes from compiled opening spans;
-- curved-wall tangent/projection comes from compiled geometry/query functions;
-- SVG symbol geometry does not become hit or snap authority.
+**Museum mapping:** use compiled opening spans/query geometry as authority. Do not derive hit/snap geometry from the rendered SVG symbol.
 
-### 5.3 Hit-test behavior not to import
+### 5.3 Hit behavior to reject
 
-openPlan3D has no one unified cross-type deterministic hit resolver comparable to Museum's `resolvePlanHit()` / `resolveArrangeHit()`. Different helpers use different traversal orders. Examples:
+openPlan3D has independent per-type hit helpers with differing traversal rules:
 
-- furniture/openings often reverse arrays (topmost-by-draw-order);
-- room hit loops forward;
-- wall hit loops forward and returns first match;
-- curved wall hit testing samples the curve in the consumer.
+- furniture/openings often reverse arrays;
+- rooms scan forward;
+- walls can return the first qualifying wall;
+- curved wall picking/some placement helpers sample curves in the consumer.
 
-**Disposition: REJECT as Museum selection architecture.** Museum already has stronger explicit authority and one compiled-query source.
+Museum already has `resolvePlanHit()` / `resolveArrangeHit()` and compiled query geometry. **Reject openPlan3D's hit architecture**; retain only test/interaction ideas.
 
-### 5.4 Magnetic snap behavior
+### 5.4 Grid + endpoint magnetic snapping
 
-There are two relevant implementations/patterns:
+`canvasInteraction.ts` defines:
 
-- `canvasInteraction.ts` has a small pure endpoint magnetic snap helper.
-- `FloorPlanCanvas.svelte` contains a richer duplicated magnetic-snap path: endpoint pass first; if no endpoint acquired, a second pass projects to straight wall segments.
+- `GRID = 20`
+- `SNAP = 10`
+- `MAGNETIC_SNAP = 15`
+- `WALL_SNAP_DIST = 12`
 
-The canvas path uses:
+Its pure `magneticSnap()` starts from a grid/coordinate fallback, scans wall endpoints, excludes provided wall IDs, converts magnetic range with `/ zoom`, and replaces the result only for a strictly closer endpoint.
 
-- endpoint acquisition based on a constant divided by zoom;
-- endpoints as a categorical first pass;
-- nearest interior point on a wall as lower priority;
-- excluded wall IDs to stop the moving wall snapping to itself;
-- grid-rounded position as the initial fallback.
-
-The second wall pass ignores near-endpoint `t` values because endpoints were already handled.
+The larger `FloorPlanCanvas.svelte` also has component-local magnetic snap behavior, demonstrating the architectural problem H2 should avoid: snapping exists in more than one place.
 
 Useful lessons:
 
-- moving/owned sources must be excluded;
-- reference candidates and grid fallback should be separated;
-- point and span references deserve distinct semantic markers;
-- fixed-screen tolerance should be converted once by the caller.
+- screen-space acquisition;
+- moving-source exclusion;
+- endpoint references distinct from grid fallback.
 
-Do not import:
+Reject:
 
-- duplicate snap code in both component and utility;
-- straight-wall-only projection where Museum already has compiled spans;
-- hardcoded centimeter constants;
-- array order as final tie-break.
+- duplicated component + helper resolver;
+- upstream hardcoded units/constants;
+- input-array order as a semantic tie-break;
+- consumer-owned wall/curve geometry.
 
-### 5.5 Snap tie behavior
+### 5.5 Tie behavior
 
-openPlan3D's relevant snap loops use strict-nearer comparisons. Consequences:
+openPlan3D's relevant loops use strict-nearer comparisons. Equal-distance endpoints/walls therefore preserve the earlier source encountered. The outcome is stable only if array order is treated as truth.
 
-- exact-distance ties preserve the earlier wall/endpoint in array order;
-- `snapFurnitureToWalls()` also preserves the earlier qualifying wall on an exact tie;
-- the canvas magnetic snap gives endpoint category priority over wall-span projection, regardless of a later span pass.
+**Museum disposition:** do not use render/document iteration order as the new snap tie. P23 already requires final stable ID/key after context, semantic priority and screen distance.
 
-This is deterministic only if source array order is treated as semantic. Museum P23.2 should not make that assumption for snapping.
+### 5.6 Wall relation + grid preservation
 
-**H2 decision:** stable source identity must be the final snap tie-break, not incidental render/array order.
+`snapFurnitureToWalls()` in `furnitureGeometry.ts` finds the closest eligible straight wall within a threshold. Once the furniture is made flush to the wall, grid adjustment is projected only along the wall so exact perpendicular clearance is preserved.
 
-### 5.6 Wall-flush + grid relation
+`tests/furniture-interactions.test.ts` includes a diagonal-wall case that proves the exact wall clearance survives grid snapping.
 
-`furnitureGeometry.ts` contains one useful constraint-ordering idea. When furniture snaps flush to a straight wall, it grid-snaps the candidate position, then only keeps the component of grid movement that lies **along** the wall, preserving exact perpendicular wall clearance.
+P23.2 does not import furniture-wall snapping, but the principle is valuable:
 
-`tests/furniture-interactions.test.ts` includes a diagonal-wall case proving wall clearance remains exact with grid snapping enabled.
+> a weaker grid quantization must not destroy an already-acquired stronger geometric reference.
 
-Museum should not import this furniture behavior into P23.2, but the principle is useful:
+Museum simplification: if a reference candidate wins, do not grid-round that winning coordinate afterward. Grid is fallback when no valid reference is acquired.
 
-> a stronger acquired geometric relation must not be damaged by applying a weaker grid quantization afterward.
-
-For P23.2 this simplifies to: **when a valid reference snap is acquired, do not subsequently grid-round the snapped coordinate.** Grid is fallback, not a second destructive pass.
-
-### 5.7 Alignment patterns
+### 5.7 Alignment
 
 `alignment.ts` supports:
 
-- left/right/top/bottom
-- horizontal/vertical center
-- horizontal/vertical distribution
+- left/right/top/bottom alignment;
+- horizontal/vertical center alignment;
+- horizontal/vertical distribution.
 
-It derives axis-aligned rectangles from furniture center + effective width/depth. Alignment min/max/center operations move all selected furniture to a collective edge/center. Distribution sorts by center and equally spaces centers between the first and last.
+It derives axis-aligned rectangles from furniture center + effective width/depth, reads selected furniture from Svelte stores, mutates project state directly, and opens/closes its undo group internally.
 
-Important limitations:
+Important mismatch with P23.2:
 
-- rotation is not incorporated into its alignment rectangle math;
 - it is multi-selection oriented;
-- distribution is center spacing, not equal visible gaps;
-- it reads/writes Svelte stores directly;
-- it starts/ends an undo group internally;
-- no explicit no-op history guard is visible;
-- no dedicated alignment tests were found.
+- rotation is not represented in its alignment rectangle;
+- distribution is equal center spacing, not equal visible gaps;
+- algorithm is store-coupled;
+- no dedicated alignment tests were found;
+- no explicit no-op history guard is evident.
 
-**Museum disposition:** ADAPT only the min/center/max vocabulary. P23.2's narrower design is better:
-
-- one selected supported Layout object;
-- explicit reference chosen without changing viewport selection;
-- selected object's existing rotation-aware/world bounds;
-- reference bounds from compiled query AABB / selected straight wall;
-- one Museum mutation transaction;
-- preserve height/elevation, yaw, dimensions, and `roomId` unless the operation explicitly edits them;
-- no-op produces no history;
-- distribution and multi-selection remain deferred.
+**Museum disposition: ADAPT vocabulary/math only.** Keep P23.2's narrower one-object-to-reference model using canonical compiled/world bounds and Museum transactions.
 
 ### 5.8 Plan visual grammar
 
-`canvasRenderer.ts` provides several useful visual patterns, not a rendering architecture to copy.
+From `canvasRenderer.ts` / `FloorPlanCanvas.svelte`, useful visual ideas are:
 
 **Walls**
 
-- straight walls read as a filled physical-thickness band with an outline rather than a decorative centerline;
-- selected wall shifts to the common blue selection family;
-- selected endpoints and a midpoint handle are visually distinct.
+- physical thickness reads as a filled/banded wall, not a decorative centerline;
+- selected wall gets a stronger selection treatment;
+- selected wall endpoints/midpoint handles are visually distinct.
 
-Museum already renders wall casing + fill with physical width. P23.6 should refine hierarchy/tokens, not replace this with canvas geometry.
+Museum already has physical-width wall casing/fill. Refine tokens/hierarchy; do not copy Canvas geometry.
 
 **Dimensions**
 
-- external dimensions sit offset from the wall;
-- optional extension lines connect measured endpoints to the dimension line;
-- line is interrupted around the text label;
-- endpoint ticks are diagonal;
-- placement flips to the other side when the preferred label/line would leave the canvas.
+- dimension line offset from measured geometry;
+- extension lines from measured endpoints;
+- compact tick marks;
+- readable label gap/space around text;
+- presentation can flip/shift near canvas edges.
 
-Museum adaptation:
-
-- use this grammar for selected straight-wall length and rectangular room dimensions only;
-- use screen-constant stroke/text sizing rather than openPlan's zoom-scaled font formula;
-- collision/edge avoidance stays presentation-only;
-- no persisted dimension entity in P23.6.
+Museum adaptation: contextual selected straight-wall length and truthful rectangular-room dimensions only; no persistent dimension entity in P23.6.
 
 **Rooms**
 
-- restrained floor fill;
-- room name/area near centroid;
-- selected room gets a stronger outline;
-- internal width × depth text is based on room bounds.
+- restrained fill;
+- room name/area near center;
+- selected room outline stronger than passive fill.
 
-Museum adaptation: name is safe derived content. Width × depth should only appear where P23.6 can truthfully identify a rectangular room; do not show AABB width/depth as if it were exact dimensions for arbitrary concave/curved rooms.
+Do not present arbitrary room AABB width/depth as exact architectural dimensions for concave/curved rooms.
 
 **Snap points**
 
-openPlan can draw all wall endpoints as faint dots when grid is shown.
-
-Museum disposition: **do not copy as always-on snap-point clutter.** P23.6 calls for a quiet drafting surface and a visible **winning** snap marker. Candidate cloud display can remain deferred.
+openPlan3D can render many wall endpoints as faint snap points. Museum should **not** show an always-on candidate cloud in P23.6. Winner-only feedback better fits the current Plan hierarchy.
 
 **Guides**
 
-openPlan has persistent project/floor guides, drawn as dashed horizontal/vertical lines with labels and orientation-specific colors.
-
-Museum disposition: **visual STUDY/ADAPT only.** P23.2 explicitly does not introduce persistent constraints/guides. Museum guides are transient gesture overlays. Do not add guide fields to `LayoutDocument`.
+openPlan3D has persistent project/floor guides. Their dashed-line visual treatment is useful reference only. Persistent guide entities are outside P23.2 and must not be added to `LayoutDocument`.
 
 **Grid**
 
-openPlan uses separate minor/major grid levels and hides overly dense grid detail at low pixel spacing. Museum already has the same important behavior in `buildPlanGrid()` (minor hidden below 6 px). H2 confirms the existing Museum approach; no new grid renderer is needed.
+openPlan3D distinguishes major/minor grid density. Museum already has equivalent LOD (`buildPlanGrid()` hides minor lines when projected spacing is below 6 px). Keep Museum's renderer.
 
 ---
 
 ## 6. Recommended Museum snap resolver contract
 
-This section is the main H2 refinement to the current P23.2 seed. It changes no code; it records the recommended post-harvest contract.
+### 6.1 Location / ownership
 
-### 6.1 Location and ownership
-
-Recommended new pure editor module:
+Recommended pure editor seam:
 
 `apps/editor/src/lib/editor/layout/plan-snap.ts`
+
+The exact file name is implementation detail, but ownership should remain editor-side for P23.2 because the resolver combines canonical compiled queries with tool/gesture/session context.
 
 Responsibilities:
 
 - accept `CompiledLayoutQueryGeometry`;
-- accept pointer world coordinate + `pixelsPerMeter` or caller-provided world radius;
-- accept active tool/gesture context and excluded source IDs;
-- generate only allowed candidates from canonical query records + transient gesture anchors;
-- resolve one deterministic winner;
-- return renderer-neutral guide/marker metadata.
+- accept raw world pointer, `pixelsPerMeter`, active tool/gesture context and source exclusions;
+- generate only context-valid candidates from compiled queries + transient gesture anchors;
+- resolve one winner using the **umbrella comparator**;
+- return one renderer-neutral result plus transient guide/marker descriptors.
 
-It must not import:
+Do not import Svelte components, DOM/SVG, Three/Threlte, Scene mutators, history or persistence.
 
-- Svelte component state;
-- DOM/SVG;
-- Three/Threlte;
-- `SceneDocument` mutators;
-- history;
-- persistence.
-
-`LayoutPlanViewport.svelte` orchestrates the call. Existing Layout mutation/transaction functions commit the snapped result. `plan-overlays.ts` / `PlanInteractionProjection` turns the result into visual primitives. `PlanSvg.svelte` remains a thin draw adapter.
+Only promote a shared helper deeper into `layout-core` later if a real non-editor caller needs it. Do not move session snap policy into the compiler merely for cleanliness.
 
 ### 6.2 Acquisition radius
 
-Recommended initial constant:
+Initial recommendation:
 
 `SNAP_ACQUIRE_RADIUS_PX = 8`
 
-Rationale from inspected seams:
+Evidence range:
 
-- Museum Arrange already uses a small screen-space halo (6 px) for Scene footprints;
-- openPlan uses 5 px opening edge margin and 8 px handles/measurements for precision targets;
-- LibreCAD's much broader legacy catch range is additionally grid-cell-coupled and is not a good direct fit for Museum's dense Plan surface.
+- Museum Arrange already uses a 6 CSS-pixel Scene footprint halo;
+- openPlan uses 5 px opening margin and 8 px precision handles/measurement targets;
+- LibreCAD's broader legacy range is not a direct fit and is partly grid-coupled.
 
-The constant must be centralized and testable. Convert once per event:
+Policy is more important than exact number:
 
-`worldRadius = SNAP_ACQUIRE_RADIUS_PX / pixelsPerMeter`.
+- one centralized CSS-pixel value;
+- convert once using `worldRadius = px / pixelsPerMeter`;
+- independent of metric grid step;
+- test at multiple zooms.
 
-Do **not** make it a fraction of grid spacing.
+**Hysteresis:** defer in first P23.2 implementation. Neither inspected source gives compelling evidence that a sticky previous winner is required for the minimum slice. Add a release radius only if visual QA/interaction fixtures demonstrate winner flicker.
 
-Hysteresis/release radius: **defer from the first P23.2 implementation.** Neither inspected source provides evidence that Museum needs a sticky previous winner to meet the minimum slice. Add only if visual QA shows unstable flicker around equidistant references.
+### 6.3 Candidate vocabulary
 
-### 6.3 Candidate set for P23.2
+Generate only context-valid candidates already approved by P23.2:
 
-Generate only context-valid candidates:
+1. **Endpoint / room corner** — compiled `vertex` query points.
+2. **Opening edge** — canonical compiled opening interval endpoints, only in opening-relevant context.
+3. **Intersection** — intersection of eligible canonical compiled straight/query spans; dedupe self/adjacent duplicates deterministically.
+4. **Straight-wall midpoint** — midpoint of the authored straight wall segment, not midpoint of every tessellated compiled subspan.
+5. **Orthogonal** — transient X/Z relation from active gesture anchor/reference geometry.
+6. **Nearest span** — canonical `projectPointToSpans()` over eligible query spans.
+7. **Grid** — current effective grid step, only as fallback after reference resolution.
 
-1. **Endpoint / room-corner** — compiled `vertex` query points.
-2. **Opening edge** — start/end of the owning compiled opening interval, only where opening editing/placement context allows it.
-3. **Intersection** — intersections of eligible canonical compiled straight/span segments, with self/adjacent duplicate filtering.
-4. **Straight-wall midpoint** — midpoint of the authored straight wall segment, not midpoint of each tessellated span.
-5. **Orthogonal** — transient horizontal/vertical relation from the active gesture anchor to eligible reference points/spans.
-6. **Nearest span** — `projectPointToSpans()` over eligible canonical compiled spans.
-7. **Grid** — current effective grid step.
-
-Do not resample curves in the Plan consumer. For curved walls, nearest-span behavior uses the already compiled spans. Straight-wall midpoint remains explicitly straight-wall-only for P23.2.
+Curved nearest behavior must use existing compiled spans/canonical query data. Plan does not resample a curve.
 
 ### 6.4 Moving-source exclusion
 
-Every gesture must provide exclusions before candidate generation:
+Each gesture adapter supplies exclusions by stable semantic/source identity before candidate generation.
 
-- moved room and its owned Layout members where their own geometry would self-snap;
-- actively dragged object itself;
-- actively edited opening itself when an edge would trivially snap to its current coordinate;
-- current wall/vertex source as required by the edit mode;
-- Arrange Scene-owner gesture may **read** layout references but never include Scene write targets as Layout candidates that cause document crossover.
+Examples:
 
-Exclusion is by stable source identity, not coordinate comparison.
+- dragged object itself;
+- moving room and its owned Layout geometry where self-snapping would be invalid;
+- current wall/vertex source as needed by the active edit;
+- actively edited opening itself when its current edge would trivially self-win.
 
-### 6.5 Deterministic winner algorithm
+Arrange Scene-owner gestures may read Layout references, but the snap resolver never causes a cross-document write. Scene gesture writes remain Scene-only; Layout gesture writes remain Layout-only.
 
-Recommended refinement to P23.2's current seed ordering:
+### 6.5 Deterministic winner comparator — umbrella preserved
 
-**A. Filter by active tool/context validity.**  
-Invalid source kinds never enter the pool.
+This is mandatory H2 reconciliation. Use the P23 umbrella order, not upstream order:
 
-**B. Split reference candidates from grid.**  
-If at least one valid non-grid reference is within the CSS-pixel acquisition radius, resolve among references. Grid cannot steal from an acquired reference.
+**A. Tool/context validity**  
+Filter impossible/invalid feature kinds before comparison.
 
-**C. Within references, choose nearest screen distance first.**  
-This follows the strongest common upstream behavior and avoids a farther endpoint stealing from a much nearer wall/span just because of type rank.
+**B. Semantic feature priority**  
+Use an explicit per-context rank table. Do not let function-call order or source-array order define rank. Opening-edge exists only in its valid opening context. Endpoint/room-corner should outrank generic nearest-span when both are valid; remaining family ranks are reconciled explicitly in the P23.2 implementation plan rather than inferred from upstream traversal.
 
-**D. Exact/numerical tie → semantic tie rank.**  
-Recommended tie rank only for near-equal distances:
+**C. Screen distance**  
+Within the same semantic priority, compare pointer distance in screen/CSS-pixel terms.
 
-`endpoint/opening-edge → intersection → midpoint → orthogonal → nearest-span`.
+**D. Stable ID/key**  
+For an equal/numerically tied candidate, compare a stable key assembled from semantic kind + existing source IDs/subfeature identity. Never use render layer, array position or Svelte iteration order.
 
-Opening-edge is only present in opening context, so it does not become a global privileged feature.
+**Reference vs grid:** an acquired valid non-grid reference wins over grid by contract. Grid is evaluated as fallback, not as a competing higher-priority geometry feature.
 
-**E. Final tie → stable key.**  
-Use a key assembled from semantic kind + existing stable compiled source IDs/subfeature identity. Never use current array position, layer order, Svelte keyed iteration order, or “last rendered.”
+This deliberately rejects:
 
-**F. No acquired reference → grid fallback.**  
-Grid snapping may apply if `snapEnabled`; otherwise return free pointer coordinate.
+- LibreCAD's implicit call-order tie;
+- LibreCAD's nearest-first precedence as Museum product semantics;
+- openPlan's input-array tie;
+- openPlan's component-local endpoint-first implementation as architecture.
 
-This intentionally differs from:
+### 6.6 Snap result / guide result
 
-- LibreCAD's implicit type-order tie;
-- openPlan's array-order exact tie;
-- openPlan's categorical endpoint-first pass.
-
-It preserves P23.2's important “reference beats grid” rule while making reference competition spatially intuitive and stable.
-
-### 6.6 Snap result and guide result
-
-Recommended conceptual result:
+Conceptual output:
 
 ```ts
 type PlanSnapResult = {
@@ -611,216 +567,200 @@ type PlanSnapResult = {
 };
 ```
 
-`PlanSnapGuide` is transient/render-neutral. Examples:
+`PlanSnapGuide` remains renderer-neutral transient session data, for example:
 
-- line through active anchor for orthogonal relation;
-- short source-span emphasis for nearest-span;
-- point marker for endpoint/midpoint/intersection/opening-edge;
-- optional compact semantic text.
+- orthogonal line through active anchor;
+- short source-span emphasis;
+- winner marker for point/reference feature;
+- optional compact semantic label.
 
-No snap result is serialized. No guide produces history.
+No result/guide is serialized. No guide change produces history.
 
-### 6.7 Apply order
+### 6.7 Gesture apply order
 
 For position gestures:
 
-`raw pointer → context constraints → reference snap resolution → grid fallback only if no reference → preview → commit`
+`raw pointer → existing context/modifier constraints → P23 reference resolution → grid fallback if no reference → preview → one commit`
 
-Do not grid-round a winning reference coordinate after resolution. The openPlan diagonal wall fixture demonstrates why a weaker quantization should not disturb an exact stronger relation.
+Do not re-grid a winning reference coordinate.
 
-Existing 15° rotation/angle modifier behavior remains unchanged by H2/P23.2.
+Existing angle modifier semantics remain unchanged unless a separate approved plan changes them.
 
 ---
 
-## 7. Alignment contract refinement
+## 7. Alignment mapping
 
-P23.2 seed already limits alignment to one selected supported object and one reference. H2 recommends keeping that boundary.
+Keep P23.2's existing narrow product choice.
 
-### 7.1 Supported reference geometry
+### 7.1 Supported references
 
-- **another Layout object:** existing compiled object world AABB;
-- **room:** compiled Plan/world room bounds where the operation is semantically a bounds alignment;
-- **selected straight wall:** compiled wall/span source, with explicit “Center on wall” operation.
+- another supported Layout object's compiled world AABB;
+- a room's compiled Plan bounds for explicit bounds alignment;
+- a selected straight wall as a reference for bounded **Center on wall**.
 
-For object/room bounds expose only:
+Expose X or Z + min/center/max for bounds references.
 
-- X min / center / max
-- Z min / center / max
+### 7.2 Selected target
 
-No distribution in P23.2.
+Use the selected object's current rotation-aware world footprint/AABB after room-local transform and yaw. Compute only the X/Z translation delta needed to match the chosen reference.
 
-### 7.2 Rotation-aware selected object
+Preserve:
 
-openPlan's alignment rectangle ignores furniture rotation. Museum must not repeat this.
-
-Use the selected Layout object's existing world-space compiled footprint/AABB after room-local transform and yaw. Compute the translation delta required to align its current min/center/max to the chosen reference coordinate.
-
-The operation moves X/Z only. Preserve:
-
-- object height/elevation state;
+- elevation/height state;
 - yaw;
 - dimensions;
 - shape/type;
 - explicit `roomId` ownership.
 
-Do not infer room ownership from the resulting coordinate.
+Never infer ownership from resulting coordinates.
 
-### 7.3 Reference picker must not become selection
+### 7.3 Selection neutrality
 
-The Inspector's reference picker is a transient authoring target, not viewport selection.
-
-Selecting `Wall A` as an alignment reference must not:
-
-- replace the selected object;
-- switch Arrange owner;
-- create a second selection store;
-- create history before the alignment command runs.
+Inspector reference picking must not replace the selected object, change Arrange owner, create a second selection store, or produce history before Apply.
 
 ### 7.4 History
 
-One alignment command = one `layout` transaction/history entry.
+One successful alignment intent = one `layout` transaction/history result. Zero delta/no-op = no history.
 
-If the computed delta is zero within the existing mutation equality/tolerance policy, do nothing and emit no history entry.
+Distribution, group alignment and mixed-owner alignment remain deferred.
 
 ---
 
-## 8. P23.6 Plan visual grammar refinements
+## 8. P23.6 visual grammar mapping
 
-### 8.1 Wall / room / object hierarchy
+### 8.1 Hierarchy
 
-Keep the current Museum paper surface and current single blue selection language. H2 does **not** recommend copying openPlan colors.
+Recommended Plan hierarchy using current Museum tokens/surface:
 
-Recommended hierarchy:
+1. authored walls / physical wall thickness — strongest neutral architecture;
+2. opening voids/jambs — clear interruption of wall body;
+3. restrained room fill/name;
+4. Layout objects — authored but subordinate to architecture;
+5. passive Scene footprints — quieter context;
+6. transient preview/snap guides — visible but not selection-like;
+7. active selection/handles — highest interaction emphasis.
 
-1. authored architectural wall thickness strongest neutral structure;
-2. opening gaps/jambs clearly cut through walls;
-3. room fill and room label quiet;
-4. Layout objects below walls but clearly authored;
-5. passive Scene footprints below active Layout authored content;
-6. transient guides/preview above content but visually different from selection;
-7. active selection/handles highest interaction emphasis.
+Prefer stroke weight, opacity, dash and marker shape before adding new hues.
 
-Use stroke weight, opacity, dash, and shape before adding more hues.
+### 8.2 Winner markers / guides
 
-### 8.2 Snap markers and guides
+Suggested semantic shapes; final exact glyph is P23.6 presentation work:
 
-Use compact semantics instead of one generic dot:
-
-- endpoint/opening-edge: small square/bracket-like point mark;
+- endpoint / opening-edge: small square/bracket-like point mark;
 - midpoint: small triangle/diamond;
-- intersection: small `×`/cross mark;
-- nearest-span: point + short perpendicular/source emphasis;
-- orthogonal: thin dashed guide + right-angle cue where useful;
-- grid: smallest/quietest point marker, no long guide.
+- intersection: cross/`×`;
+- nearest-span: point plus short perpendicular/source emphasis;
+- orthogonal: thin dashed guide + right-angle cue when useful;
+- grid fallback: smallest/quietest marker, no long guide.
 
-Exact glyph geometry is presentation work for P23.6, but all markers must:
+Rules:
 
-- stay screen-constant in CSS px;
-- use `pointer-events: none`;
-- never become hit geometry;
-- never look identical to selection handles;
-- remain legible at 50/100/200 px-per-meter reference zooms and across all shipped themes.
+- screen-constant CSS-pixel geometry;
+- pointer-inert (`pointer-events: none` at SVG adapter level);
+- winner-only by default;
+- not identical to selection handles;
+- no hit/snap authority from marker geometry.
 
-### 8.3 Guide layering and lifecycle
+### 8.3 Plan render/token seam
 
-Place snap guides inside the existing transient Plan interaction projection/layer system. Do not add a second SVG overlay with independent world transforms.
+Prefer a compact semantic token set rather than one token per upstream behavior. For example:
 
-A good structure is:
+- `snap-guide`
+- `snap-marker`
+- `snap-label`
+- `alignment-preview`
 
-`Plan snap result → plan-overlays.ts → PlanInteractionProjection → PlanRenderModel → PlanSvg.svelte`.
+Marker shape communicates feature kind; token communicates shared state. Add new CSS variables in the existing Plan token layer only if the current palette cannot express the needed hierarchy.
 
-This preserves one view transform and deterministic render ordering.
+Do not encode candidate identity in CSS classes or SVG DOM state.
 
 ### 8.4 Dimensions
 
-Adapt the useful openPlan drafting grammar:
+Adapt only drafting grammar:
 
 - extension lines;
 - offset dimension line;
 - concise metric label;
-- line break/gap behind text or equivalent readable halo;
+- readable gap/halo behind label;
 - compact diagonal ticks;
-- flip/shift presentation near viewport edges when needed.
+- simple presentation-only flip/shift near viewport edge.
 
-For P23.6 show only derived/contextual dimensions that current semantics can support truthfully:
+Display only semantically truthful contextual dimensions:
 
 - selected straight-wall length;
 - rectangular-room principal dimensions.
 
-Do not persist these as dimension entities in P23.6.
+No persisted annotation/dimension system in P23.6.
 
-### 8.5 Door/opening presentation correction
+### 8.5 Opening symbol truth
 
-Current `PlanSvg.svelte` door swing is semantically overclaimed. P23.6 should explicitly remove/suppress it until door handedness/swing exists in authored state.
+Suppress the current invented directional leaf/swing until authored door handedness/swing semantics exist.
 
 Allowed now:
 
-- wall gap/void;
-- jamb boundaries;
-- neutral door/opening symbol that does not imply left/right swing;
-- selected opening body + width handles from the actual opening edit contract.
+- opening gap/void;
+- neutral jamb/window framing;
+- selected opening body/width handles supplied by real P23.3 edit semantics.
 
-Disallowed now:
+Not allowed now:
 
-- invented leaf hinge side;
+- invented hinge side;
 - invented swing direction;
-- SVG-derived state used for snap/hit/mutation.
+- decorative SVG symbol as hit/snap/mutation source.
 
 ### 8.6 Grid
 
-Museum's current grid LOD is already stronger than importing openPlan's canvas grid:
+Keep current Museum grid model:
 
 - major/minor world grid;
-- minor hidden when projected below 6 px;
-- stable world/screen transform;
-- Plan paper token system.
+- minor-line LOD below roughly 6 projected pixels;
+- shared Plan transform;
+- existing paper palette.
 
-P23.6 should tune hierarchy only. Visual grid changes must not alter snap coordinates.
+P23.6 changes only drawing hierarchy. Visual density does not change authored snap coordinates or reference acquisition.
 
-### 8.7 Theme/token refinement
+### 8.7 Themes / accessibility
 
-`plan.css` already centralizes paper/plan tokens and the theme registry keeps shipped themes separate from spatial canvas invariants. Add semantic snap/guide CSS variables at this shared Plan token layer if new values are required; do not add a “CAD theme” and do not hardcode per-theme snap colors in `PlanSvg.svelte`.
+Exercise all shipped themes, including the light `porcelain-atelier` identity. Because Plan spatial palette is invariant, snap/guide additions should normally live in the shared Plan token layer.
 
-Suggested minimum token vocabulary:
+Verify:
 
-- `--editor-plan-guide`
-- `--editor-plan-guide-muted`
-- `--editor-plan-snap-marker`
-- `--editor-plan-snap-marker-fill`
-- `--editor-plan-preview-valid`
-- existing danger token for invalid preview
-
-Marker kind should be communicated primarily by geometry, so one marker ink can serve multiple kinds.
+- sufficient contrast on paper;
+- marker feature kind not conveyed by color alone;
+- focus-visible behavior for any new DOM controls;
+- reduced-motion rules if a control uses transitions;
+- no visitor import of editor theme/snap/guide infrastructure.
 
 ---
 
-## 9. Acceptance fixtures and provenance
+## 9. Acceptance fixtures with provenance
 
-These fixtures should be added when P23.2/P23.6 implements the harvest. “Port” below means fixture intent/data may be adapted under the noted license; it does not authorize importing GPL code.
+The table below is the implementation handoff. LibreCAD provenance is STUDY-only; all such Museum tests are independently authored. openPlan3D fixture text may be adapted/ported only under MIT obligations.
 
-| H2 fixture | Museum acceptance | Provenance | Disposition |
+| Fixture | Museum acceptance | Provenance | Disposition |
 |---|---|---|---|
-| **H2-F1 fixed-pixel acquisition** | Same pointer distance in CSS px acquires/releases the same reference at Plan scales 50, 100, 200 px/m; changing grid step does not change acquisition radius | LibreCAD screen catch concept + rejection of grid-cell coupling; openPlan zoom-normalized tolerances and `opening-hit-testing.test.ts` | Independent Museum fixture; LibreCAD STUDY, openPlan ADAPT |
-| **H2-F2 opening physical extent** | A point over the actual opening width is eligible; a point the same distance from center but outside opening body is not; test across zoom | openPlan `tests/opening-hit-testing.test.ts` wide-opening regression (#18) | PORT/ADAPT under MIT attribution |
-| **H2-F3 stable symmetric tie** | Two equal-distance reference candidates resolve to same stable source key even if input candidate/compiled traversal order is reversed | LibreCAD strict-nearer implicit tie + openPlan array-order tie exposed by inspection | Independent Museum regression; do not port GPL |
-| **H2-F4 reference beats grid** | Acquired endpoint/midpoint/intersection/span coordinate remains exact even when grid fallback would round elsewhere | LibreCAD ordinary candidate/grid competition; openPlan diagonal wall + grid fixture | Independent/adapted behavior |
-| **H2-F5 nearest-reference competition** | Within acquired non-grid references, closer screen-space candidate wins; semantic rank only breaks numerical tie | LibreCAD nearest-candidate behavior; H2 refinement over openPlan endpoint-first pass | Independent Museum fixture |
-| **H2-F6 moving-source exclusion** | Dragged object/room/wall cannot snap to its own current/source geometry; neighboring references remain eligible | openPlan `excludeWallIds`; P23 owner/room transform contract | Independent Museum fixture |
-| **H2-F7 orthogonal transient guide** | Guide snaps from active gesture anchor, marker/line shown; cancel/snap-off clears all state and leaves document/history unchanged | LibreCAD restriction + preview lifecycle | Independent Museum fixture; STUDY only |
-| **H2-F8 opening-edge snap** | Opening edit/placement can acquire owning opening edge; unrelated opening edge does not globally outrank context | LibreCAD semantic candidate separation + openPlan opening extent | Independent Museum fixture |
-| **H2-F9 curved nearest-span uses compile** | Auto/explicit curved wall nearest snap matches canonical compiled query projection; Plan resolver performs no curve sampling | Museum `g2AutoBezierDocument` + rejection of openPlan consumer sampling | Reuse Museum fixture |
-| **H2-F10 intersection source** | Intersection candidate is derived from canonical compiled spans, stable under zoom, excludes adjacent/self duplicate intersections | LibreCAD intersection snap behavior + Museum compiler boundary | Independent Museum fixture |
-| **H2-F11 non-default grid step** | One changed effective grid step reaches every affected draft/placement/translation path; no hidden 0.25 m path remains | Current Museum duplicated default identified by P23.2 | Museum regression |
-| **H2-F12 alignment rotated bounds** | Rotated Layout object min/center/max aligns using current world footprint/AABB, preserving Y/yaw/dimensions/roomId | openPlan alignment vocabulary; explicit rejection of its rotation-blind rect | Independent Museum fixture |
-| **H2-F13 alignment no-op** | Already-aligned operation does not write document or history | Museum one-intent/one-history invariant; gap in openPlan alignment | Museum regression |
-| **H2-F14 guide lifecycle** | Pointer cancel, Esc, commit, tool change, mode switch and Plan→3D all clear snap overlays | LibreCAD preview/action lifecycle | Independent Museum fixture; STUDY only |
-| **H2-F15 visual/semantic separation** | Snap marker is non-hit-testable, does not alter `resolvePlanHit`/`resolveArrangeHit`, selection, JSON, compiled geometry, or history | Museum architecture + LibreCAD separate overlay model | Museum contract test |
-| **H2-F16 door symbol truth** | No door leaf/swing graphic appears when document has no handedness/swing semantic; opening gap/jamb remains | Current `PlanSvg.svelte` mismatch + P23.6 contract | Museum render regression |
-| **H2-F17 Plan hierarchy matrix** | walls/openings/rooms/objects/passive Scene footprints/selection/snap guides remain distinguishable at 50/100/200 px/m and all shipped themes | openPlan renderer visual grammar + current Museum Plan/theme seams | Museum component/visual contract |
+| **H2-F1 fixed-pixel acquisition** | same CSS-pixel pointer distance acquires same reference at 50/100/200 px/m; grid-step change does not change catch radius | LibreCAD screen catch concept + rejection of grid coupling; openPlan zoom-normalized hit tolerances | independent Museum test |
+| **H2-F2 opening physical extent** | full physical opening span is eligible; equally distant point outside body is not; stable across zoom | openPlan `tests/opening-hit-testing.test.ts`, regression `#18` | ADAPT/PORT under MIT if text used |
+| **H2-F3 semantic priority before distance** | when two acquired valid candidates have different semantic rank, umbrella rank wins even if lower-rank candidate is nearer; same-rank candidates use screen distance | P23 umbrella + LibreCAD/openPlan evidence that upstream orders differ | Museum contract test |
+| **H2-F4 stable exact tie** | equal-rank/equal-distance candidates resolve by stable key and remain same when candidate traversal order reverses | LibreCAD strict-nearer call-order tie; openPlan array-order tie | independent Museum regression |
+| **H2-F5 reference beats grid** | acquired reference coordinate remains exact; no later grid rounding moves it | P23 contract + openPlan diagonal wall/grid relation | independent/adapted behavior |
+| **H2-F6 moving-source exclusion** | moved target cannot self-snap; valid neighbor remains eligible | openPlan `excludeWallIds` + Museum owner model | independent Museum test |
+| **H2-F7 orthogonal transient guide** | orthogonal result/guide derives from active anchor; cancel/snap-off clears it with no document/history change | LibreCAD restriction + preview lifecycle | STUDY-derived independent test |
+| **H2-F8 opening-edge context** | opening-edge candidate exists only in opening-relevant context; does not globally steal unrelated gestures | P23.2 context contract + openPlan opening extent | independent Museum test |
+| **H2-F9 curved nearest-span uses compiler** | curved nearest reference matches canonical compiled query projection; resolver performs no curve sampling | Museum `g2AutoBezierDocument` + rejection of openPlan consumer sampling | reuse Museum fixture |
+| **H2-F10 canonical intersection** | intersection comes from eligible compiled query spans, dedupes self/adjacent duplicates and is stable across zoom | LibreCAD intersection behavior + Museum compiler boundary | independent Museum test |
+| **H2-F11 non-default grid step** | one changed effective grid step reaches every affected Layout draft/placement/translation path; no hidden 0.25 path | current Museum duplicated defaults | Museum regression |
+| **H2-F12 Camera isolation** | changing Layout Plan grid/reference settings does not change Camera Plan snap behavior | Museum domain/workspace boundary | Museum regression |
+| **H2-F13 rotated alignment bounds** | rotated Layout target aligns using current world footprint/AABB, preserving elevation/yaw/dimensions/roomId | openPlan alignment vocabulary + rejection of rotation-blind rect | independent Museum test |
+| **H2-F14 alignment no-op** | already aligned operation writes no document/history | Museum deterministic history contract; openPlan gap | Museum regression |
+| **H2-F15 guide lifecycle** | Esc, pointer cancel, commit, tool change, Layout↔Arrange and Plan→3D clear feedback | LibreCAD preview/action lifecycle | STUDY-derived independent test |
+| **H2-F16 visual/selection isolation** | marker/guide cannot alter `resolvePlanHit`, `resolveArrangeHit`, selection, JSON, compiled geometry or history | Museum architecture + LibreCAD separate overlay grammar | Museum contract test |
+| **H2-F17 door symbol truth** | no directional leaf/swing is rendered without authored semantics; opening gap/jamb stays | current `PlanSvg.svelte` mismatch + P23.6 contract | Museum render regression |
+| **H2-F18 visual hierarchy matrix** | walls/openings/rooms/objects/passive footprints/selection/snap/preview/invalid remain distinguishable at 50/100/200 px/m and all shipped themes | openPlan visual grammar + current Museum Plan/theme seams | Museum component/visual gate |
 
-### Reusable current Museum fixture sources
+### Reuse current Museum fixture sources
 
-Prefer extending current compiler/query fixtures instead of inventing parallel geometry fixtures:
+Prefer existing compiler/query fixtures:
 
 - `apps/editor/tests/layout/__fixtures__/layout-g2-fixtures.ts`
   - `g2LineRectangleDocument`
@@ -830,147 +770,148 @@ Prefer extending current compiler/query fixtures instead of inventing parallel g
 - `apps/editor/tests/lib/editor/layout/plan-hit.test.ts`
 - `apps/editor/tests/lib/editor/layout/arrange-hit.test.ts`
 - `apps/editor/tests/lib/editor/layout/layout-plan-transform.test.ts`
+- `apps/editor/tests/lib/editor/layout/layout-object-editing.test.ts`
+- `apps/editor/tests/lib/layout/plan-render-model.test.ts`
+- `apps/editor/tests/lib/layout/plan-render-boundary.test.ts`
+- theme registry/controller tests referenced by P23.6
 
-New H2 fixtures should compile through `compileLayoutGeometry()` and feed the snap resolver `geometry.queries`; no hand-built shadow wall geometry for integration tests except narrow resolver unit inputs.
+Integration fixtures should compile a real `LayoutDocument` through `compileLayoutGeometry()` and feed `geometry.queries` into the resolver. Hand-built query inputs are fine only for narrow resolver unit tests.
 
 ---
 
-## 10. Exact source-to-Museum mapping
+## 10. Source → Museum mapping
 
-| Harvest finding | Museum seam | Mapping |
+| Harvest finding | Museum seam | H2 mapping |
 |---|---|---|
-| Nearest acquired ordinary snap | new pure `plan-snap.ts` over `geometry.queries` | ADAPT behavior; explicit deterministic comparator |
-| Screen-space catch radius | `LayoutPlanViewport.svelte` + `layout-plan-transform.ts` | caller converts CSS px to world once |
-| Grid fallback | existing `snapToGrid()` | centralize effective step; fallback only |
-| Endpoint/corner | `CompiledQueryPoint(kind='vertex')` | direct canonical source |
-| Interior/nearest wall | `CompiledQuerySpan` + `projectPointToSpans()` | direct canonical source; no resampling |
-| Opening physical extent | compiled `opening` spans | direct canonical source; SVG symbol never authority |
-| Orthogonal guide | active gesture anchor + eligible query features | editor-session candidate only |
-| Snap marker / guide line | `plan-overlays.ts` / `PlanInteractionProjection` | render-neutral transient primitive |
-| Snap drawing | `PlanRenderModel` → `PlanSvg.svelte` | style/transform only |
-| Alignment min/center/max | compiled object/room AABBs + existing layout mutation transaction | one selected object to one ref |
-| Selection topmost/authority | existing `resolvePlanHit()` / `resolveArrangeHit()` | preserve unchanged; snapping does not select |
-| Preview cleanup | `LayoutInteractionState`, component-local runes, tool/mode cancellation | never serialize/history |
-| Wall/dimension grammar | existing Plan render model + PlanSvg + Plan chrome | presentation only |
-| Theme treatment | `apps/editor/src/lib/editor/styles/plan.css` + existing theme tokens/tests | no new CAD theme |
+| reference candidate generation | `CompiledLayoutGeometry.queries` + new pure editor resolver | ADAPT; no new geometry truth |
+| fixed CSS-pixel catch | Layout Plan event/viewport adapter | convert px→world once; independent of grid |
+| deterministic winner | pure resolver | **umbrella order preserved:** context → semantic → distance → stable key |
+| endpoint/corner | compiled `vertex` points | direct canonical source |
+| opening edge | compiled opening interval/spans | context-scoped canonical source |
+| nearest wall/span | `projectPointToSpans()` | direct canonical source; no resampling |
+| midpoint | authored straight segment identity + compiled endpoints | one midpoint per authored straight wall, not tessellation chunk |
+| intersection | eligible compiled spans | deterministic derived runtime candidate |
+| orthogonal | active gesture anchor + canonical query references | transient editor candidate |
+| grid | `snapToGrid()` with one effective Layout grid step | fallback only |
+| guide/marker | `plan-overlays.ts` / `PlanInteractionProjection` | transient renderer-neutral primitives |
+| Plan draw | `PlanRenderModel` → `PlanSvg.svelte` | transform/style only |
+| alignment | compiled object/room bounds + straight-wall query + existing Layout transaction | one target → one ref |
+| selection | existing `resolvePlanHit()` / `resolveArrangeHit()` | KEEP AS-IS; snap never selects |
+| preview cleanup | `LayoutInteractionState` / component-local runes + cancellation seams | no persistence/history |
+| Plan grammar | existing Plan render model / SVG / chrome | presentation only |
+| theme treatment | `plan.css` / `tokens.css` / theme tests | shared Plan semantic tokens only |
 
 ---
 
-## 11. Not-to-import architecture
+## 11. Explicit not-to-import list
 
-### From LibreCAD
+### LibreCAD
 
 Do not import or recreate as a parallel subsystem:
 
-- `RS_Snapper`/Qt action inheritance architecture;
+- GPL source/test text;
+- Qt action inheritance / `RS_Snapper` architecture;
+- LibreCAD document/entity classes;
 - visual-snap manager/solution object graph;
 - overlay entity containers as a second Plan model;
-- relative-zero/UCS system;
-- full endpoint/center/middle/distance/tangent/normal/ray snap vocabulary;
-- document/entity classes;
-- settings-driven grid-cell-coupled acquisition range;
-- any GPL source/test text.
+- UCS/relative-zero system;
+- full tangent/normal/ray/distance snap vocabulary;
+- grid-cell-coupled acquisition policy;
+- implicit function-call order as Museum snap semantics.
 
-H2 uses only independently described behavior: nearest acquired candidate, explicit feedback, transient lifecycle, restriction/guide separation.
-
-### From openPlan3D
+### openPlan3D
 
 Do not import:
 
-- `FloorPlanCanvas.svelte` as a monolithic interaction/render authority;
-- duplicate component-local + utility snap implementations;
-- Canvas2D as a second Plan renderer;
-- consumer curve sampling for hit/snap/wall length;
-- per-type independent hit resolvers as Museum's cross-type selection system;
-- render-array order as snap tie truth;
-- Svelte store reads/writes inside alignment algorithms;
-- furniture document semantics into `LayoutDocument`;
+- monolithic `FloorPlanCanvas.svelte` interaction/render authority;
+- Canvas2D as a second Museum Plan renderer;
+- duplicate component-local + utility snap resolvers;
+- render/source-array order as snap truth;
+- per-type independent hit helpers as Museum's cross-type selection system;
+- consumer curve sampling for snap/hit geometry;
+- Svelte-store reads/writes inside alignment algorithm;
+- openPlan furniture/project data semantics into `LayoutDocument`;
 - multi-selection alignment/distribution into P23.2;
 - persistent guide entities into P23.2;
-- hardcoded upstream colors/units;
-- room AABB dimensions presented as true dimensions for non-rectangular rooms.
+- upstream hardcoded colors/units;
+- room AABB width/depth displayed as exact dimensions for arbitrary rooms.
 
-### Museum hard boundaries to preserve
+### Museum boundaries that remain hard
 
-- `LayoutDocument` remains authored architecture/rough layout-object truth.
-- `SceneDocument` remains separate; Arrange may read layout references without cross-document mutation.
-- room-local transforms/explicit `roomId` remain authoritative.
-- `compileLayoutGeometry()` remains the single layout geometry compiler.
-- Plan consumes compiled query/render-model geometry; SVG does not reinterpret curves/topology.
-- current deterministic selection/history ownership remains canonical.
-- one completed gesture/command produces one correctly tagged history result.
-- no snap/guide/preview state is serialized.
-- no visitor runtime dependency on editor snapping, selection, guide, Inspector, or history code.
+- `LayoutDocument` stays authored architecture/Layout-object truth.
+- `SceneDocument` stays separate; Arrange can read references without cross-owner writes.
+- room-local transforms and explicit room ownership stay authoritative.
+- `compileLayoutGeometry()` remains the single layout compiler.
+- Plan/SVG consumes compiled/render-model geometry and does not resample/reinterpret architecture.
+- canonical selection/history remain deterministic and separate from snapping.
+- one completed mutation/gesture produces one correctly tagged history result.
+- snap/guide/preview state is session-only and never serialized.
+- visitor runtime never imports editor snapping, selection, guide, Inspector or history infrastructure.
 
 ---
 
 ## 12. Recommended refinements to P23.2
 
-Record these in H2; do not edit the plan in this harvest.
+Record during P23.2 reconciliation; **do not edit the plan in H2**.
 
-1. **Replace the seed tie wording** `tool/context validity → semantic feature priority → screen distance → stable ID/key` with:
-   - tool/context validity;
-   - acquired reference family before grid;
-   - nearest CSS-pixel distance among references;
-   - semantic rank only for numerical ties;
-   - stable source key final.
-2. **Pin initial acquisition to 8 CSS px**, centralized, with `worldRadius = px / pixelsPerMeter`; grid step never affects it.
-3. **Defer snap hysteresis** until a failing visual/interaction fixture proves it necessary.
-4. **Define reference/grid apply order:** a winning reference coordinate is final; do not re-grid it.
-5. **Define stable-key requirement:** candidate order/render order cannot be the tie-break.
-6. **Keep snap candidate type editor-runtime only** unless later evidence shows a shared `layout-core` query primitive is necessary. No persistent `SnapPrimitive`.
-7. **Require moving-source exclusions by stable IDs** for every gesture adapter.
-8. **Use compiled spans for curved nearest-point behavior; never resample in Plan.**
-9. **Straight-wall midpoint means authored segment midpoint**, not every compiler tessellation span midpoint.
-10. **Opening-edge candidates are context-scoped**, built from the opening's canonical compiled interval.
-11. **Reference picker is transient and selection-neutral.**
-12. **Alignment remains one selected object → one explicit reference.** Multi-select/distribute stays deferred.
-13. **Alignment uses rotation-aware world bounds** and one Layout transaction; no-op = no history.
-14. **Snap off means both coordinate snapping and guide/marker feedback off.**
-15. **Add lifecycle tests** for cancel/tool/mode/view changes, not only coordinate math.
+1. **Keep the umbrella comparator unchanged:** `tool/context validity → semantic priority → screen distance → stable ID/key`.
+2. Make semantic rank an explicit per-context table; never infer it from candidate generation order.
+3. Pin the first implementation to **8 CSS px acquisition**, centralized; grid step never affects it. Treat 8 px as a QA-tunable implementation default, not new durable product truth.
+4. Defer hysteresis/release radius until a failing interaction/visual fixture proves it necessary.
+5. An acquired valid reference beats grid; do not re-grid the winning reference coordinate.
+6. Keep the snap candidate/result type editor-runtime only unless a real shared caller later justifies a deeper `layout-core` abstraction.
+7. Require moving-source exclusions by stable IDs for every gesture adapter.
+8. Use compiled spans/query functions for curved nearest behavior; Plan never resamples curves.
+9. Straight-wall midpoint is the authored wall midpoint, not each compiler subspan midpoint.
+10. Opening-edge candidates are context-scoped and derive from canonical compiled opening intervals.
+11. Keep alignment reference picking transient and selection-neutral.
+12. Keep alignment one selected object → one explicit reference; multi-select/distribute deferred.
+13. Alignment uses rotation-aware world bounds, preserves ownership/3D-preserved state, one Layout transaction, no-op = no history.
+14. Snap off disables both coordinate snapping and snap guide/marker feedback.
+15. Add lifecycle tests and explicit Camera Plan isolation tests, not coordinate math alone.
 
 ---
 
 ## 13. Recommended refinements to P23.6
 
-Record these in H2; do not edit the plan in this harvest.
+Record during P23.6 reconciliation; **do not edit the plan in H2**.
 
-1. **Add snap-specific semantic Plan style tokens** and route them through `PlanInteractionProjection` / `PlanRenderModel` rather than direct component markup state.
-2. **Keep winner-only feedback in P23.6.** Do not show every potential snap point by default.
-3. **Use shape + line pattern, not additional hue families, to distinguish snap kinds.**
-4. **Keep snap markers/guide stroke/text screen-constant and pointer-inert.**
-5. **Adapt dimension grammar:** offset line, extension lines, compact ticks, readable label gap/halo, presentation-only edge avoidance.
-6. **Restrict contextual room dimensions to truthful rectangular cases.** Do not label arbitrary room AABB dimensions as architectural dimensions.
-7. **Explicitly remove/suppress current invented door swing/leaf presentation** until handedness/swing semantics are authored.
-8. **Keep opening gap/jamb rendering and compiled opening hit/snap source separate.** Decorative symbol geometry is never hit/snap truth.
-9. **Retain current major/minor grid LOD model** and tune presentation only; grid density changes never alter reference acquisition.
-10. **Keep P21 Plan paper/theme system.** Add shared Plan semantic tokens only; no new CAD-specific theme.
-11. **Visual QA matrix must include selection + snap + preview + invalid together**, so snap feedback cannot be mistaken for selection or invalid state.
-12. **Component tests should assert semantics/classes/tokens and non-mutation**, not rely only on pixel snapshots.
+1. Add a compact semantic snap/guide presentation vocabulary through `PlanInteractionProjection` / `PlanRenderModel`; no direct component-owned geometry truth.
+2. Winner-only snap feedback by default. No always-on candidate cloud in the P23 minimum.
+3. Use marker shape/pattern + shared Plan ink, not a new hue family, to communicate feature kind.
+4. Keep markers/guides screen-constant and pointer-inert.
+5. Adapt dimension grammar: offset line, extension lines, compact ticks, readable label gap/halo, simple presentation-only edge avoidance.
+6. Restrict room dimensions to truthful rectangular cases.
+7. Explicitly remove/suppress the current invented directional door leaf/swing until handedness/swing semantics are authored.
+8. Keep decorative opening graphics separate from compiled opening hit/snap geometry.
+9. Keep current major/minor grid LOD and Plan paper system; tune styling only.
+10. Exercise all shipped themes and representative 50/100/200 px/m zooms.
+11. QA selection + hover + snap + preview + invalid together so states cannot be confused.
+12. Prefer semantic class/token/component assertions plus non-mutation tests; pixel snapshots are supplementary, not the only gate.
 
 ---
 
 ## 14. H2 closeout
 
-H2 provides enough evidence to unblock detailed implementation planning for P23.2 and the snapping/selection/guide portion of P23.6.
+H2 supplies the required evidence for later P23.2 and P23.6 reconciliation.
 
-The recommended implementation direction is intentionally small:
+Recommended architecture remains intentionally small:
 
 ```text
 CompiledLayoutGeometry.queries
-        + transient gesture anchor/context
-                    ↓
-             pure Plan snap resolver
-                    ↓
-       snapped point + semantic guides
-          ↙                     ↘
+        + transient gesture context
+                  ↓
+          pure Plan snap resolver
+                  ↓
+      one snapped point + guides
+         ↙                    ↘
 existing Layout transaction   PlanInteractionProjection
-                                    ↓
-                            PlanRenderModel
-                                    ↓
-                              PlanSvg.svelte
+                                      ↓
+                               PlanRenderModel
+                                      ↓
+                                PlanSvg.svelte
 ```
 
-No new document model. No second geometry compiler. No second selection system. No persistent guide/constraint model. No Canvas/Three Plan renderer. No Scene/Camera ownership crossover.
+No new document model. No second geometry compiler. No second selection system. No persistent constraint/guide model. No Canvas/Three Plan renderer. No Scene/Camera ownership crossover.
 
-**H2 complete. Stop here.**
+**P23-H2 complete. Stop here.**
