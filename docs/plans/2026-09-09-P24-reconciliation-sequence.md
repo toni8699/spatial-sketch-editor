@@ -395,7 +395,7 @@ One completed gesture = one history entry; cancel/no-op = none. All Scene ops ta
 | Semantic operation / current seam | Owner | Inputs | History | Sensitivity |
 |---|---|---|---|---|
 | Place asset [conceptual]; current `beginAssetPlacement` / `createPendingPlacementAt` seam | Placement pipeline (`pendingPlacement*` → commit) | asset id + pose intent | One entry on commit | Support/Y resolution [POST-F0 RECHECK] |
-| Scene transform gesture → gizmo/Plan adapter → begin transaction → transient preview → `updatePlacementTransform*` at commit → one `commitDocumentTransaction` | Scene/camera/Plan gesture adapters + `editor-store` transaction | entity ids + owned components | One entry; no-op none | Frames [POST-F0 RECHECK] |
+| Scene transform gesture → gizmo/Plan adapter → begin transaction → transient preview → `updatePlacementTransform*` at commit → one `commitDocumentTransaction` | Scene 3D gizmo adapter + Scene Plan gesture adapter + `editor-store` transaction | entity ids + owned components | One entry; no-op none | Frames [POST-F0 RECHECK] |
 | Inspector transform edit → `commitPlacementTransform(id, transform)` | `editor-store.commitPlacementTransform` | single entity id + transform | One entry | Sync [F0-FREE] |
 | `duplicateSelection` | `placement-cluster-mutator` | selection set | One entry; partial warns (fix directed) | Re-ground [POST-F0 RECHECK] |
 | `createCluster(name?)` / `deleteCluster` | `placement-cluster-mutator` on `SceneDocument.clusters` | member ids + optional name; current pre-F0 implementation derives/validates common room internally | One entry | Room constraint [POST-F0 RECHECK] |
