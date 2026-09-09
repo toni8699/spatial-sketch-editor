@@ -292,9 +292,13 @@ export class EditorStore {
 	}
 
 	/**
-	 * The live layout document, for the central format-dispatch guard
-	 * (P23.0 F0 stage 1). Empty until the layout preview initializes — an
-	 * empty layout is not authorable, which is the correct refusal.
+	 * The live layout document for the central format-dispatch guard
+	 * (P23.0 F0 stage 1). Null when no source is registered: only unit-test
+	 * stores and the frozen relic hit that path — the production composition
+	 * root always registers (the architecture test pins the EditorApp
+	 * wiring), and null classifies as legacy so fixture stores keep
+	 * authoring. This fallback is deliberately NOT a production fail-open:
+	 * `p23-f0-stage1-format-policy.test.ts` asserts the registration.
 	 */
 	private get layoutDocumentForFormatPolicy(): unknown {
 		return this.#layoutFormatPolicySource?.().project.layout ?? null;
@@ -2836,6 +2840,24 @@ export class EditorStore {
 
 	commitLayoutTransaction(snapshot: unknown): boolean {
 		if (!this.historyController.isDocumentUndoBlocked) return false;
+		// P23.0 stage-2 precondition: the format gate is re-checked at COMMIT.
+		// A document swap landing mid-transaction (begin saw legacy, the live
+		// layout is now wall-first) must not commit wall-first shape through
+		// an entry-guarded-only bracket — roll the transaction back instead.
+		// `cancel()` restores the pre-transaction preview snapshot and closes
+		// the bracket, so a refused commit leaks no open transaction.
+		const layoutFormat: LayoutFormatKey = this.layoutDocumentForFormatPolicy === null
+			? 'legacy'
+			: classifyLayoutFormat(this.layoutDocumentForFormatPolicy);
+		if (LAYOUT_MUTATION_POLICY[layoutFormat] !== 'adapted') {
+			this.historyController.cancel();
+			this.setStatusMessage(
+				layoutFormat === 'wall-first'
+					? 'Wall-first layout mutation enables with the canonical writers (P23.0 stage 2)'
+					: 'Unrecognized layout format cannot be authored'
+			);
+			return false;
+		}
 		const result = this.historyController.commitLayout(snapshot);
 		if (result.error) this.setStatusMessage(result.error.message);
 		return result.changed;

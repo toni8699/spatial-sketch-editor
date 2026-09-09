@@ -142,7 +142,15 @@ const DIRECT_WRITE_EXCEPTIONS: Record<string, string> = {
 	'editor/store/navigation-graph-mutator.svelte.ts':
 		'Writes inside guarded beginDocumentTransaction brackets (camera/scene domain)',
 	'editor/store/placement-cluster-mutator.svelte.ts':
-		'Writes inside guarded beginDocumentTransaction brackets (camera/scene domain)'
+		'Writes inside guarded beginDocumentTransaction brackets (camera/scene domain)',
+	// material/texture registry writes — each site is immediately preceded
+	// by host.beginDocumentTransaction() in the same function.
+	'editor/store/material-resource-mutator.svelte.ts':
+		'textures/materials writes inside guarded beginDocumentTransaction brackets (material domain)',
+	// connection.pathAnchors splices (review round 2) — every call site is
+	// wrapped by the guarded layout/scene transaction runner above it.
+	'editor/store/path-anchor-mutator.svelte.ts':
+		'positionPath.anchors splices inside guarded beginDocumentTransaction brackets (anchor domain)'
 };
 
 describe('P23.0 F0 stage 1 — central format-dispatch policy tables', () => {
@@ -211,8 +219,15 @@ describe('P23.0 F0 stage 1 — exhaustive mutation-entry-point inventory', () =>
 	});
 
 	it('every direct document-array write file is on the reviewed exception list', () => {
-		const writePattern =
-			/\.(floors|rooms|boundary|openings|objects|entities|clusters|navigationNodes|pathAnchors|walls|junctions) = [^=]|\.(entities|rooms|objects|clusters|navigationNodes|openings|walls|junctions)\.push\(/;
+		// Widen per review round 2: mutating methods beyond push (splice/sort/
+		// index-assign), the remaining SceneDocument arrays (connections/
+		// textures/materials), and nested path anchors. Local-copy splices
+		// (e.g. CameraFlowPanel's filtered copy) deliberately don't match —
+		// only direct document-collection writes are audited.
+		const collections = 'floors|rooms|boundary|openings|objects|entities|clusters|navigationNodes|pathAnchors|walls|junctions|connections|textures|materials';
+		const writePattern = new RegExp(
+			`\\.(${collections}) = [^=]|\\.(${collections}|anchors)\\.(push|splice|unshift|pop|shift|sort|reverse|fill|copyWithin)\\(`
+		);
 		const writers = ALL_SOURCE_FILES.filter((file) =>
 			writePattern.test(readFileSync(file, 'utf8'))
 		).map((file) => file.slice(EDITOR_SRC_LIB.length + 1));
