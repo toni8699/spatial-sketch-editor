@@ -4,8 +4,8 @@
 
 **Created:** 2026-09-08 · **Status:** proposed (tracker authoritative)
 **Depends on:** P23 minimum useful Build set complete.
-**Detail status:** P24 remains an umbrella/research-reconciliation plan, not an implementation-ready brief. P24A Phase 2 research has been reviewed and has a linked annex; the checked-in Phase 4 compact research has now been reviewed directionally for P24B, but P24B still requires deeper current-code audits and direct reference studies before its implementation contract/minimum can be frozen.
-**Planning model:** progressive — this umbrella owns WHAT/WHY/BOUNDARIES/ORDER/RESEARCH GATES/high-level acceptance. Evidence artifacts (Phase 2 research, the P24B B0–B6 studies) inform but never override the umbrella contract. Child plans carry implementation detail: the [P24A annex](2026-09-08-P24A-asset-supply-canonical-ingest-annex.md) is the P24A child seed (`seed — evidence pending`: Phase 2 research reviewed, its implementation-readiness reconciliation not yet run); the P24B child brief is deliberately **not written yet** — B0–B5 must close first, and no speculative P24B.x seeds are created to fill filenames. Child status vocabulary and the evidence-selection rule (no research for research's sake) live in the [tracker rules](README.md).
+**Detail status:** P24 remains an umbrella/research-reconciliation plan, not an implementation-ready brief. P24A Phase 2 research has been reviewed and has a linked annex; the checked-in Phase 4 compact research has now been reviewed directionally for P24B, and the Three source harvest is complete; remaining current-code rechecks, bounded unresolved questions and R9 minimum inclusion must close before its implementation contract can be frozen.
+**Planning model:** progressive — this umbrella owns WHAT/WHY/BOUNDARIES/ORDER/RESEARCH GATES/high-level acceptance. Evidence artifacts (Phase 2 research, the P24B B0–B6 studies) inform but never override the umbrella contract. Child plans carry implementation detail: the [P24A annex](2026-09-08-P24A-asset-supply-canonical-ingest-annex.md) is the P24A child seed (`seed — evidence pending`: pipeline-side readiness evidence recorded in reconciliation R1; registry/runtime integration and the required post-F0 recheck remain open); the P24B child brief is deliberately **not written yet** — B0–B5 must close first, and no speculative P24B.x seeds are created to fill filenames. Child status vocabulary and the evidence-selection rule (no research for research's sake) live in the [tracker rules](README.md).
 
 ## Outcome
 
@@ -64,6 +64,18 @@ implementation plan. Its generic “must-build” list includes several capabili
 that Museum Editor already implements in some form. The correct next step is to
 reconcile the research against live code and mature reference tools, not to copy
 that list into tickets.
+
+### Three capability harvest — completed source evidence
+
+The [Three r175–r186 harvest](../Deep-research/P24-3D-assets-staging/three-r175-r186-museum-harvest.md) is complete as a source audit. It identifies
+implementation substitutions, compatibility risks and bounded experiments; it does
+not establish runtime compatibility, measured performance, minimum inclusion or
+authorization to upgrade. The reconciliation sequence records its P24 dispositions.
+Harvest ADOPT findings are candidate KEEP/POLISH/DEEPEN implementations for R9-selected
+capabilities; BENCHMARK/SPIKE remains optional evidence work; FOLLOW-UP/REJECT stays
+outside the minimum. Finding 06 (`Object3D.dispose()`) is explicitly downgraded to
+**conditional implementation recheck**, because of Threlte disposal interaction and
+the relevant post-r186 point-shadow disposal fix. No cache/refcount deletion is implied.
 
 ## Why split
 
@@ -163,20 +175,23 @@ remains open to evidence-led improvement.
 
 ## Known live baseline — preserve, then audit maturity
 
-Current live code/docs already establish canonical foundations including:
+P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code, but F0 acceptance remains open and wall-first writer enablement remains gated.
+
+Preserve the following canonical foundations; legacy room-frame behavior is an
+explicit compatibility concern, not a permanent P24 storage invariant:
 
 - ordered Scene multi-selection;
 - one active Scene selection/history system rather than a P24-local selection;
 - one mounted TransformControls host with domain adapters;
-- room-local Scene transforms with explicit world/local conversion at editor
-  boundaries;
+- canonical Scene transform ownership and coordinate conversion, including
+  world-local compatibility/cutover code and explicit legacy room-frame handling;
 - translate / rotate / scale, numeric Inspector editing and snapping;
 - active-object multi-selection pivot and rigid multi-object transforms;
 - uniform/independent editor scale behavior;
 - floor placement ghost, Drop to Floor and Keep on Floor;
 - selection-aware duplicate;
-- flat, same-room `SceneObjectCluster` grouping with rigid group transforms and
-  editor hierarchy UI;
+- flat `SceneObjectCluster` semantics with rigid group transforms and editor
+  hierarchy UI; room-frame constraints require the post-F0 recheck;
 - one chronological Scene/Layout history model with transaction/coalescing
   behavior already used by transform gestures;
 - `SceneMaterialInstance`, material assignment, base texture, roughness/metalness,
@@ -282,7 +297,7 @@ Minimum audit coverage:
 
 - Scene selection and ordered multi-selection;
 - active/primary selection semantics and viewport/Outliner synchronization;
-- single TransformControls host, Scene adapter, pivot math and room-local/world
+- single TransformControls host, Scene adapter, pivot math and canonical/legacy-frame
   conversion;
 - current transform modes, snapping, cancellation, Inspector synchronization and
   history coalescing;
@@ -306,7 +321,8 @@ framework merely to organize the audit.
 Preserve the one TransformControls authority and investigate whether the existing
 experience needs targeted depth in areas such as:
 
-- Local vs World gizmo orientation while keeping room-local storage unchanged;
+- Local vs World gizmo orientation while keeping the canonical transform storage
+  and coordinate model accepted through P23 unchanged;
 - bounded pivot options beyond the current Active Object behavior, especially a
   Selection Center if useful;
 - active/primary selection visual clarity;
@@ -323,12 +339,21 @@ experience needs targeted depth in areas such as:
   hierarchy;
 - Outliner improvements required for richer staging.
 
+Public TransformControls color and handle-visibility APIs are preferred
+implementation primitives for already-selected capabilities, where supported by
+the dependency baseline selected at freeze. They do not independently expand the
+P24 minimum. The palette traversal is a substitution candidate; negative-tip
+customization, shared host, adapters, snapping and gesture/history lifecycle remain.
+Native Object3D pivot is an optional implementation experiment, not a new authored
+pivot model or a replacement for multi-selection pivot math.
+
 ### Architecture guardrails
 
 - Local/World, if adopted, is **gizmo orientation**, not a new storage coordinate
   model.
-- Multi-room operations must compute in an explicit common/world frame and inverse
-  through each member's owning room without inferring a new owner from position.
+- Multi-entity operations must compute in an explicit common/world frame and
+  convert through a legacy room frame only where the document requires it, without
+  inferring a new owner from position.
 - Alignment/distribution should become deterministic semantic Scene operations,
   not one-off UI calculations.
 - One user action remains one Scene history result.
@@ -435,29 +460,41 @@ The study must answer, rather than assume:
 - Should the current numeric Spot angle be presented in degrees while remaining
   canonically stored in the existing representation?
 
+Native light-helper geometry is a preferred implementation primitive for
+already-selected capabilities, not an independent expansion of the P24 minimum.
+Keep helpers editor-only and operations under Museum's existing gizmo/history
+ownership. PointLightHelper is not a range volume; unlimited Spot lights require
+bounded editor presentation.
+
 ### Units and authoring semantics
 
-- What should the user-facing meaning of intensity be for each supported light?
-- Are raw renderer-relative numbers sufficient, or should physical/user-facing
-  units such as lumen/candela/lux be introduced?
+- Preserve current intensity values and direct renderer mapping; document the
+  actual units per supported light (point/spot: candela). Accurate labels do not
+  require a new lumen-conversion workflow or photometric authoring system.
+- Canonical spot angle is the renderer's half-angle in radians. Degree presentation
+  must identify half-angle versus full aperture. Reconcile validation with the
+  supported maximum half-angle of π/2 and explicitly handle existing values above
+  that range; never silently reinterpret or clamp saved data. The current π limit
+  is an existing mismatch, not an upgrade regression.
 - Is color temperature useful enough for the first mature lighting surface?
 - Which details are semantic Scene truth versus renderer implementation?
 
 ### Environment / HDRI
 
-P24A supplies HDRI resources. P24B must separately determine the authoring model:
+**Ratified architecture; minimum inclusion remains R9:** If authored environment enters the P24 minimum, its semantic model is global Scene-level intent: asset reference, lighting intensity, Y rotation, background mode and optionally authored exposure.
 
-- environment asset reference;
-- environment/IBL intensity;
-- Y rotation;
-- visible background versus lighting-only environment;
-- exposure;
-- PMREM/cache lifecycle;
-- whether tone-mapping choice stays system-owned;
-- whether environment is global Scene state rather than per-room state.
+Native Three Scene environment/background controls and PMREM provide the rendering
+primitives; custom IBL shaders are not required. Threlte already supplies AgX tone
+mapping and sRGB output. Tone-mapping choice remains system-owned, initially
+preserving AgX; per-room environment blending remains follow-up. This closes the
+global-versus-per-room architecture question, not the inclusion or schema gate.
 
-Do not freeze a schema until the P24A asset identity and current renderer seams are
-inspected together.
+P24A supplies asset identity/bytes; P24B owns any authored Scene intent. Exact schema,
+optional exposure inclusion, asset resolution, lifecycle and editor/visitor parity
+must be reconciled together before implementation freeze. PMREM and future GI data
+remain derived renderer resources, never authored Scene truth. Scoped caches,
+reference counts and asynchronous cancellation remain necessary; Object3D disposal
+does not replace them.
 
 ### Shadows and performance
 
@@ -480,10 +517,14 @@ setup. Prefer a preset operation that creates/updates ordinary Scene
 lights/environment state over a new persistent `LightingRig` hierarchy unless a
 real durable-rig use case is demonstrated.
 
-B4 should end with a dedicated visual/interaction acceptance fixture, not merely
-schema tests: representative room, mixed materials, multiple light types and an
-HDRI/environment, verifying editor handles, Inspector synchronization, authored
-output and visitor isolation.
+For a selected authored preset, explicitly define how the fixed ambient/directional
+baseline and editor assist lighting interact with it, avoiding hidden extra light.
+Preserve legacy appearance through an explicit compatibility policy.
+
+B4 should end with a dedicated visual/interaction acceptance fixture for selected
+capabilities, not merely schema tests: representative room, mixed materials,
+multiple light types and, if selected by R9, HDRI/environment. Verify editor handles,
+Inspector synchronization, authored output and visitor isolation.
 
 ## B5 — Unified staging UX / visual polish study
 
@@ -531,7 +572,18 @@ P24A normalized asset
 ```
 
 The exact operations and acceptance criteria remain TBD until the studies above
-close their open questions.
+close their open questions. Environment architecture is ratified conditionally;
+its appearance in this directional flow does not settle R9 minimum inclusion.
+
+P24 remains WebGL-first with Svelte 5 and Threlte. The Three version is a conditional
+dependency baseline selected at implementation freeze, not a pin to r186. Record
+and pass the renderer/dependency acceptance gate for the selected baseline; if it
+changes, additionally compare against the current baseline for visual output,
+editor interactions, visitor parity, assets, resource lifetimes and performance.
+Capabilities already available do not wait for an upgrade; newer APIs require an
+accepted compatible baseline before use. Harvest §F supplies test dimensions;
+its numerical thresholds are proposed budgets to calibrate on named fixtures and
+devices, not automatically ratified criteria. See reconciliation R9 for the gate.
 
 The visitor must reproduce canonical authored Scene/material/light/environment
 state without editor-only systems such as TransformControls, selection stores,
@@ -548,8 +600,8 @@ preserving while deeper study continues:
 
 - ordered multi-selection;
 - one TransformControls host/adapters;
-- room-local transforms;
-- flat same-room clusters;
+- canonical transform ownership with explicit legacy room-frame compatibility;
+- flat cluster semantics, with coordinate/room constraints rechecked post-F0;
 - existing duplicate/history model;
 - floor placement/grounding pipeline;
 - current material-instance architecture;
@@ -583,6 +635,13 @@ preserving while deeper study continues:
 - advanced shadow controls;
 - arrays/components;
 - richer procedural staging fixtures.
+
+Three-specific experiments (probe GI, SunLight, native pivot) and need-driven
+optimization benchmarks remain non-blocking depth tails. WebGPU migration,
+clustered lighting, SSGI/VXGI, splats and progressive streaming belong to a later
+renderer/asset platform decision. None becomes a P25 prerequisite. Three scene
+serialization, replacement navigation/selection systems and HTMLTexture replacing
+P25's semantic DOM Info Panel are not P24 implementation directions.
 
 ### DCC / wrong-product boundary
 
@@ -662,14 +721,14 @@ not optional asset-catalogue or DCC-depth tails.
 
 P24A's current annex gives a candidate bounded supply/ingest minimum, but the
 **combined P24 gate is still not frozen** because P24B has not completed the
-maturity/reference studies above.
+remaining reconciliation and acceptance work above.
 
 A future combined gate is expected to prove enough Stage depth to:
 
 - use a representative normalized P24A asset set;
 - place/revise/replace assets efficiently;
 - materially differentiate the scene;
-- author credible lighting/environment intent;
+- author credible lighting intent and, if selected by R9, environment intent;
 - Save/Load/Preview/Publish that state;
 - cold-boot the resulting visitor without editor-only authoring systems.
 
@@ -687,7 +746,8 @@ Both P24A and P24B must preserve:
 - frozen visitor/editor isolation and P22 cold-visitor bundle boundaries;
 - one project asset registry and one asset-resolution path;
 - separate `LayoutDocument` and `SceneDocument` ownership;
-- room-local Scene transforms where currently authoritative;
+- canonical Scene transform ownership and P23 coordinate contracts, with explicit
+  legacy room-frame compatibility rather than a permanent room-local constraint;
 - deterministic selection and one chronological history model;
 - one existing transform/gizmo authority rather than a parallel staging/light
   gizmo system;

@@ -5,6 +5,7 @@
 **Parent:** [P24 — Scene / Staging Depth umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md)  
 **Cross-view authority:** [Unified Plan / 3D authoring addendum](2026-09-09-P23-P24-unified-plan-3d-authoring-addendum.md)  
 **Pascal evidence:** [`Pascal-editor-harvest.md`](../Deep-research/P24-3D-assets-staging/Pascal-editor-harvest.md) — CLOSED at pinned revision `32c3c8a24dae17c55beaabf45029148900a3b409`  
+**Three evidence:** [Three r175–r186 harvest](../Deep-research/P24-3D-assets-staging/three-r175-r186-museum-harvest.md) — source audit complete; adoption and runtime acceptance remain conditional.  
 **Tracker:** P24 remains the registered plan number. This file consumes no new P-number and does not change P24's `proposed` status.
 
 ## Purpose
@@ -22,7 +23,9 @@ P24 reconciliation
 → freezes implementation only after the required post-P23 seam recheck
 ```
 
-P24 implementation still depends on the accepted P23 minimum useful Build set. Any P24 decision touching coordinates, placement ownership, selection routing, Plan projection or Scene/Camera migration must consume the coordinate/ownership model actually shipped by P23, not assume today's Room-local baseline remains permanent.
+P24 implementation still depends on the accepted P23 minimum useful Build set. Any P24 decision touching coordinates, placement ownership, selection routing, Plan projection or Scene/Camera migration must consume the coordinate/ownership model accepted through P23, not assume the earlier Room-local baseline remains permanent.
+
+P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code, but F0 acceptance remains open and wall-first writer enablement remains gated.
 
 ## Authority and evidence order
 
@@ -33,10 +36,21 @@ Read in this order:
 3. [P24A annex](2026-09-08-P24A-asset-supply-canonical-ingest-annex.md);
 4. current Museum Editor code and tests for the capability being reconciled;
 5. checked-in Phase 2 / Phase 4 research — durable inputs are `../Deep-research/P24-3D-assets-staging/deep-research-exact-asset-compact.md` + `museum-editor-phase2-acquisition-manifest.json` (Phase 2) and `../Deep-research/P24-3D-assets-staging/deep-research-P24-3D-editing-compact.md` (Phase 4). The legacy `museum-editor-phase2-exact-asset-harvest-P24.md` path is absent on disk; the umbrella and P24A annex now use the compact artifact as the durable Phase 2 source. The Phase 4 full source remains absent per the umbrella;
-6. completed [Pascal harvest](../Deep-research/P24-3D-assets-staging/Pascal-editor-harvest.md) where relevant;
+6. completed [Pascal harvest](../Deep-research/P24-3D-assets-staging/Pascal-editor-harvest.md) and [Three r175–r186 harvest](../Deep-research/P24-3D-assets-staging/three-r175-r186-museum-harvest.md) where relevant;
 7. additional direct reference inspection only where a concrete unresolved maturity question remains.
 
 Museum contracts remain authority. External references are evidence only.
+
+The Three harvest closes source-capability questions, not runtime compatibility,
+performance or R9 inclusion. Translate ADOPT to candidate KEEP/POLISH/DEEPEN
+implementation choices for selected capabilities; BENCHMARK/SPIKE remains optional
+evidence work; FOLLOW-UP/REJECT stays outside the minimum. **Exception: harvest
+finding 06 (`Object3D.dispose()`) is downgraded from ADOPT to conditional
+implementation recheck** because of Threlte disposal interaction and the relevant
+post-r186 point-shadow disposal fix (`02198fbc4b`, #34522). Preserve scoped caches,
+reference counts, clone ownership and asynchronous cancellation; do not infer
+recursive resource disposal or delete ownership logic. The Three version is a
+conditional dependency baseline selected at implementation freeze, not a pin to r186.
 
 ## Research rule
 
@@ -104,7 +118,16 @@ remote parent: `e030038fa3708f578baf97a6bc4f8b6c77b5f689`
 local Museum commit: `f0f1f6380a26a535bf3c50b37404fd1ff0bca42e`
 P23 F0 scaffolding: uncommitted dirty tree at audit time (no F0 commit to pin).
 
-F0 scaffolding decodes nothing wall-first yet; authoring stays Room-owned/Room-local until the F0 gate.
+At that audit baseline, F0 scaffolding decoded nothing wall-first and authoring
+remained Room-owned/Room-local. The table below is historical evidence, not a claim
+about today's implementation.
+
+**Current-state qualification:** P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code, but F0 acceptance remains open and wall-first writer enablement remains gated.
+Current Scene/footprint code includes world-local handling and optional legacy
+`roomId`; the earlier no-discriminator/required-room observations must not be used
+as current invariants. R2/R5–R8 and the draft freeze packet carry dated pre-F0
+observations/line references; refresh affected rows against the accepted baseline
+at R9 rather than treating compatibility code as F0 acceptance.
 
 | Seam | Class |
 |---|---|
@@ -152,11 +175,26 @@ Closed now (pipeline-side evidence, no runtime changes):
 
 Open items requiring the post-F0 recheck (R9): placement/proxy seams against world-local Scene, Save/Load + cold-visitor model resolution, P22 model pinning. Annex stays `seed — evidence pending` until that recheck; flipping it is an R9-gate decision, not this track.
 
+### Three conformance additions — conditional on the selected runtime/corpus
+
+Retain glTF Transform normalization and the existing Meshopt runtime seam. Define
+conformance fixtures for formats/extensions actually accepted by the selected
+runtime: EXT/KHR Meshopt as applicable, rotated texture transforms and imported
+instancing where present in the proof corpus. KHR Meshopt requires a compatible
+baseline. Draco/KTX2, broader HDR formats, simplification and LOD remain
+benchmark-first additions, not mandatory supply formats. Record deployed
+decoder/transcoder resources and publication retention/resolution of every accepted
+asset dependency; acquisition URLs must not become runtime dependencies.
+
+Keep static-first Wave 1 and the benchmark-first gltfpack disposition. This does
+not force uploaded-model support into Wave 1, replace the normalization/rights
+pipeline or turn every harvest loader into a required fixture.
+
 ## R2 — P24B B0 capability-maturity baseline
 
 Audit current Stage capabilities end-to-end before deciding depth.
 
-Required matrix:
+Dated pre-F0 baseline matrix (coordinate/room observations require the current-state qualification in R0 and a post-F0 refresh):
 
 | Capability | Current Museum behavior | Canonical owner | Proven gap | Evidence needed? | Disposition |
 |---|---|---|---|---|---|
@@ -170,7 +208,7 @@ Required matrix:
 | Snapping / guides | room-local steps, Shift-bypass; grid visual-only | existing Scene/Plan seams | no align/distribute; no guides/collision feedback | code for baseline; bounded refs in R5 only if open | KEEP seams; DEPTH DECISION → R5; REJECT generic framework |
 | Materials | 6-entry catalogue, single-select, roughness/metalness + one map override | current Scene material model | no tint/PBR-set/scale UI; no multi-apply; no P24A import path | code for baseline; bounded refs in R6 only if open | KEEP model; DEPTH DECISION → R6 |
 | Lights | point/spot/directional, 2.5m drop, 0.12m proxy, fixed -Z aim | `SceneLightEntity` authority | no handles; no cone/range viz; no presets | code for baseline; bounded refs in R7 only if open | KEEP authority; DEPTH DECISION → R7; REJECT second gizmo |
-| Environment | fixed ambient + directional rig, no authored env (missing/partial confirmed) | renderer/Scene seams | exposure/tonemap/IBL/HDRI absent (greenfield) | code for baseline; bounded refs in R7 only if open | DEPTH DECISION → R7 with renderer ownership + visitor parity |
+| Environment | fixed ambient + directional rig; Threlte AgX + sRGB; no authored exposure/HDRI/IBL state | Scene intent + renderer resources | asset resolution, semantic mapping, lifecycle and parity remain; native Three environment/PMREM primitives exist | Three harvest + R7 | Global architecture ratified conditionally; minimum inclusion R9, schema/runtime gate still open |
 | Outliner / Inspector | single-select panels; multi has Duplicate/Delete + prefs only | existing editor surfaces | no bulk transform/material edit; commit-only sync by design | code for baseline | POLISH bulk + sync |
 | History integration | single stack, 1-gesture-1-entry, `documentsMatch` no-op guard | canonical history | cross-view fixture pins missing | code only | KEEP; fixtures per R3/R4 |
 | Editor-only vs visitor + asset-resolution boundary | zero editor imports in `apps/museum`; P20/P22 texture-only; models shipped-catalogue | P20 registry / P22 resolver / visitor isolation | GLB ingest absent (confirmed P24A.4 gap) | code only | KEEP boundary; P24A extends registry |
@@ -258,6 +296,16 @@ Evidence basis: one-host authority + bounds-center pivot + room-local/world conv
 
 Code-verified on main: one-host authority + bounds-center pivot (`editor-cluster-transform.ts:15-32`, `scene-gizmo-adapter.svelte.ts:162-164`); v6 scalar scale, per-axis session-only (`editor-transform.ts:24-41`); duplicate +0.5 XZ, one history entry, no re-ground, partial clusters silently skipped (`placement-cluster-mutator.svelte.ts:639-669`); flat same-room clusters (`:486-508`); snap room-local + Shift-bypass, no winner feedback.
 
+### Preferred implementation primitives — no independent minimum expansion
+
+For already-selected capabilities, prefer public TransformControls `setColors`
+and plane/rotation visibility APIs when supported by the baseline selected at
+freeze. Replace private palette traversal where equivalent; preserve
+`SCENE_PALETTE`, the host, adapters, cancellation, snapping and history.
+`applyEditorGizmoSingleEnding`, multi-selection pivot math and gesture lifecycle
+have no proven drop-in replacement. Native Object3D pivot remains an optional
+implementation experiment, not a new authored pivot schema.
+
 ## R6 — B3 material maturity
 
 Audit the existing material definition/instance path first. Decide the minimum for:
@@ -279,7 +327,7 @@ Evidence basis: 6-entry catalogue + `SceneMaterialInstance` shared/unique + Make
 
 - Keep the `MaterialDefinition` / `SceneMaterialInstance` shared-vs-unique model; no slot/UV/graph scope.
 - Minimum: base color/tint override, PBR map set on definitions, physical tile scale where the existing repeat path supports it, Apply-to-multiselection, shared/unique preview feedback, P24A import consumption.
-- Editor/visitor parity required per material addition.
+- Editor/visitor parity required per material addition, including roughness/metalness, mapped PBR, alpha and transmission fixtures as applicable. If the renderer baseline changes, review BRDF/PMREM differences separately from material retuning. No node-material graph, retroreflectivity UI or arbitrary GLB slot-editing expansion follows from the harvest.
 
 Code-verified on main: 6-entry catalogue (`materials.ts:3-63`); shared/unique + Make Unique (`material-resource-mutator.svelte.ts:193-231`); single-select Inspector (`EditorMaterialInspector.svelte:19-24`); no tint override; roughness/metalness + one map override only; repeat path read-only (`materials.ts:79-86`, `defaultTileSizeMeters`); resolver copies currently byte-identical (`scene-instance-material.ts:65` editor + museum); parity remains an acceptance requirement.
 
@@ -300,11 +348,33 @@ Audit current Scene lights and renderer/environment seams. Decide the minimum fo
 Evidence basis: `SceneLightEntity` point/spot/directional + fixed -Z aim + 0.12m proxy (`editor-lights.ts`, `EntityLight.svelte`); fixed ambient+directional rig with no authored environment (`MuseumScene.svelte` both apps); P24A HDRI supply still absent (R1). No new direct-reference study needed unless a concrete lighting-interaction question survives the post-F0 recheck.
 
 - Keep `SceneLightEntity` point/spot/directional authority; no second light-gizmo system — handles compose with the existing TransformControls.
-- Minimum: range visualization (point), cone/direction handles (spot), pick proxies, degree-presented spot angle (canonical storage unchanged), one gallery preset as ordinary Scene ops (no persistent rig), HDRI consumption only after P24A supply exists.
-- Exposure/tonemap/IBL only where the renderer owns them + visitor parity; per-light `castShadow` remains authored Scene state, while shadow-map resolution/bias/quality policy stays renderer/system-owned with safe defaults and warnings — no per-light shadow-map tuning in the minimum.
-- Units: raw renderer-relative numbers stand unless new evidence shows authoring harm; color temperature deferred to follow-up.
+- Candidate minimum, inclusion still R9: range visualization (point), cone/direction handles (spot), pick proxies, explicitly labeled degree-presented spot angle (canonical radians), one gallery preset as ordinary Scene ops (no persistent rig). HDRI/environment inclusion additionally requires P24A supply and runtime readiness.
+- Per-light `castShadow` remains authored Scene state; shadow-map resolution/bias/quality policy remains renderer/system-owned with safe defaults and warnings. No per-light shadow-map tuning in the minimum. Environment intent and tone-mapping ownership follow the ratified boundary below.
+- Units: preserve existing intensity values and direct renderer mapping; document actual units per light (point/spot: candela). Accurate labels do not require lumen conversion, a photometric authoring system or color temperature; those remain follow-up.
+- Canonical spot angle is the renderer's half-angle in radians. Degree presentation must distinguish half-angle from full aperture. Current Inspector/mutator/codec validation accepts up to π; reconcile with Three's supported maximum half-angle of π/2, with explicit treatment of existing out-of-range values. Never silently reinterpret or clamp saved data; this is an existing mismatch, not an upgrade regression.
+- Native light-helper geometry is a preferred implementation primitive for already-selected capabilities; it does not independently expand the minimum. Helpers remain editor-only, with handles using Museum's existing operations/gizmo/history. PointLightHelper is not a range volume; unlimited Spot lights need bounded editor presentation.
 
 Code-verified on main: 3 light kinds, fixed -Z aim, 0.12m proxy (`EntityLight.svelte:17-54`); 2.5m drop (`editor-lights.ts:23`); radian-only angle UI (`EditorLightInspector.svelte:140-146`); fixed ambient+directional environment rig in both `MuseumScene.svelte` copies (authored `SceneLightEntity` lights render in addition). Refinements: per-light `castShadow` already exists (`editor-lights.ts:91`) — only map-level controls are absent; existing lighting presets are session viewport-only (`editor-store.svelte.ts:181-197`), not Scene ops.
+
+### Ratified global environment architecture — inclusion remains R9
+
+If authored environment enters the P24 minimum, its semantic model is global Scene-level intent: asset reference, lighting intensity, Y rotation, background mode and optionally authored exposure.
+
+Native Scene environment/background controls and PMREM provide the rendering
+primitives. Threlte already supplies AgX tone mapping and sRGB output; tone-mapping
+choice stays system-owned, initially preserving AgX. Per-room environment blending
+remains follow-up. This closes architecture, not minimum inclusion or schema.
+
+Asset identity/bytes remain registry-owned, authored intent Scene-owned, and PMREM
+or future GI caches renderer-derived. Exact schema, optional authored exposure,
+asset resolution, lifecycle and Preview/Publish parity require joint reconciliation.
+Object3D disposal remains the conditional implementation recheck above; scoped
+caches/refcounts/async cancellation are not replaced.
+
+A selected gallery preset must define interaction with the fixed ambient/directional
+baseline and editor assist lighting, avoiding hidden extra lighting. Preserve legacy
+appearance through an explicit compatibility policy. Presets create/update ordinary
+authored Scene lights and any selected environment state, never a persistent rig.
 
 ## R8 — B5 final presentation reconciliation — EXECUTED pre-F0 (rules closed; minimum inclusion still R9)
 
@@ -333,7 +403,7 @@ Bulk transform/material multi-edit, Scene/asset integrity diagnostics surface, a
 
 - R5: one-host/no-second-gizmo authority; Inspector↔gizmo commit sync polish; snap-winner feedback polish (no new framework); flat non-nested cluster concept; duplicate collision/bounds check + silent-skip→warn; align/distribute semantic direction (exact op set + frames at R9/post-F0); Local/World wire direction with no stored state.
 - R6: shared/unique model, no slot/UV/graph; tint override; PBR map set on definitions; physical tile scale via existing repeat path; Apply-to-multiselection; shared/unique preview feedback; per-addition editor/visitor parity as acceptance requirement.
-- R7: `SceneLightEntity` authority, no second light gizmo; range viz, cone/direction handles, pick proxies, degree-presented spot angle (storage unchanged); per-light `castShadow` authored, map policy system-owned; raw units; temperature deferred; one gallery preset as ordinary Scene ops; HDRI/exposure/tonemap/IBL scope boundaries as stated.
+- R7: `SceneLightEntity` authority, no second light gizmo; range/cone/pick feedback candidates use native helper geometry only as a preferred primitive for selected capabilities; explicit spot half-angle/degree semantics and out-of-range compatibility decision; existing intensity values retained with accurate units; `castShadow` authored, map policy system-owned; temperature deferred. Global Scene environment architecture is ratified conditionally; inclusion and optional authored exposure remain R9. Tone mapper system-owned, initially AgX; preset baseline/legacy behavior must be explicit.
 - R8: all presentation rules above; silent-skip→warn fixes.
 
 ### B. Decisions pending post-F0 recheck (decided at R9, after R0 gate item 7)
@@ -347,6 +417,21 @@ Bulk transform/material multi-edit, Scene/asset integrity diagnostics surface, a
 
 - Bulk transform/material multi-edit; Scene/asset integrity diagnostics surface; disabled-without-reason polish backlog.
 - Exact align/distribute op set beyond the R8 rules.
+- Authored environment inclusion and optional authored exposure; global Scene architecture is ratified, schema/runtime readiness remains open.
+
+### Three experiments / depth tails — not minimum prerequisites
+
+| Disposition | Candidates |
+|---|---|
+| Non-blocking P24 experiments | WebGL LightProbeGrid; SunLight only with a relevant sunlight fixture; native pivot |
+| Benchmark only for a demonstrated need | Compression, simplification/LOD, batching, GTAO, integrated WebGL effects |
+| Follow-up | Area lights, broader HDR formats, IES |
+| Post-P25 renderer/asset platform | WebGPU migration, clustered lighting, SSGI/VXGI, Gaussian splats, progressive streaming |
+| Excluded from P24 minimum | Node-material authoring, Three scene persistence, replacement navigation/selection systems |
+
+None becomes a P25 prerequisite. HTMLTexture does not change the accepted semantic
+DOM Info Panel direction. Harvest §G supplies bounded experiment proposals, not an
+instruction to run them all or automatically adopt its numerical budgets.
 
 ### D. Remaining R9 gate checklist status
 
@@ -357,13 +442,14 @@ Bulk transform/material multi-edit, Scene/asset integrity diagnostics surface, a
 5. Plan/3D acceptance — themes + R3/R4/R8 rules done; fixtures at freeze.
 6. Save/Load + P22 acceptance — open, post-F0.
 7. Post-F0 seam recheck — blocked on F0.
-8. Child plans + owner review — last.
+8. Renderer/dependency baseline + acceptance definition — open; conditional upgrade comparison, no r186 pin.
+9. Child plans + owner review — last.
 
 ## R9 pre-freeze closeout — DRAFT (not a freeze; no child plans; no schema/API/code changes)
 
 Consolidates the pre-F0 packet into freeze-ready input. Legend: [F0-FREE] resolved pre-F0 · [POST-F0 RECHECK] blocked on F0 seam recheck · [R9-PICK] F0-independent inclusion call at freeze.
 
-### 1. Final capability maturity matrix (draft)
+### 1. Final capability maturity matrix (draft; dated baseline, affected rows require post-F0 refresh)
 
 | Capability | Verified behavior + owner | Disposition | Sensitivity |
 |---|---|---|---|
@@ -379,14 +465,14 @@ Consolidates the pre-F0 packet into freeze-ready input. Legend: [F0-FREE] resolv
 | Placement entry points | Click-to-place 3D only; model Place via Inspector; no Plan entry/drag | POLISH entries, no new framework | [F0-FREE] |
 | Snapping | Room-local steps + Shift-bypass; no winner feedback | KEEP seams; winner feedback | [F0-FREE]; snap frame/application [POST-F0 RECHECK] |
 | Materials | 6-entry catalogue; shared/unique + Make Unique; single-select Inspector; roughness/metalness + one map override; read-only repeat path | KEEP model; tint + PBR set + tile scale + multi-apply + preview feedback | [F0-FREE]; import consumption [POST-F0 RECHECK / R1] |
-| Lights | Point/spot/directional + 0.12m proxy, -Z aim, 2.5m drop, radian UI, authored `castShadow` | KEEP authority; range viz + cone handles + degree angle + gallery Scene-op preset + raw units | [F0-FREE]; HDRI consumption pending supply |
-| Environment | Fixed ambient+directional rig, no authored env | Tonemap system-owned; global-vs-per-room + exposure/IBL/HDRI model pending supply + renderer inspection | Partly [F0-FREE]; model [POST-F0 RECHECK / R1] |
+| Lights | Point/spot/directional + 0.12m proxy, -Z aim, radian UI, authored `castShadow`; current angle validation exceeds renderer limit | KEEP authority; accurate units without rescaling; explicit half-angle + compatibility handling; native helpers preferred only for selected feedback/handle capabilities; preset baseline policy | Direction [F0-FREE]; minimum inclusion R9; compatibility fixture required |
+| Environment | Fixed ambient+directional rig; Threlte AgX/sRGB; no authored environment; native backend primitives available | Global Scene intent ratified if included; tone mapper system-owned; caches derived; per-room blending follow-up | Inclusion + optional exposure [R9-PICK]; schema/registry/runtime [POST-F0 RECHECK / R1] |
 | Outliner / Inspector | Shared selection, commit-only numerics, single-select panels, existing density treatment | KEEP + POLISH; bulk edit | [F0-FREE]; bulk edit [R9-PICK] |
 | History | Single stack (`HISTORY_LIMIT=100`), 1-gesture-1-entry, `begin/commit/cancelDocumentTransaction` (`editor-store.svelte.ts:2813-2867`) | KEEP; cross-view fixture pins at freeze | [F0-FREE]; operation-owner tags [POST-F0 RECHECK] |
 | Editor / visitor boundary | Zero editor imports in museum; texture-only resolution; GLB ingest = P24A.4 gap | KEEP boundary; P24A extends registry | [POST-F0 RECHECK / R1] |
 | P24A supply | Proven pipeline (normalize-asset.sh determinism, rights gate, OBB, 12-proof set); static-first registry; `gltfpack` deferred | Direction closed | [F0-FREE]; registry/codec/pinning [POST-F0 RECHECK] |
 
-No new direct-reference study needed: every disposition above is grounded in current-code evidence from R0–R8. Reference inspection reopens only for a concrete unresolved question surviving the post-F0 recheck.
+No broad direct-reference survey is needed. The dated R0–R8 baseline plus completed Three harvest inform these dispositions; refresh affected code evidence after F0 and run only the bounded compatibility/implementation checks required by the selected capabilities and dependency baseline.
 
 ### 2. Deterministic operation / history ownership matrix (draft)
 
@@ -398,11 +484,12 @@ One completed gesture = one history entry; cancel/no-op = none. All Scene ops ta
 | Scene transform gesture → gizmo/Plan adapter → begin transaction → transient preview → `updatePlacementTransform*` at commit → one `commitDocumentTransaction` | Scene 3D gizmo adapter + Scene Plan gesture adapter + `editor-store` transaction | entity ids + owned components | One entry; no-op none | Frames [POST-F0 RECHECK] |
 | Inspector transform edit → `commitPlacementTransform(id, transform)` | `editor-store.commitPlacementTransform` | single entity id + transform | One entry | Sync [F0-FREE] |
 | `duplicateSelection` | `placement-cluster-mutator` | selection set | One entry; partial warns (fix directed) | Re-ground [POST-F0 RECHECK] |
-| `createCluster(name?)` / `deleteCluster` | `placement-cluster-mutator` on `SceneDocument.clusters` | member ids + optional name; current pre-F0 implementation derives/validates common room internally | One entry | Room constraint [POST-F0 RECHECK] |
+| `createCluster(name?)` / `deleteCluster` | `placement-cluster-mutator` on `SceneDocument.clusters` | member ids + optional name; dated pre-F0 baseline derived/validated common room internally; recheck world-local compatibility/cutover behavior | One entry | Room constraint [POST-F0 RECHECK] |
 | Align / distribute (new) | Deterministic Scene ops | entity set + mode | One entry each | Exact set [R9-PICK]; frames [POST-F0 RECHECK] |
 | `replaceSceneAsset` (new, no current seam) | Scene op via normalized metadata | entity id + asset id | One entry | Bounds behavior [POST-F0 RECHECK] |
 | `applyMaterialPatch` / `makeMaterialInstanceUnique` | `material-resource-mutator` via `store.requestMaterialEdit` | entity/material ids + patch | One entry (confirm at freeze) | [F0-FREE] |
 | Light authoring [conceptual]; current `beginLightPlacement` / `createPendingLightAt` / `updateLightFields` seam + gallery preset op | Light mutators (`editor-lights.ts`, preset as ordinary Scene ops) | kind + props | One entry | [F0-FREE] |
+| Environment edit / selected gallery preset [conditional; conceptual, no API/schema freeze] | Scene semantic operations; registry owns referenced asset bytes | Global environment intent + optional exposure only if selected | One entry per logical authored edit/preset; cache generation/update produces none | Inclusion [R9-PICK]; schema/runtime [POST-F0 RECHECK / R1] |
 | P24A acquire / normalize / approve | Pipeline-owned lifecycle, not editor undo | source + recipe + rights evidence | Promotion gated by acceptance, never half-approved | Boundary [F0-FREE]; registry/codec [POST-F0 RECHECK] |
 
 No mixed Layout/Scene transaction and no persistent cross-document support reference without a separately specified ownership/delete/history contract (umbrella invariant; addendum entity-ownership rule).
@@ -416,11 +503,13 @@ No mixed Layout/Scene transaction and no persistent cross-document support refer
 - F5 preview/commit agreement: final displayed preview equals committed result for one staging gesture.
 - F6 one-handle-drag-one-history: single yaw-handle drag → exactly one history entry; failed/no-op drag → none.
 - F7 duplicate-then-move: +0.5 XZ clone, collision/bounds checked, one entry; partial-cluster duplicate warns. [re-ground POST-F0 RECHECK]
-- F8 material assign + Make Unique: shared edit prompts choice; unique clone `-copy`; visitor renders resolved material identically.
-- F9 light authoring: create point/spot → Inspector sync (incl. degree angle, `castShadow`) → visitor renders same lights with no editor helpers.
-- F10 Save/Load + cold visitor: staged Scene/materials/lights survive round-trip; cold visitor renders canonical meaning with no editor-only state. [codec + resolution POST-F0 RECHECK]
-- F11 gallery preset: one preset op yields ordinary Scene lights only; no persistent rig entity.
+- F8 material assign + Make Unique: shared edit prompts choice; unique clone `-copy`; editor authored output, Preview and Publish resolve materials consistently on the selected renderer baseline. Review expected BRDF/PMREM differences separately if the baseline changes.
+- F9 light authoring: create point/spot → Inspector sync (explicit half-angle/degree semantics, supported range and existing out-of-range policy, `castShadow`) → visitor renders same lights with no helpers. Verify finite/unlimited range feedback and no second gizmo authority.
+- F10 Save/Load + cold visitor: staged Scene/materials/lights and, if selected, global environment/optional exposure survive round-trip; referenced assets remain retained/resolvable. Cold visitor and Preview consume the same canonical meaning with no editor-only state. [codec + resolution POST-F0 RECHECK]
+- F11 gallery preset: one preset op yields ordinary authored Scene light/environment state selected by the preset, with one history result and no persistent rig. Verify explicit baseline/assist-light interaction and legacy appearance policy; environment remains conditional on R9 inclusion.
 - F12 explicit support choice: ambiguous stacked surface forces a visible choice; never silent `Y = 0`. [POST-F0 RECHECK]
+
+- F13 renderer/dependency acceptance [baseline selected at freeze; additional comparisons if upgraded]: use harvest §F dimensions for package/types/Threlte compatibility, editor gestures, material/light/shadow output, accepted assets/decoders, context recovery, visitor isolation, disposal and performance. Test only selected capabilities/formats; calibrate proposed numeric thresholds on named devices/fixtures before ratifying them. Include PCFSoft→PCF behavior, BRDF/PMREM/environment rotation changes and Object3D/Threlte disposal interaction as applicable. Explicitly investigate the post-r186 point-shadow disposal fix on the exact candidate baseline; later fixes cannot be assumed present. Failure requires a verified compatible baseline/fix or deferral, not an automatic r186 upgrade.
 
 ## R9 — B6 minimum freeze / child-plan gate
 
@@ -433,7 +522,8 @@ Only after R0–R8 have enough evidence:
 5. define Plan/3D acceptance where both views participate;
 6. define Save/Load + P22 visitor acceptance;
 7. run a targeted post-P23-F0 seam recheck for every item R0 marked `requires post-F0 recheck`;
-8. then update/write implementation-ready P24 child plans and request owner review.
+8. select the conditional Three/types/Threlte renderer/dependency baseline and define its acceptance gate (F13); an upgrade is separately scoped, not implied by the harvest or required for already-available capabilities. Record required compatibility/visual/lifetime/performance proof as an implementation ship gate; no changed baseline enters production until it passes;
+9. then update/write implementation-ready P24 child plans and request owner review.
 
 No implementation-ready P24B brief is created before this gate closes.
 
