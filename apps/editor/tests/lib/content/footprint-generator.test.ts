@@ -105,6 +105,42 @@ describe('generateObbFootprint (P24A.2 generated-obb evidence spike)', () => {
     ).toBe(false);
   });
 
+  it('bounds a round table archetype by its diameter (oracle shape)', () => {
+    const samples: [number, number][] = [];
+    for (let index = 0; index < 64; index += 1) {
+      const angle = (index / 64) * Math.PI * 2;
+      samples.push([0.7 * Math.cos(angle), 0.7 * Math.sin(angle)]);
+    }
+    const result = generateObbFootprint(samples);
+    if (!result.success) throw new Error(result.error);
+    // A sampled circle yields a near-square OBB between the inscribed
+    // (1.4) and diagonal (1.4√2) bounds — never a collapsed sliver.
+    expect(result.footprint.width).toBeCloseTo(result.footprint.depth, 1);
+    expect(result.footprint.width).toBeGreaterThanOrEqual(1.4);
+    expect(result.footprint.width).toBeLessThanOrEqual(1.4 * Math.SQRT2 + 1e-6);
+    expect(validateAssetFootprint(result.footprint)).toBeNull();
+  });
+
+  it('bounds a thin-leg table archetype by the leg span, not the top (oracle shape)', () => {
+    // Four 0.06m posts at ±0.5 plus a 1.4m top sampled sparsely: the OBB must
+    // cover the full occupied span while staying a valid footprint.
+    const samples: [number, number][] = [
+      [-0.7, -0.45],
+      [0.7, -0.45],
+      [0.7, 0.45],
+      [-0.7, 0.45],
+      [-0.5, -0.5],
+      [0.5, -0.5],
+      [0.5, 0.5],
+      [-0.5, 0.5]
+    ];
+    const result = generateObbFootprint(samples);
+    if (!result.success) throw new Error(result.error);
+    expect(result.footprint.width).toBeCloseTo(1.4, 6);
+    expect(result.footprint.depth).toBeCloseTo(1.0, 6);
+    expect(validateAssetFootprint(result.footprint)).toBeNull();
+  });
+
   it('emits a counter-clockwise outline the existing gate accepts', () => {
     const result = generateObbFootprint([
       [0, 0],
