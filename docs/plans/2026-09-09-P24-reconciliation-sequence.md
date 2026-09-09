@@ -247,7 +247,7 @@ Use Pascal only where its completed harvest already provides useful counter-fixt
 
 Evidence basis: one-host authority + bounds-center pivot + room-local/world conversion (`gizmo/scene-gizmo-adapter.svelte.ts`, `editor-cluster-transform.ts`); v6 scalar-scale loss (`editor-transform.ts`); Pascal lifecycle/counter-fixtures (completed harvest). No new direct-reference study needed unless a concrete interaction question survives the post-F0 recheck.
 
-- Local/World gizmo orientation: ADOPT as orientation-only switch, storage unchanged; default stays World (current behavior).
+- Local/World gizmo orientation: WIRE the existing toolbar switch (`EditorViewportToolbar` Local/World → `interactionStore.toggleSpace`) through to the scene gizmo policy, orientation-only, storage unchanged; default stays World. The switch UI exists but the scene/camera gizmo policies currently hardcode world with no reader of `interactionStore.space`.
 - Selection-Center pivot alongside Active-Object bounds-center: ADOPT if post-F0 world frame keeps pivot math rigid; no new stored pivot.
 - Primary/active selection clarity + numeric Inspector ↔ gizmo sync: POLISH.
 - Snap winner feedback: POLISH; no new snap framework.
@@ -255,6 +255,8 @@ Evidence basis: one-host authority + bounds-center pivot + room-local/world conv
 - Duplicate-then-move: ADOPT with collision/re-ground check (closes the R2 gap).
 - Cluster UX without nesting; Room-gate removal rechecked post-F0.
 - No second gizmo or transform authority.
+
+Code-verified on main: one-host authority + bounds-center pivot (`editor-cluster-transform.ts:15-32`, `scene-gizmo-adapter.svelte.ts:162-164`); v6 scalar scale, per-axis session-only (`editor-transform.ts:24-41`); duplicate +0.5 XZ, one history entry, no re-ground, partial clusters silently skipped (`placement-cluster-mutator.svelte.ts:639-669`); flat same-room clusters (`:486-508`); snap room-local + Shift-bypass, no winner feedback.
 
 ## R6 — B3 material maturity
 
@@ -279,6 +281,8 @@ Evidence basis: 6-entry catalogue + `SceneMaterialInstance` shared/unique + Make
 - Minimum: base color/tint override, PBR map set on definitions, physical tile scale where the existing repeat path supports it, Apply-to-multiselection, shared/unique preview feedback, P24A import consumption.
 - Editor/visitor parity required per material addition.
 
+Code-verified on main: 6-entry catalogue (`materials.ts:3-63`); shared/unique + Make Unique (`material-resource-mutator.svelte.ts:193-231`); single-select Inspector (`EditorMaterialInspector.svelte:19-24`); no tint override; roughness/metalness + one map override only; repeat path read-only (`materials.ts:79-86`, `defaultTileSizeMeters`); parity via dual `scene-instance-material.ts:65` (editor + museum copies).
+
 ## R7 — B4 lighting + environment maturity
 
 Audit current Scene lights and renderer/environment seams. Decide the minimum for:
@@ -299,6 +303,8 @@ Evidence basis: `SceneLightEntity` point/spot/directional + fixed -Z aim + 0.12m
 - Minimum: range visualization (point), cone/direction handles (spot), pick proxies, degree-presented spot angle (canonical storage unchanged), one gallery preset as ordinary Scene ops (no persistent rig), HDRI consumption only after P24A supply exists.
 - Exposure/tonemap/IBL only where the renderer owns them + visitor parity; shadow policy stays system-owned (safe defaults + warnings, no per-light map controls in the minimum).
 - Units: raw renderer-relative numbers stand unless new evidence shows authoring harm; color temperature deferred to follow-up.
+
+Code-verified on main: 3 light kinds, fixed -Z aim, 0.12m proxy (`EntityLight.svelte:17-54`); 2.5m drop (`editor-lights.ts:23`); radian-only angle UI (`EditorLightInspector.svelte:140-146`); ambient + directional rig only in both `MuseumScene.svelte` copies. Refinements: per-light `castShadow` already exists (`editor-lights.ts:91`) — only map-level controls are absent; existing lighting presets are session viewport-only (`editor-store.svelte.ts:181-197`), not Scene ops.
 
 ## R8 — B5 final presentation reconciliation
 
