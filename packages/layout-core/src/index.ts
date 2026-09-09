@@ -1,4 +1,5 @@
 export * from './layout-codec';
+export * from './layout-compat';
 export * from './layout-geometry';
 export * from './layout-geometry-curve';
 export * from './layout-geometry-objects';
@@ -9,3 +10,5 @@ export * from './layout-geometry-validation';
 export * from './layout-portals';
 export * from './layout-room-frame';
 export * from './layout-types';
+export * from './layout-wall-first-codec';
+export * from './layout-wall-first-types';
