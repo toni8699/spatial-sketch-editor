@@ -2,7 +2,7 @@
 
 **Date:** 2026-09-09
 **Status:** complete static harvest at the pinned revision. Not an implementation gate.
-**Brief:** [Pascal harvest brief](Pascal-editor-harvest-brief.md)
+**Brief:** [Pascal harvest brief](Pascal-editor-harvest-brief.md) (CLOSED)
 **Pinned revision:** `32c3c8a24dae17c55beaabf45029148900a3b409`
 **Local checkout:** `/private/tmp/museum-pascal-harvest`
 **License:** [root LICENSE](https://github.com/pascalorg/editor/blob/32c3c8a24dae17c55beaabf45029148900a3b409/LICENSE) inspected at the pinned revision: MIT, copyright 2026 Pascal Group Inc. Copying substantial code/test text requires retaining the notice. No code was copied into Museum. Checked files carry no divergent per-file license header (`packages/nodes/src/item/definition.ts`, `packages/nodes/src/item/floorplan.ts`, `packages/nodes/src/item/floorplan-move.ts`, `packages/nodes/src/item/renderer.tsx`, `packages/core/src/services/snap.ts`, `packages/editor/src/components/tools/wall/wall-snap-geometry.ts`, `packages/editor/src/components/tools/item/use-placement-coordinator.tsx`). Dependency/asset licenses were not audited.

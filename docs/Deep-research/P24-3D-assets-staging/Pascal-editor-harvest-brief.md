@@ -1,8 +1,9 @@
 # Pascal Editor harvest brief — shared Plan / 3D authoring
 
 **Date:** 2026-09-09  
-**Status:** bounded reference harvest brief — not a P23 execution gate  
+**Status:** bounded reference harvest brief — CLOSED  
 **Reference:** `https://github.com/pascalorg/editor`  
+**Completed artifact:** [`Pascal-editor-harvest.md`](Pascal-editor-harvest.md)  
 **Museum decision context:** [`../../archive/plans/2026-09-09-scope-decision-unified-plan-3d-semantic-authoring.md`](../../archive/plans/2026-09-09-scope-decision-unified-plan-3d-semantic-authoring.md)
 
 ## Purpose
@@ -151,3 +152,12 @@ This harvest is **not** a new P23 execution gate. P23 remains approved and its i
 Pascal findings may refine bounded implementation choices. If a finding appears to prove that Museum's ratified architecture cannot support a required behavior, stop and raise a separate architecture review. Do not resolve that conflict by importing Pascal's scene graph, state architecture or document model by default.
 
 P24 may use the harvest during its existing B0–B5 reconciliation before its minimum freezes.
+
+## Closure record
+
+**Pascal reference harvest:** CLOSED  
+**Completed artifact:** [`Pascal-editor-harvest.md`](Pascal-editor-harvest.md)  
+**Pinned:** `32c3c8a24dae17c55beaabf45029148900a3b409`  
+**Evidence type:** static source/test inspection  
+**Upstream tests:** not executed  
+**No new P23 gate.**
