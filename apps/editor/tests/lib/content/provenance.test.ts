@@ -55,6 +55,60 @@ describe('classifyRights (P24A.0 rights gate evidence)', () => {
     expect(gateApproved(result)).toBe(false);
   });
 
+  it('sends unresolved derivative rights to manual review (C)', () => {
+    const result = classifyRights({
+      sourceUrl: 'https://polyhaven.com/a/white_plaster_02',
+      sourceProvider: 'Poly Haven',
+      assetOrPackId: 'white_plaster_02',
+      licenseId: 'CC0',
+      commercialUse: true,
+      derivatives: 'unknown',
+      redistribution: true,
+      attributionRequired: false,
+      acquiredAt: '2026-09-09'
+    });
+    expect(result.decision).toBe('manual-review');
+    expect(result.confidence).toBe('C');
+    expect(gateApproved(result)).toBe(false);
+  });
+
+  it('rejects explicitly forbidden derivatives (D)', () => {
+    const result = classifyRights({
+      sourceUrl: 'https://example.com/model',
+      sourceProvider: 'Example',
+      assetOrPackId: 'model-1',
+      licenseId: 'CC-BY-ND-4.0',
+      commercialUse: true,
+      derivatives: false,
+      redistribution: true,
+      attributionRequired: true,
+      attributionText: 'By Example.',
+      acquiredAt: '2026-09-09'
+    });
+    expect(result).toEqual({
+      decision: 'reject',
+      confidence: 'D',
+      reason: 'rights forbid derivatives'
+    });
+    expect(gateApproved(result)).toBe(false);
+  });
+
+  it('sends missing acquisition date to manual review (C), never silent A/B', () => {
+    const result = classifyRights({
+      sourceUrl: 'https://polyhaven.com/a/sofa_03',
+      sourceProvider: 'Poly Haven',
+      assetOrPackId: 'sofa_03',
+      licenseId: 'CC0',
+      commercialUse: true,
+      derivatives: true,
+      redistribution: true,
+      attributionRequired: false
+    });
+    expect(result.decision).toBe('manual-review');
+    expect(result.confidence).toBe('C');
+    expect(gateApproved(result)).toBe(false);
+  });
+
   it('rejects missing license identity (D) — never silently Approved', () => {
     const result = classifyRights({
       sourceUrl: 'https://example.com/model',
