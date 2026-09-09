@@ -24,6 +24,7 @@ import type {
 	LayoutFormatVersion,
 	LayoutJunction,
 	LayoutWall,
+	LayoutWallFirstFloor,
 	LayoutWallFirstRoom,
 	LayoutWallOpening,
 	OrientedWallRef
@@ -55,12 +56,14 @@ type ParsedValue<T> = T | undefined;
 const ROOT_KEYS = [
 	'units',
 	'formatVersion',
+	'floor',
 	'junctions',
 	'walls',
 	'rooms',
 	'openings',
 	'objects'
 ] as const;
+const FLOOR_KEYS = ['id', 'name', 'elevation', 'height'] as const;
 const JUNCTION_KEYS = ['id', 'point'] as const;
 const WALL_KEYS = ['id', 'startJunctionId', 'endJunctionId', 'role', 'thickness', 'height'] as const;
 const ROOM_KEYS = ['id', 'name', 'boundary', 'floorThickness', 'ceilingThickness'] as const;
@@ -90,6 +93,7 @@ export function createEmptyWallFirstLayoutDocument(): LayoutDocumentWallFirst {
 	return {
 		units: UNITS,
 		formatVersion: LAYOUT_WALL_FIRST_FORMAT_VERSION,
+		floor: { id: 'floor', name: 'Floor', elevation: 0, height: 3 },
 		junctions: [],
 		walls: [],
 		rooms: [],
@@ -169,6 +173,7 @@ function parseDocument(
 	}
 
 	const formatVersion = readFormatVersion(record.formatVersion, `${path}.formatVersion`, issues);
+	const floor = parseFloor(record.floor, `${path}.floor`, issues);
 
 	const junctions = parseArray(record.junctions, `${path}.junctions`, issues, parseJunction);
 	const walls = parseArray(record.walls, `${path}.walls`, issues, parseWall);
@@ -176,6 +181,7 @@ function parseDocument(
 	const openings = parseArray(record.openings, `${path}.openings`, issues, parseOpening);
 	const objects = parseArray(record.objects, `${path}.objects`, issues, parseObject);
 	if (
+		!floor ||
 		!junctions ||
 		!walls ||
 		!rooms ||
@@ -307,6 +313,7 @@ function parseDocument(
 	return {
 		units: UNITS,
 		formatVersion: formatVersion ?? LAYOUT_WALL_FIRST_FORMAT_VERSION,
+		floor,
 		junctions,
 		walls,
 		rooms,
@@ -334,6 +341,22 @@ function readFormatVersion(
 		return undefined;
 	}
 	return input as LayoutFormatVersion;
+}
+
+function parseFloor(
+	input: unknown,
+	path: string,
+	issues: LayoutDocumentIssue[]
+): ParsedValue<LayoutWallFirstFloor> {
+	const record = readRecord(input, path, issues);
+	if (!record) return undefined;
+	assertAllowedKeys(record, FLOOR_KEYS, path, issues);
+	const id = readId(record.id, `${path}.id`, issues);
+	const name = readString(record.name, `${path}.name`, issues);
+	const elevation = readNumber(record.elevation, `${path}.elevation`, issues);
+	const height = readPositiveNumber(record.height, `${path}.height`, issues);
+	if (!id || !name || elevation === undefined || height === undefined) return undefined;
+	return { id, name, elevation, height };
 }
 
 function parseJunction(

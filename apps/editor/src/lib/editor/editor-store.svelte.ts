@@ -1145,8 +1145,8 @@ export class EditorStore {
 		if (pending?.id === nodeId) {
 			return {
 				...pending,
-				position: this.rooms.point(pending.roomId, pending.position),
-				cameraTarget: this.rooms.point(pending.roomId, pending.cameraTarget),
+				position: this.rooms.pointInFrame(pending.roomId, pending.position),
+				cameraTarget: this.rooms.pointInFrame(pending.roomId, pending.cameraTarget),
 				connectedNodeIds: [...pending.connectedNodeIds]
 			};
 		}

@@ -244,6 +244,24 @@ function planWallSplitInternal(
 }
 
 /**
+ * Split with an exact junction coordinate — the migration T-node path: the
+ * stem's endpoint junction already exists at a known coordinate, and the
+ * host split must land on that exact coordinate (a reconstructed
+ * `pointAtSpanDistance` can drift in the last ulp and trip the
+ * `junction_point_mismatch` guard).
+ */
+export function planWallSplitAtPoint(
+	document: LayoutDocumentWallFirst,
+	wallId: string,
+	splitDistance: number,
+	point: LayoutVec2,
+	allocator: NodingIdAllocator,
+	options: { existingJunctionId?: string } = {}
+): NodingPlan {
+	return planWallSplitInternal(document, wallId, splitDistance, allocator, options, point);
+}
+
+/**
  * Node a proper X crossing: one new shared junction, both walls split
  * against it, processed in stable wall-ID order (H3 §9.2).
  */

@@ -24,7 +24,7 @@ export type PreparedLayoutRoomGeometry = {
 };
 
 export function prepareLayoutRoomSegments(
-	room: LayoutRoom,
+	room: Pick<LayoutRoom, 'id' | 'boundary'>,
 	path = `rooms.${room.id}`
 ): PreparedLayoutRoomGeometry {
 	const issues: LayoutGeometryIssue[] = [];
@@ -60,8 +60,8 @@ export function validateLayoutRoomGeometry(room: LayoutRoom, floor: LayoutFloor,
 }
 
 export function validatePreparedLayoutRoomGeometry(
-	room: LayoutRoom,
-	floor: LayoutFloor,
+	room: Pick<LayoutRoom, 'id' | 'boundary'> & { openings: readonly LayoutRoom['openings'][number][] },
+	floor: Pick<LayoutFloor, 'id' | 'height'>,
 	prepared: readonly (SampledSegment | null)[],
 	path = `rooms.${room.id}`
 ): LayoutGeometryIssue[] {

@@ -336,7 +336,7 @@
 			store.updateNavigationNodePoint(
 				node.id,
 				'target',
-				store.rooms.localPoint(node.roomId, active.initialTarget)
+				store.rooms.localPointInFrame(node.roomId, active.initialTarget)
 			);
 		} else {
 			store.updateSelectedNodeFov(active.initialFov);
@@ -451,8 +451,8 @@
 			const node = store.selectedNavigationNode;
 			if (!node || node.id !== owner.nodeId) return null;
 			return {
-				position: store.rooms.point(node.roomId, node.position),
-				target: store.rooms.point(node.roomId, node.cameraTarget),
+				position: store.rooms.pointInFrame(node.roomId, node.position),
+				target: store.rooms.pointInFrame(node.roomId, node.cameraTarget),
 				fov: node.fov,
 				pending: store.isPendingNavigationNode(node.id)
 			};
@@ -585,7 +585,7 @@
 					? store.updateNavigationNodePoint(
 							active.owner.nodeId,
 							'target',
-							store.rooms.localPoint(
+							store.rooms.localPointInFrame(
 								store.selectedNavigationNode!.roomId,
 								worldTarget
 							)

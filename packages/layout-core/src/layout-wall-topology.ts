@@ -125,10 +125,12 @@ export function classifyWallIntersection(
 	}
 	const tReverse = endpointOnInterior(b, a);
 	if (tReverse) {
+		// `endpointOnInterior(p, q)` already answers "endpoint of p on q": the
+		// reverse call's roles are correct as returned (endpoint = b, host = a).
 		return {
 			kind: 'endpoint-on-interior',
-			endpointWallId: tReverse.interiorWallId,
-			interiorWallId: tReverse.endpointWallId,
+			endpointWallId: tReverse.endpointWallId,
+			interiorWallId: tReverse.interiorWallId,
 			point: tReverse.point
 		};
 	}

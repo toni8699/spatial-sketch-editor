@@ -115,9 +115,11 @@ export function resolveDraftConnectionPathPart(
 	const fromNode = getDraftNode(document, connection.fromNodeId);
 	const toNode = getDraftNode(document, connection.toNodeId);
 	const points = [
-		rooms.point(fromNode.roomId, fromNode.position),
+		// P23.0b: room-owned endpoints resolve through the legacy frame;
+		// world-local endpoints (no roomId) pass through unchanged.
+		resolveScenePoint(fromNode, rooms),
 		...connection.positionPath.anchors.map((anchor) => resolveScenePoint(anchor, rooms)),
-		rooms.point(toNode.roomId, toNode.position)
+		resolveScenePoint(toNode, rooms)
 	];
 
 	return connection.positionPath.kind === 'rounded-polyline'

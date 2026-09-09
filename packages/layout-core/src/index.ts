@@ -8,6 +8,8 @@ export * from './layout-geometry-openings';
 export * from './layout-geometry-queries';
 export * from './layout-geometry-types';
 export * from './layout-geometry-validation';
+export * from './layout-migration';
+export * from './layout-migration-math';
 export * from './layout-portals';
 export * from './layout-room-frame';
 export * from './layout-room-reconciliation';

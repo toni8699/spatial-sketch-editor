@@ -6,7 +6,7 @@ export type NodeConnectionRow = {
 	bucket: NodeConnectionBucket;
 	connectionId: string;
 	partnerId: string;
-	partnerRoomId: string;
+	partnerRoomId?: string;
 	anchorsCount: number;
 	kind: 'rounded-polyline' | 'auto-bezier';
 	clearance: number;

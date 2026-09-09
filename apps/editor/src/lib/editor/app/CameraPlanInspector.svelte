@@ -64,7 +64,7 @@
 	);
 	const nodeWorld = $derived(
 		node && selection?.kind === 'node'
-			? store.rooms.point(node.roomId, node.position)
+			? store.rooms.pointInFrame(node.roomId, node.position)
 			: null
 	);
 	const anchorWorld = $derived(
@@ -104,7 +104,7 @@
 	function commitNodeXZ(x: number, z: number) {
 		const current = nodeWorld;
 		if (!node || !current || !Number.isFinite(x) || !Number.isFinite(z)) return;
-		const local = store.rooms.localPoint(node.roomId, [x, current[1], z]);
+		const local = store.rooms.localPointInFrame(node.roomId, [x, current[1], z]);
 		store.commitNavigationNodePoint(node.id, 'position', local);
 	}
 

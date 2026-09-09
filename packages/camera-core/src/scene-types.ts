@@ -29,7 +29,11 @@ export const CAMERA_EASING: readonly CameraEasing[] = [
 /** Structural graph input consumed by camera routing. */
 export type CameraGraphNode = {
   id: string;
-  roomId: string;
+  /**
+   * Legacy room-local graph gate. Absent under world-local (P23.0b)
+   * documents, where node coordinates are already project/world space.
+   */
+  roomId?: string;
   label: string;
   position: Vec3;
   cameraTarget: Vec3;

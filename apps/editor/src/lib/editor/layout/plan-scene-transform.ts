@@ -9,7 +9,12 @@ const SHIFT_ROTATION_SNAP = Math.PI / 12;
 
 export type PlanSceneTransformMember = {
 	id: string;
-	roomId: string;
+	/**
+	 * Legacy room frame gate (P23.0b). Absent means the member's coordinates
+	 * are already project/world space (world-local document) and every frame
+	 * resolution below is the identity.
+	 */
+	roomId?: string;
 	position: Vec3;
 	rotation: Vec3;
 };
@@ -44,7 +49,7 @@ export function planSceneWorldPivot(
 	member: Pick<PlanSceneTransformMember, 'roomId' | 'position'>,
 	rooms: LayoutRoomRegistry
 ): LayoutVec2 {
-	const world = rooms.point(member.roomId, member.position);
+	const world = rooms.pointInFrame(member.roomId, member.position);
 	return [world[0], world[2]];
 }
 
@@ -71,8 +76,8 @@ export function translatePlanSceneMembers(
 	const delta: LayoutVec2 = [target[0] - primaryPivot[0], target[1] - primaryPivot[1]];
 	return members.map((member) => {
 		const pivot = planSceneWorldPivot(member, rooms);
-		const worldY = rooms.point(member.roomId, member.position)[1];
-		const local = rooms.localPoint(member.roomId, [pivot[0] + delta[0], worldY, pivot[1] + delta[1]]);
+		const worldY = rooms.pointInFrame(member.roomId, member.position)[1];
+		const local = rooms.localPointInFrame(member.roomId, [pivot[0] + delta[0], worldY, pivot[1] + delta[1]]);
 		return {
 			id: member.id,
 			position: [local[0], member.position[1], local[2]],
@@ -108,8 +113,8 @@ export function rotatePlanSceneMembers(
 			pivot[0] + cos * x + sin * z,
 			pivot[1] - sin * x + cos * z
 		];
-		const worldY = rooms.point(member.roomId, member.position)[1];
-		const local = rooms.localPoint(member.roomId, [rotatedWorld[0], worldY, rotatedWorld[1]]);
+		const worldY = rooms.pointInFrame(member.roomId, member.position)[1];
+		const local = rooms.localPointInFrame(member.roomId, [rotatedWorld[0], worldY, rotatedWorld[1]]);
 		return {
 			id: member.id,
 			position: [local[0], member.position[1], local[2]],

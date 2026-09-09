@@ -8,4 +8,5 @@ export * from './project-types';
 export * from './scene';
 export * from './scene-codec';
 export * from './scene-format';
+export * from './scene-world-conversion';
 export * from './shipped-static';

@@ -88,6 +88,20 @@ export type LayoutWallOpening = {
 };
 
 /**
+ * Floor descriptor (P23.0b). Floor-level Y coordinates stay floor-owned
+ * exactly as in the legacy schema (H5: `LayoutFloor.elevation`/`.height` are
+ * floor-level properties, not Room metadata). One floor is the P23 minimum
+ * storey; the codec enforces the same floor-height/opening-height rules the
+ * legacy geometry validation applies.
+ */
+export type LayoutWallFirstFloor = {
+  id: string;
+  name: string;
+  elevation: number;
+  height: number;
+};
+
+/**
  * Persistent semantic Room over a derived candidate face. `boundary` holds
  * oriented Wall references (derived/reconciled by P23.8 — this codec only
  * validates the reference structure). Surface thicknesses stay Room metadata;
@@ -110,6 +124,12 @@ export type LayoutWallFirstRoom = {
 export type LayoutDocumentWallFirst = {
   units: 'meters';
   formatVersion: LayoutFormatVersion;
+  /**
+   * Floor-level Y frame (P23.0b). Exactly one floor for the P23 minimum;
+   * multi-floor legacy payloads are compatibility-only (H5 excludes
+   * multi-floor topology).
+   */
+  floor: LayoutWallFirstFloor;
   junctions: LayoutJunction[];
   walls: LayoutWall[];
   rooms: LayoutWallFirstRoom[];

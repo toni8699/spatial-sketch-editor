@@ -441,9 +441,13 @@ export class EditorSelectionActions {
 		const placement = this.host.document.entities.find((object) => object.id === placementId);
 		if (!placement) return false;
 
-		this.selectRoom(placement.roomId);
-		if (this.host.selectedRoomId !== placement.roomId) return false;
-		this.host.ensureRoomTreeExpanded(placement.roomId);
+		// P23.0b: world-local placements carry no room — they select without a
+		// room gate; legacy room-owned placements require their room context.
+		if (placement.roomId !== undefined) {
+			this.selectRoom(placement.roomId);
+			if (this.host.selectedRoomId !== placement.roomId) return false;
+			this.host.ensureRoomTreeExpanded(placement.roomId);
+		}
 
 		const additive = options.additive ?? false;
 		const selected = additive
@@ -463,8 +467,8 @@ export class EditorSelectionActions {
 		this.host.cancelPendingFrame();
 		const placement = this.host.document.entities.find((object) => object.id === id);
 		if (!placement) return false;
-		if (this.host.selectedRoomId !== placement.roomId) {
-			this.selectRoom(placement.roomId as RoomId);
+		if (placement.roomId !== undefined && this.host.selectedRoomId !== placement.roomId) {
+			this.selectRoom(placement.roomId);
 		}
 		if (!this.host.isPlacementSelectable(id)) return false;
 		// setWorkspace auto-cross-clears nav; reducer model.
@@ -550,9 +554,12 @@ export class EditorSelectionActions {
 		);
 		if (!ownsEveryMember) return false;
 
-		this.selectRoom(cluster.roomId);
-		if (this.host.selectedRoomId !== cluster.roomId) return false;
-		this.host.ensureRoomTreeExpanded(cluster.roomId);
+		// P23.0b: world-local clusters carry no room gate (see placement note).
+		if (cluster.roomId !== undefined) {
+			this.selectRoom(cluster.roomId);
+			if (this.host.selectedRoomId !== cluster.roomId) return false;
+			this.host.ensureRoomTreeExpanded(cluster.roomId);
+		}
 		this.host.ensureClusterTreeExpanded(cluster.id);
 		if (!this.selectCluster(cluster.id)) return false;
 		if (options.focus ?? true) this.host.focusSelection();

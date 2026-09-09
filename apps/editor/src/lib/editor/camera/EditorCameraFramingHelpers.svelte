@@ -220,8 +220,8 @@
 			const node = store.selectedNavigationNode;
 			if (!node) return null;
 			return {
-				position: store.rooms.point(node.roomId, node.position),
-				target: store.rooms.point(node.roomId, node.cameraTarget),
+				position: store.rooms.pointInFrame(node.roomId, node.position),
+				target: store.rooms.pointInFrame(node.roomId, node.cameraTarget),
 				fov: node.fov,
 				userData: {
 					editorEntity: 'camera-fov-handle',

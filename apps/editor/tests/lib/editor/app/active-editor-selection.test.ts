@@ -285,7 +285,7 @@ describe('EditorActiveSelectionStore exclusivity', () => {
 			kind: 'placement',
 			ids: [entityId],
 			clusterId: null,
-			roomId: store.document.entities[0]!.roomId
+			roomId: store.document.entities[0]!.roomId!
 		};
 		selectLayoutRoom(layoutInteraction, 'room-a');
 		const workspace = JSON.stringify(store.selection.workspace);

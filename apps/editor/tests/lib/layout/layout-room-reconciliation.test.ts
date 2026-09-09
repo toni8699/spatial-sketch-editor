@@ -26,7 +26,9 @@ function document(
 ): Omit<LayoutDocumentWallFirst, 'rooms'> {
 	return {
 		units: 'meters',
-		formatVersion: LAYOUT_WALL_FIRST_FORMAT_VERSION,			junctions: junctions.map(([id, x, z]) => ({ id, point: [x, z] as LayoutVec2 })),
+		formatVersion: LAYOUT_WALL_FIRST_FORMAT_VERSION,
+		floor: { id: 'floor-1', name: 'Floor 1', elevation: 0, height: 3 },
+		junctions: junctions.map(([id, x, z]) => ({ id, point: [x, z] as LayoutVec2 })),
 		walls: walls.map((wall) => ({
 			id: wall.id,
 			startJunctionId: wall.start,

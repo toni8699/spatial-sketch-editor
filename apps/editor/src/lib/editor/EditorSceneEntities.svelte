@@ -37,14 +37,16 @@
   const hiddenSet = $derived(new Set(hiddenEntityIds));
 
   const roomGroups = $derived.by(() => {
-    const entitiesByRoom = new Map<RoomId, SceneEntity[]>();
+    const entitiesByRoom = new Map<RoomId | undefined, SceneEntity[]>();
     for (const entity of scene.entities) {
       const entities = entitiesByRoom.get(entity.roomId) ?? [];
       entities.push(entity);
       entitiesByRoom.set(entity.roomId, entities);
     }
     return [...entitiesByRoom].map(([roomId, entities]) => ({
-      room: rooms.getRequired(roomId),
+      // P23.0b: absent roomId is the world-local identity frame — entities
+      // are already project/world space and render without a room transform.
+      room: roomId === undefined ? null : rooms.getRequired(roomId),
       entities
     }));
   });
@@ -65,8 +67,8 @@
   }
 </script>
 
-{#each roomGroups as group (group.room.id)}
-  <T.Group position={group.room.position} rotation={group.room.rotation}>
+{#each roomGroups as group (group.room?.id ?? '__world__')}
+  <T.Group position={group.room?.position ?? [0, 0, 0]} rotation={group.room?.rotation ?? [0, 0, 0]}>
     {#each group.entities as entity (entity.id)}
       {@const scaleVersion = placementRegistry.scaleVersion ?? 0}
       {@const editorScale = scaleVersion >= 0
@@ -75,7 +77,7 @@
       {#if !hiddenSet.has(entity.id)}
       <EditorPlacementRoot
         placementId={entity.id}
-        roomId={entity.roomId}
+        roomId={entity.roomId ?? null}
         {placementRegistry}
         position={entity.position}
         rotation={entity.rotation}

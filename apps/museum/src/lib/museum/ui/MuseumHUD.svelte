@@ -57,7 +57,7 @@
     {#each navigationNodes as node, index (node.id)}
       <button
         class:active={state.activeNodeId === node.id}
-        class:visited={state.visitedRoomIds.has(node.roomId)}
+        class:visited={node.roomId !== undefined && state.visitedRoomIds.has(node.roomId)}
         disabled={!state.canNavigateTo(node.id)}
         onclick={() => state.requestNode(node.id)}
       >

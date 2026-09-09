@@ -48,7 +48,41 @@ import {
 	readVec3
 } from './readers';
 
-type EntityParserOptions = { allowMaterialInstance: boolean } & ResolvedSceneValidationOptions;
+type EntityParserOptions = {
+	allowMaterialInstance: boolean;
+	/**
+	 * P23.0b world-local mode: `roomId` is optional on entities/clusters
+	 * (absent = project/world coordinates) and a root `formatVersion: 1`
+	 * discriminator is accepted.
+	 */
+	worldLocal: boolean;
+} & ResolvedSceneValidationOptions;
+
+/**
+ * Reads `roomId` under the parser's format mode. Legacy (room-local):
+ * required-key semantics as before. World-local: optional, but a *present*
+ * value is rejected by name — world-local documents must never carry Room
+ * ownership (P23.0b: it would be dead data and invites a second Room
+ * transform).
+ */
+function readWorldLocalRoomId(
+	input: JsonRecord,
+	key: string,
+	path: string,
+	issues: SceneDocumentIssue[],
+	options: { worldLocal: boolean }
+): string | undefined {
+	if (!options.worldLocal) return readRoomId(input, key, path, issues);
+	const value = input[key];
+	if (value === undefined) return undefined;
+	addIssue(
+		issues,
+		`${path}.${key}`,
+		'room_id_forbidden_in_world_local',
+		'World-local scene documents must not carry roomId; convert legacy records instead'
+	);
+	return undefined;
+}
 
 export function parseTextureAsset(
 	input: unknown,
@@ -208,6 +242,7 @@ export function parseModelEntity(
 	issues: SceneDocumentIssue[],
 	options: EntityParserOptions
 ): SceneModelEntity | undefined {
+	const roomId = readWorldLocalRoomId(input, 'roomId', path, issues, options);
 	assertAllowedKeys(
 		input,
 		[
@@ -227,7 +262,6 @@ export function parseModelEntity(
 	);
 	const id = readRequiredString(input, 'id', path, issues);
 	const name = readRequiredString(input, 'name', path, issues);
-	const roomId = readRoomId(input, 'roomId', path, issues);
 	const assetId = readRequiredString(input, 'assetId', path, issues);
 	if (assetId && !options.isKnownAssetId(assetId)) {
 		addIssue(issues, `${path}.assetId`, 'unknown_asset', `Unknown asset: ${assetId}`);
@@ -243,7 +277,7 @@ export function parseModelEntity(
 	if (
 		!id ||
 		!name ||
-		!roomId ||
+		roomId === undefined ||
 		!assetId ||
 		!fallback ||
 		!transform ||
@@ -255,11 +289,11 @@ export function parseModelEntity(
 		kind: 'model',
 		id,
 		name,
-		roomId,
 		assetId,
 		fallback: fallback as SceneModelEntity['fallback'],
 		...transform,
-		...(materialInstanceId === undefined ? {} : { materialInstanceId })
+		...(materialInstanceId === undefined ? {} : { materialInstanceId }),
+		...(roomId === undefined ? {} : { roomId })
 	};
 }
 
@@ -289,9 +323,9 @@ export function parsePrimitiveEntity(
 		path,
 		issues
 	);
+	const roomId = readWorldLocalRoomId(input, 'roomId', path, issues, options);
 	const id = readRequiredString(input, 'id', path, issues);
 	const name = readRequiredString(input, 'name', path, issues);
-	const roomId = readRoomId(input, 'roomId', path, issues);
 	const primitiveRaw = readRequiredString(input, 'primitive', path, issues);
 	const primitive =
 		primitiveRaw && (SCENE_PRIMITIVE_KINDS as readonly string[]).includes(primitiveRaw)
@@ -321,7 +355,7 @@ export function parsePrimitiveEntity(
 	if (
 		!id ||
 		!name ||
-		!roomId ||
+		roomId === undefined ||
 		!primitive ||
 		!dimensions ||
 		!materialId ||
@@ -336,21 +370,22 @@ export function parsePrimitiveEntity(
 		kind: 'primitive',
 		id,
 		name,
-		roomId,
 		primitive,
 		dimensions,
 		materialId,
 		castShadow,
 		receiveShadow,
 		...transform,
-		...(materialInstanceId === undefined ? {} : { materialInstanceId })
+		...(materialInstanceId === undefined ? {} : { materialInstanceId }),
+		...(roomId === undefined ? {} : { roomId })
 	} as ScenePrimitiveEntity;
 }
 
 export function parseLightEntity(
 	input: JsonRecord,
 	path: string,
-	issues: SceneDocumentIssue[]
+	issues: SceneDocumentIssue[],
+	options: { worldLocal: boolean }
 ): SceneLightEntity | undefined {
 	assertAllowedKeys(
 		input,
@@ -375,7 +410,7 @@ export function parseLightEntity(
 	);
 	const id = readRequiredString(input, 'id', path, issues);
 	const name = readRequiredString(input, 'name', path, issues);
-	const roomId = readRoomId(input, 'roomId', path, issues);
+	const roomId = readWorldLocalRoomId(input, 'roomId', path, issues, options);
 	const lightRaw = readRequiredString(input, 'light', path, issues);
 	const light =
 		lightRaw && (SCENE_LIGHT_KINDS as readonly string[]).includes(lightRaw)
@@ -443,7 +478,7 @@ export function parseLightEntity(
 	if (
 		!id ||
 		!name ||
-		!roomId ||
+		roomId === undefined ||
 		!light ||
 		!colorValid ||
 		!intensityValid ||
@@ -460,7 +495,6 @@ export function parseLightEntity(
 			kind: 'light',
 			id,
 			name,
-			roomId,
 			light: 'spot',
 			color: color!,
 			intensity: intensity!,
@@ -468,7 +502,8 @@ export function parseLightEntity(
 			castShadow,
 			...transform,
 			...(range === undefined ? {} : { range }),
-			...(penumbra === undefined ? {} : { penumbra })
+			...(penumbra === undefined ? {} : { penumbra }),
+			...(roomId === undefined ? {} : { roomId })
 		};
 	}
 	if (light === 'point') {
@@ -476,25 +511,25 @@ export function parseLightEntity(
 			kind: 'light',
 			id,
 			name,
-			roomId,
 			light: 'point',
 			color: color!,
 			intensity: intensity!,
 			castShadow,
 			...transform,
-			...(range === undefined ? {} : { range })
+			...(range === undefined ? {} : { range }),
+			...(roomId === undefined ? {} : { roomId })
 		};
 	}
 	return {
 		kind: 'light',
 		id,
 		name,
-		roomId,
 		light: 'directional',
 		color: color!,
 		intensity: intensity!,
 		castShadow,
-		...transform
+		...transform,
+		...(roomId === undefined ? {} : { roomId })
 	};
 }
 
@@ -511,7 +546,7 @@ export function parseEntity(
 	const kind = readRequiredString(input, 'kind', path, issues);
 	if (kind === 'model') return parseModelEntity(input, path, issues, options);
 	if (kind === 'primitive') return parsePrimitiveEntity(input, path, issues, options);
-	if (kind === 'light') return parseLightEntity(input, path, issues);
+	if (kind === 'light') return parseLightEntity(input, path, issues, options);
 	if (kind !== undefined) {
 		addIssue(issues, `${path}.kind`, 'invalid_entity_kind', `Invalid scene entity kind: ${kind}`);
 	}
@@ -521,7 +556,8 @@ export function parseEntity(
 export function parseCluster(
 	input: unknown,
 	path: string,
-	issues: SceneDocumentIssue[]
+	issues: SceneDocumentIssue[],
+	options: { worldLocal: boolean }
 ): SceneObjectCluster | undefined {
 	if (!isRecord(input)) {
 		addIssue(issues, path, 'invalid_type', 'Expected a cluster object');
@@ -530,8 +566,8 @@ export function parseCluster(
 	assertAllowedKeys(input, ['id', 'name', 'roomId', 'memberIds'], path, issues);
 	const id = readRequiredString(input, 'id', path, issues);
 	const name = readRequiredString(input, 'name', path, issues);
-	const roomId = readRoomId(input, 'roomId', path, issues);
+	const roomId = readWorldLocalRoomId(input, 'roomId', path, issues, options);
 	const memberIds = readStringArray(input.memberIds, `${path}.memberIds`, issues);
-	if (!id || !name || !roomId || !memberIds) return undefined;
-	return { id, name, roomId, memberIds };
+	if (!id || !name || roomId === undefined || !memberIds) return undefined;
+	return { id, name, memberIds, ...(roomId === undefined ? {} : { roomId }) };
 }

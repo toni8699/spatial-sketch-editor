@@ -198,7 +198,8 @@ export type PlanSceneProjection = {
 	footprints: readonly {
 		key: string;
 		entityId: string;
-		roomId: string;
+		/** Absent under world-local documents (P23.0b): points are world space. */
+		roomId?: string;
 		kind: 'model' | 'primitive';
 		primitive?: 'box' | 'plane' | 'cylinder' | 'sphere';
 		points: LayoutVec2[];

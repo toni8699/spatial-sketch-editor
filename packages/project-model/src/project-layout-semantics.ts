@@ -21,6 +21,14 @@ export type LayoutRoomRegistry = SceneRoomResolver & {
 	get(roomId: string): LayoutRoomRegistryEntry | undefined;
 	getRequired(roomId: string): LayoutRoomRegistryEntry;
 	localPoint(roomId: string, worldPoint: Vec3): Vec3;
+	/**
+	 * Frame-aware resolution (P23.0b): present `roomId` resolves through the
+	 * Room frame; absent `roomId` is the identity frame — the point is already
+	 * project/world space and must never be transformed again.
+	 */
+	pointInFrame(roomId: string | undefined, localPoint: Vec3): Vec3;
+	/** Inverse of {@link pointInFrame}. */
+	localPointInFrame(roomId: string | undefined, worldPoint: Vec3): Vec3;
 };
 
 export function createLayoutRoomRegistry(layout: LayoutDocument): LayoutRoomRegistry {
@@ -45,16 +53,23 @@ export function createLayoutRoomRegistry(layout: LayoutDocument): LayoutRoomRegi
 		byId,
 		has: (roomId) => byId.has(roomId),
 		get: (roomId) => byId.get(roomId),
-		getRequired,
-		point: (roomId, localPoint) => {
-			const entry = getRequired(roomId);
-			return layoutRoomPoint(entry.room, entry.floor, localPoint);
-		},
-		localPoint: (roomId, worldPoint) => {
-			const entry = getRequired(roomId);
-			return layoutRoomLocalPoint(entry.room, entry.floor, worldPoint);
-		}
-	};
+		getRequired,        point: (roomId, localPoint) => {
+            const entry = getRequired(roomId);
+            return layoutRoomPoint(entry.room, entry.floor, localPoint);
+        },
+        localPoint: (roomId, worldPoint) => {
+            const entry = getRequired(roomId);
+            return layoutRoomLocalPoint(entry.room, entry.floor, worldPoint);
+        },
+        pointInFrame: (roomId, localPoint) =>
+            roomId === undefined
+                ? ([...localPoint] as Vec3)
+                : layoutRoomPoint(getRequired(roomId).room, getRequired(roomId).floor, localPoint),
+        localPointInFrame: (roomId, worldPoint) =>
+            roomId === undefined
+                ? ([...worldPoint] as Vec3)
+                : layoutRoomLocalPoint(getRequired(roomId).room, getRequired(roomId).floor, worldPoint)
+    };
 }
 
 export function validateProjectSceneRooms(
@@ -123,11 +138,15 @@ function validateProjectCameraPoses(
 		const toNode = nodeById.get(connection.toNodeId);
 		if (!fromNode || !toNode) continue;
 		const anchors: Vec3[] = [
-			rooms.point(fromNode.roomId, fromNode.position),
+			fromNode.roomId
+				? rooms.point(fromNode.roomId, fromNode.position)
+				: ([...fromNode.position] as Vec3),
 			...connection.positionPath.anchors.map((anchor) =>
-				anchor.roomId ? rooms.point(anchor.roomId, anchor.position) : [...anchor.position] as Vec3
+				anchor.roomId ? rooms.point(anchor.roomId, anchor.position) : ([...anchor.position] as Vec3)
 			),
-			rooms.point(toNode.roomId, toNode.position)
+			toNode.roomId
+				? rooms.point(toNode.roomId, toNode.position)
+				: ([...toNode.position] as Vec3)
 		];
 		const positionPath = createCameraPositionPath([
 			connection.positionPath.kind === 'rounded-polyline'

@@ -59,7 +59,7 @@ describe('S7 step 0 — scene placement session fixtures', () => {
 		// then take the room's first three entities as the session members.
 		// Placement selection is room-scoped: select the first entity's room,
 		// then take that room's entities as the session members.
-		const roomId = store.document.entities[0]!.roomId;
+		const roomId = store.document.entities[0]!.roomId!;
 		const entities = store.document.entities
 			.filter((entity) => entity.roomId === roomId)
 			.slice(0, 2);
@@ -162,7 +162,7 @@ describe('S7 step 0 — scene placement session fixtures', () => {
 
 	it('refuses the session when member roots are missing (monolith begin guard) and cancels the transaction', () => {
 		const store = createFixtureEditorStore(2);
-		const roomId = store.document.entities[0]!.roomId;
+		const roomId = store.document.entities[0]!.roomId!;
 		const ids = store.document.entities
 			.filter((entity) => entity.roomId === roomId)
 			.map((entity) => entity.id);
@@ -302,7 +302,7 @@ describe('S7 step 0 — camera session fixtures', () => {
 		// the fixture must reproduce that selection first.
 		expect(store.selectionActions.selectNavigationNode(node.id)).toBe(true);
 		expect(store.selectionActions.selectCameraHandle('target')).toBe(true);
-		const worldTarget = store.rooms.point(node.roomId, node.cameraTarget);
+		const worldTarget = store.rooms.point(node.roomId!, node.cameraTarget);
 		const moved = [
 			worldTarget[0] + 2,
 			worldTarget[1],
@@ -310,7 +310,7 @@ describe('S7 step 0 — camera session fixtures', () => {
 		] as Vec3;
 
 		// The monolith previews convert world → room-local before writing.
-		const movedLocal = store.rooms.localPoint(node.roomId, moved);
+		const movedLocal = store.rooms.localPoint(node.roomId!, moved);
 		expect(store.beginDocumentTransaction()).toBe(true);
 		expect(store.updateNavigationNodePoint(node.id, 'target', movedLocal)).toBe(true);
 		expect(store.canUndo).toBe(false); // in-flight

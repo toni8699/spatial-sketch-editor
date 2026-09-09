@@ -4,10 +4,10 @@
  * The Scene counterpart of Layout's `formatVersion` dispatch (P23.0 child
  * plan, "target schema and identification" required policy):
  *
- * - the **new** (world-local) Scene shape will carry an explicit format
- *   discriminator; that shape and its decoder arrive with P23.0b, so today
- *   *every* explicit `formatVersion` in a Scene payload is rejected as an
- *   unsupported version rather than guessed at;
+ * - the **new** (world-local) Scene shape carries the explicit discriminator
+ *   `formatVersion: 1` (P23.0b) and routes to the world-local decoder;
+ *   every other explicit value is rejected as an unsupported version rather
+ *   than guessed at;
  * - a payload **without** `formatVersion` is accepted only through the
  *   explicit recognized legacy decoder (`validateSceneDocument`, the current
  *   room-local shape). Missing version never silently means "whatever
@@ -20,7 +20,7 @@
  * nested Scene schema version — package orchestration must never dispatch on
  * the generator string, and this module never reads package data.
  */
-import type { SceneDocument } from './scene';
+import { SCENE_WORLD_LOCAL_FORMAT_VERSION, type SceneDocument } from './scene';
 import type { SceneDocumentIssue } from './scene-codec';
 import { validateSceneDocument } from './scene-codec';
 
@@ -35,22 +35,31 @@ export type RecognizedLegacySceneDecode = {
 	sceneSpace: 'legacy-room-local';
 };
 
+export type WorldLocalSceneDecode = {
+	kind: 'world-local';
+	/** New canonical world-local Scene document (`formatVersion: 1`). */
+	document: SceneDocument;
+	/** World-local values are runtime-final; no Room resolution. */
+	sceneSpace: 'project-world';
+};
+
 export type UnrecognizedSceneDecode = {
 	kind: 'unrecognized';
 	reason: 'invalid-json-payload' | 'legacy-invalid' | 'unsupported-format-version';
 	issues: SceneDocumentIssue[];
 };
 
-export type SceneFormatIdentification = RecognizedLegacySceneDecode | UnrecognizedSceneDecode;
+export type SceneFormatIdentification =
+	| RecognizedLegacySceneDecode
+	| WorldLocalSceneDecode
+	| UnrecognizedSceneDecode;
 
 /**
  * Identify a parsed Scene payload's format explicitly.
  *
- * The world-local Scene decoder does not exist until P23.0b, so an explicit
- * `formatVersion` of any value is rejected with
- * `unsupported-format-version`. When P23.0b lands, its discriminator value is
- * added here and routed to the new decoder — the dispatch stays the single
- * Scene format boundary.
+ * `formatVersion: 1` routes to the world-local decoder (P23.0b); a missing
+ * `formatVersion` routes to the recognized legacy room-local decoder; any
+ * other explicit value is rejected with `unsupported-format-version`.
  */
 export function identifySceneFormat(input: unknown): SceneFormatIdentification {
 	if (typeof input !== 'object' || input === null || Array.isArray(input)) {
@@ -63,6 +72,17 @@ export function identifySceneFormat(input: unknown): SceneFormatIdentification {
 		};
 	}
 	if ('formatVersion' in input) {
+		if (input.formatVersion === SCENE_WORLD_LOCAL_FORMAT_VERSION) {
+			const worldLocal = validateSceneDocument(input);
+			if (worldLocal.success) {
+				return {
+					kind: 'world-local',
+					document: worldLocal.document,
+					sceneSpace: 'project-world'
+				};
+			}
+			return { kind: 'unrecognized', reason: 'legacy-invalid', issues: worldLocal.issues };
+		}
 		return {
 			kind: 'unrecognized',
 			reason: 'unsupported-format-version',
@@ -70,8 +90,7 @@ export function identifySceneFormat(input: unknown): SceneFormatIdentification {
 				{
 					path: '$.formatVersion',
 					code: 'unsupported_format_version',
-					message:
-						'No Scene decoder is implemented for explicit formatVersion values yet; the recognized legacy scene shape carries no formatVersion'
+					message: `Unsupported Scene formatVersion ${JSON.stringify(input.formatVersion)}; recognized values: ${SCENE_WORLD_LOCAL_FORMAT_VERSION} (world-local) and missing (recognized legacy)`
 				}
 			]
 		};

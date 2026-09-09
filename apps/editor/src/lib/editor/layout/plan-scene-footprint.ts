@@ -11,7 +11,11 @@ const CIRCLE_STEPS = 32;
 export type PlanSceneFootprint = {
 	key: string;
 	entityId: string;
-	roomId: string;
+	/**
+	 * Legacy room frame gate (P23.0b). Absent means the footprint points are
+	 * already project/world space (world-local document).
+	 */
+	roomId?: string;
 	kind: 'model' | 'primitive';
 	primitive?: ScenePrimitiveEntity['primitive'];
 	points: LayoutVec2[];
@@ -57,7 +61,7 @@ export function buildPlanSceneFootprintProjection(
 	for (const entity of document.entities) {
 		if (entity.kind === 'light') continue;
 		const localOutline = footprintForEntity(entity, assetById);
-		if (!localOutline || !rooms.has(entity.roomId)) continue;
+		if (!localOutline || (entity.roomId !== undefined && !rooms.has(entity.roomId))) continue;
 		const scale = resolveScale(entity, options.getEffectiveScale?.(entity));
 		if (!scale) continue;
 		const points = projectFootprint(entity, localOutline, scale, rooms);
@@ -167,7 +171,7 @@ function projectFootprint(
 		const scaledZ = z * scale[2];
 		const localX = entity.position[0] + scaledX * cos + scaledZ * sin;
 		const localZ = entity.position[2] - scaledX * sin + scaledZ * cos;
-		const world = rooms.point(entity.roomId, [localX, entity.position[1], localZ]);
+		const world = rooms.pointInFrame(entity.roomId, [localX, entity.position[1], localZ]);
 		return [world[0], world[2]];
 	});
 }

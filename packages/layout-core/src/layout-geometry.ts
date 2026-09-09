@@ -1,5 +1,7 @@
 import type { Vec3 } from './types';
 import type {
+	DraftPath,
+	DraftSegment,
 	LayoutDocument,
 	LayoutFloor,
 	LayoutObject,
@@ -7,6 +9,7 @@ import type {
 	LayoutRoom,
 	LayoutVec2
 } from './layout-types';
+import type { LayoutDocumentWallFirst } from './layout-wall-first-types';
 import type {
 	CompiledCurveSample,
 	CompiledFloor,
@@ -42,41 +45,193 @@ import { bounds2, createQueryGeometryBuilder, polygonBounds2, type QueryGeometry
 const OPENING_CENTER_EPSILON = 0.01;
 
 /**
+ * Opening shape accepted by the compiler source: the legacy segment-hosted
+ * opening. Wall-first openings are mapped onto it with `segmentId = wallId`
+ * (see `compileWallFirstLayoutGeometry`) so exactly one compiler consumes
+ * both generations (P23.0: one geometry compiler/output model remains
+ * authoritative).
+ */
+export type CompilerOpening = LayoutOpening;
+
+/**
+ * Internal compiler-source room: everything the shared compile core reads
+ * from a room. The legacy document maps 1:1; the wall-first document maps
+ * Walls to line segments and Wall-hosted openings to segment-hosted ones.
+ */
+export type CompilerRoomSource = {
+	room: Pick<LayoutRoom, 'id' | 'wallThickness' | 'floorThickness' | 'ceilingThickness'>;
+	boundary: DraftPath;
+	openings: readonly CompilerOpening[];
+	/**
+	 * Per-wall thickness override keyed by boundary segment id (P23.0b: wall
+	 * thickness is Wall-owned in the wall-first schema; the legacy schema is
+	 * room-uniform and leaves this absent). Absent keeps legacy behavior and
+	 * legacy cache keys byte-identical.
+	 */
+	wallThicknessBySegmentId?: Readonly<Record<string, number>>;
+};
+
+/** Internal compiler-source floor frame (legacy floor maps 1:1). */
+export type CompilerFloorSource = Pick<LayoutFloor, 'id' | 'elevation' | 'height'>;
+
+/**
+ * Internal compiler-source accepted by `compileLayoutGeometrySource`. The
+ * public `compileLayoutGeometry` is a thin adapter over this, so every
+ * generation compiles through the same code path.
+ */
+export type CompilerSource = {
+	floor: CompilerFloorSource;
+	rooms: readonly CompilerRoomSource[];
+	objects: readonly LayoutObject[];
+};
+
+/** Legacy compiler source: identity mapping onto the shared core. */
+export function legacyCompilerSource(document: LayoutDocument): CompilerSource {
+	return {
+		floor: document.floors[0] ?? { id: 'floor', name: 'Floor', elevation: 0, height: 3 },
+		rooms: (document.floors[0]?.rooms ?? []).map((room) => ({ room, boundary: room.boundary, openings: room.openings })),
+		objects: document.objects
+	};
+}
+
+/**
  * Compile a LayoutDocument once into render-neutral geometry consumed by Plan,
  * editor 3D, and visitor 3D. Pure, deterministic, non-mutating, visitor-safe.
  */
 export function compileLayoutGeometry(document: LayoutDocument): CompiledLayoutGeometryResult {
+	return compileLayoutGeometrySource(legacyCompilerSource(document));
+}
+
+/**
+ * Compile a wall-first Layout through the same shared core (P23.0 compiler
+ * cutover): document-global Walls become the boundary segments (identity:
+ * `wallId` — the wall-first compiler source sets `segmentId = wallId`),
+ * Room-hosted openings rebase onto their Wall, Room boundaries map to the
+ * Wall segments each Room references, and Wall-owned thickness flows through
+ * the per-wall override. Query/selection identities for physical walls carry
+ * the `wallId`; Room-derived semantic records retain `roomId`.
+ */
+export function compileWallFirstLayoutGeometry(
+	document: LayoutDocumentWallFirst
+): CompiledLayoutGeometryResult {
+	const pointById = new Map(document.junctions.map((junction) => [junction.id, junction.point]));
+	const wallById = new Map(document.walls.map((wall) => [wall.id, wall]));
+
+	const wallThicknessBySegmentId: Record<string, number> = {};
+	for (const wall of document.walls) wallThicknessBySegmentId[wall.id] = wall.thickness;
+
+	const rooms: CompilerRoomSource[] = document.rooms.map((room) => {
+		const segments: DraftSegment[] = [];
+		const roomOpenings: CompilerOpening[] = [];
+		for (const ref of room.boundary) {
+			const wall = wallById.get(ref.wallId);
+			if (!wall) continue; // reference integrity is the codec's job
+			const start = pointById.get(wall.startJunctionId);
+			const end = pointById.get(wall.endJunctionId);
+			if (!start || !end) continue;
+			// The Room boundary chain must connect ref-to-ref, so the segment
+			// follows the ref's traversal direction (reverse swaps endpoints).
+			// The legacy compiler core measures opening offsets from each
+			// boundary segment's start, so reverse refs also mirror offsets
+			// (o' = L − (o + w)) to keep them measured from the canonical
+			// Wall start downstream.
+			const reversed = ref.direction === 'reverse';
+			segments.push({
+				id: wall.id,
+				kind: 'line',
+				start: [...(reversed ? end : start)] as LayoutVec2,
+				end: [...(reversed ? start : end)] as LayoutVec2
+			});
+		}
+		for (const opening of document.openings) {
+			const ref = room.boundary.find((candidate) => candidate.wallId === opening.wallId);
+			if (!ref) continue;
+			if (ref.direction === 'reverse') {
+				const wall = wallById.get(opening.wallId)!;
+				const start = pointById.get(wall.startJunctionId);
+				const end = pointById.get(wall.endJunctionId);
+				if (!start || !end) continue;
+				const length = Math.hypot(end[0] - start[0], end[1] - start[1]);
+				roomOpenings.push({
+					...opening,
+					segmentId: opening.wallId,
+					offset: length - (opening.offset + opening.width)
+				});
+				continue;
+			}
+			roomOpenings.push({ ...opening, segmentId: opening.wallId });
+		}
+		return {
+			room: {
+				id: room.id,
+				wallThickness: document.walls[0]?.thickness ?? 0.1,
+				floorThickness: room.floorThickness,
+				ceilingThickness: room.ceilingThickness
+			},
+			boundary: { closed: true, segments },
+			openings: roomOpenings,
+			wallThicknessBySegmentId
+		};
+	});
+
+	return compileLayoutGeometrySource({
+		floor: document.floor,
+		rooms,
+		objects: document.objects
+	});
+}
+
+/**
+ * Shared compile core (P23.0 compiler cutover): one geometry compiler/output
+ * model for every document generation. Legacy and wall-first callers differ
+ * only in the `CompilerSource` adapter they supply. Diagnostics paths remain
+ * room-indexed (`rooms[i]`) so legacy consumers see identical issue paths.
+ */
+export function compileLayoutGeometrySource(source: CompilerSource): CompiledLayoutGeometryResult {
 	const issues: LayoutGeometryIssue[] = [];
 	const floors: CompiledFloor[] = [];
 	const rooms: CompiledRoom[] = [];
 	const queryBuilder = createQueryGeometryBuilder();
 
-	const objects = compileObjects(document.objects, issues, queryBuilder);
+	const objects = compileObjects(source.objects, issues, queryBuilder);
 
-	for (const [floorIndex, floor] of document.floors.entries()) {
+	const floor = source.floor;
+	{
 		const floorRoomIds: string[] = [];
 		let floorMin: Vec3 = [Infinity, Infinity, Infinity];
 		let floorMax: Vec3 = [-Infinity, -Infinity, -Infinity];
 
-		for (const [roomIndex, room] of floor.rooms.entries()) {
-			const path = `floors[${floorIndex}].rooms[${roomIndex}]`;
-			const prepared = prepareLayoutRoomSegments(room, path);
+		for (const [roomIndex, roomSource] of source.rooms.entries()) {
+			const path = `floors[0].rooms[${roomIndex}]`;
+			const prepared = prepareLayoutRoomSegments(
+				{ id: roomSource.room.id, boundary: roomSource.boundary },
+				path
+			);
 			const roomIssues = [
 				...prepared.issues,
-				...validatePreparedLayoutRoomGeometry(room, floor, prepared.segments, path)
+				...validatePreparedLayoutRoomGeometry(
+					{
+						id: roomSource.room.id,
+						boundary: roomSource.boundary,
+						openings: roomSource.openings
+					},
+					floor,
+					prepared.segments,
+					path
+				)
 			];
 			issues.push(...roomIssues);
 			if (hasBlockingLayoutIssues(roomIssues)) continue;
 
-			const compiledRoom = compileRoom(room, floor, prepared.segments as SampledSegment[], queryBuilder);
+			const compiledRoom = compileRoom(roomSource, floor, prepared.segments as SampledSegment[], queryBuilder);
 			rooms.push(compiledRoom);
-			floorRoomIds.push(room.id);
+			floorRoomIds.push(roomSource.room.id);
 			includeBounds3(floorMin, floorMax, compiledRoom.bounds3.min, compiledRoom.bounds3.max);
 		}
 
 		for (const object of objects) {
 			if (!object.roomId) continue;
-			const owned = floor.rooms.some((room) => room.id === object.roomId);
+			const owned = source.rooms.some((roomSource) => roomSource.room.id === object.roomId);
 			if (owned) includeBounds3(floorMin, floorMax, object.worldAabb.min, object.worldAabb.max);
 		}
 
@@ -125,44 +280,42 @@ export function compileLayoutGeometry(document: LayoutDocument): CompiledLayoutG
 }
 
 function compileRoom(
-	room: LayoutRoom,
-	floor: LayoutFloor,
+	roomSource: CompilerRoomSource,
+	floor: CompilerFloorSource,
 	sampledSegments: SampledSegment[],
 	queryBuilder: QueryGeometryBuilder
 ): CompiledRoom {
+	const room = roomSource.room;
 	const floorElevation = floor.elevation;
 	const ceilingElevation = floor.elevation + floor.height;
 
-	const floorPolygon: LayoutVec2[] = room.boundary.segments.flatMap((segment, index) => {
+	const floorPolygon: LayoutVec2[] = roomSource.boundary.segments.flatMap((segment, index) => {
 		const samples = sampledSegments[index]!.samples;
 		if (segment.kind === 'line') return [[...segment.start] as LayoutVec2];
 		return samples.slice(0, -1).map((sample) => [...sample.point] as LayoutVec2);
 	});
 	const ceilingPolygon = floorPolygon.map(([x, z]) => [x, z] as LayoutVec2);
 
-	const openingsBySegment = new Map<string, LayoutOpening[]>();
-	for (const opening of room.openings) {
+	const openingsBySegment = new Map<string, CompilerOpening[]>();
+	for (const opening of roomSource.openings) {
 		const openings = openingsBySegment.get(opening.segmentId) ?? [];
 		openings.push(opening);
 		openingsBySegment.set(opening.segmentId, openings);
 	}
 
-	const walls: CompiledWall[] = room.boundary.segments.map((segment, index) => {
+	const walls: CompiledWall[] = roomSource.boundary.segments.map((segment, index) => {
 		const sampled = sampledSegments[index]!;
 		const openings = openingsBySegment.get(segment.id) ?? [];
+		// P23.0b: wall thickness is Wall-owned in the wall-first schema. The
+		// per-wall override keeps every downstream record identical in shape;
+		// only the thickness value may differ per wall. Cache keys remain
+		// structural (`thickness` participates where it always did).
+		const wallThickness = roomSource.wallThicknessBySegmentId?.[segment.id] ?? room.wallThickness;
 		const segmentDependencyKey = cacheKeyOf([
 			'segment-geometry',
 			floor.id,
 			room.id,
 			segment
-		]);
-		const wallCacheKey = cacheKeyOf([
-			'wall',
-			segmentDependencyKey,
-			openings,
-			room.wallThickness,
-			floor.elevation,
-			floor.height
 		]);
 		const sections = splitSampledWallAroundOpenings(sampled, segment, openings, floor.height);
 		const compiledOpenings = openings.map((opening) =>
@@ -170,13 +323,20 @@ function compileRoom(
 		);
 		const solidSpans = buildSolidSpans(sampled.samples, sections);
 		const solidCenterlinePolylines = wallPolylinesAroundOpenings(sampled.samples, openings);
-		const wallBounds2Value = wallBounds2(sampled.samples, room.wallThickness);
-		const wallBounds3Value = wallBounds3(sampled.samples, room.wallThickness, floorElevation, ceilingElevation);
+		const wallBounds2Value = wallBounds2(sampled.samples, wallThickness);
+		const wallBounds3Value = wallBounds3(sampled.samples, wallThickness, floorElevation, ceilingElevation);
 		return {
 			id: geometryId(['wall', floor.id, room.id, segment.id]),
-			cacheKey: wallCacheKey,
+			cacheKey: cacheKeyOf([
+				'wall',
+				segmentDependencyKey,
+				openings,
+				wallThickness,
+				floor.elevation,
+				floor.height
+			]),
 			segmentId: segment.id,
-			thickness: room.wallThickness,
+			thickness: wallThickness,
 			length: sampled.length,
 			samples: sampled.samples,
 			sections,
@@ -192,7 +352,7 @@ function compileRoom(
 	const roomBounds2 = roomBounds2FromWalls(walls, floorPolygon);
 	const roomBounds3 = roomBounds3FromParts(floorPolygon, walls, floorElevation, ceilingElevation, room.floorThickness, room.ceilingThickness);
 
-	emitRoomQueryRecords(queryBuilder, floor, room, walls, floorPolygon, roomBounds3);
+	emitRoomQueryRecords(queryBuilder, floor, { id: room.id, boundary: roomSource.boundary }, walls, floorPolygon, roomBounds3);
 
 	return {
 		id: geometryId(['room', floor.id, room.id]),
@@ -202,11 +362,16 @@ function compileRoom(
 			floor.elevation,
 			floor.height,
 			room.id,
-			room.boundary,
+			roomSource.boundary,
 			room.wallThickness,
 			room.floorThickness,
 			room.ceilingThickness,
-			room.openings
+			roomSource.openings,
+			// Legacy callers never supply per-wall thickness, so their cache
+			// keys stay byte-identical to the pre-cutover compiler.
+			...(roomSource.wallThicknessBySegmentId
+				? [roomSource.wallThicknessBySegmentId]
+				: [])
 		]),
 		roomId: room.id,
 		floorElevation,
@@ -344,8 +509,8 @@ function isValidObject(object: LayoutObject): boolean {
 
 function emitRoomQueryRecords(
 	queryBuilder: QueryGeometryBuilder,
-	floor: LayoutFloor,
-	room: LayoutRoom,
+	floor: CompilerFloorSource,
+	room: Pick<LayoutRoom, 'id' | 'boundary'>,
 	walls: readonly CompiledWall[],
 	floorPolygon: readonly LayoutVec2[],
 	roomBounds3: LayoutBounds3

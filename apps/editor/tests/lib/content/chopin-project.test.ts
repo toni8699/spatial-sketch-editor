@@ -61,12 +61,12 @@ describe('canonical Chopin project', () => {
 		}
 
 		for (const entity of chopinProject.scene.entities) {
-			expectVecClose(chopinRuntime.rooms.point(entity.roomId, entity.position), legacyPoint(entity.roomId, entity.position));
+			expectVecClose(chopinRuntime.rooms.point(entity.roomId!, entity.position), legacyPoint(entity.roomId!, entity.position));
 		}
 		for (const [index, node] of chopinProject.scene.navigationNodes.entries()) {
 			const runtimeNode = chopinRuntime.scene.navigationNodes[index]!;
-			expectVecClose(runtimeNode.position, legacyPoint(node.roomId, node.position));
-			expectVecClose(runtimeNode.cameraTarget, legacyPoint(node.roomId, node.cameraTarget));
+			expectVecClose(runtimeNode.position, legacyPoint(node.roomId!, node.position));
+			expectVecClose(runtimeNode.cameraTarget, legacyPoint(node.roomId!, node.cameraTarget));
 		}
 		for (const [connectionIndex, connection] of chopinProject.scene.connections.entries()) {
 			const runtimeConnection = chopinRuntime.scene.connections[connectionIndex]!;

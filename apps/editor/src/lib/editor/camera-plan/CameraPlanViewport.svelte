@@ -223,7 +223,7 @@
 			...preview.model.rooms.flatMap((room) => room.floorPolygon),
 			...preview.model.objects.flatMap((object) => object.planFootprint),
 			...store.document.navigationNodes.map((node) => {
-				const world = store.rooms.point(node.roomId, node.position);
+				const world = store.rooms.pointInFrame(node.roomId, node.position);
 				return [world[0], world[2]] as LayoutVec2;
 			})
 		];
@@ -364,9 +364,9 @@
 				(candidate) => candidate.id === session.nodeId
 			);
 			if (!node) return;
-			const resolved = store.rooms.point(node.roomId, node.position);
+			const resolved = store.rooms.pointInFrame(node.roomId, node.position);
 			const next = snapPoint(world);
-			const local = store.rooms.localPoint(node.roomId, [
+			const local = store.rooms.localPointInFrame(node.roomId, [
 				next[0],
 				resolved[1],
 				next[1]
@@ -670,7 +670,7 @@
 				(node) => node.id === pending.sourceNodeId
 			);
 			if (source) {
-				const sourceWorld = store.rooms.point(source.roomId, source.position);
+				const sourceWorld = store.rooms.pointInFrame(source.roomId, source.position);
 				rubberBand = {
 					from: [sourceWorld[0], sourceWorld[2]],
 					to: world

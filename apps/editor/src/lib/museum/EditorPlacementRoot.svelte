@@ -18,7 +18,8 @@
     children
   }: {
     placementId: string;
-    roomId: RoomId;
+    /** World-local placements (P23.0b) carry no room frame. */
+    roomId: RoomId | null;
     placementRegistry: EditorPlacementRegistry;
     position?: Vec3;
     rotation?: Vec3;
@@ -37,7 +38,7 @@
 
     object.userData.editorEntity = 'placement';
     object.userData.placementId = id;
-    object.userData.roomId = roomId;
+    if (roomId !== null) object.userData.roomId = roomId;
     registry.registerPlacementRoot(id, object);
 
     return () => {

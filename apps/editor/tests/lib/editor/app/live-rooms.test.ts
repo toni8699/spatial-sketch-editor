@@ -89,7 +89,7 @@ describe('live room registry', () => {
 		expect(store.document.navigationNodes).toHaveLength(1);
 		const node = store.document.navigationNodes[0]!;
 		expect(node.roomId).toBe(roomId);
-		expect(store.rooms.has(node.roomId)).toBe(true);
+		expect(store.rooms.has(node.roomId!)).toBe(true);
 		// Room-local position/target resolved through the live registry: finite.
 		expect(node.position.every((v) => Number.isFinite(v))).toBe(true);
 		expect(node.cameraTarget.every((v) => Number.isFinite(v))).toBe(true);

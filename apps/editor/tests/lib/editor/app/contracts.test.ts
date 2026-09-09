@@ -2257,7 +2257,7 @@ describe('cross-domain selection contracts', () => {
 		const entityId = store.document.entities[0]!.id;
 
 		// Room-only latent context never fires the hook.
-		expect(store.selectionActions.selectRoom(store.document.entities[0]!.roomId)).toBe(true);
+		expect(store.selectionActions.selectRoom(store.document.entities[0]!.roomId!)).toBe(true);
 		expect(fired).toBe(0);
 
 		// An actionable placement pick fires it.

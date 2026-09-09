@@ -22,8 +22,15 @@ export class RuntimeStateStore {
     const initialNode = initialNodeId === null ? undefined : graph.nodeById.get(initialNodeId);
     if (initialNode) {
       this.activeNodeId = initialNode.id;
-      this.currentRoomId = initialNode.roomId;
-      this.visitedRoomIds = new Set([initialNode.roomId]);
+      // P23.0b: world-local nodes carry no roomId. They leave the current
+      // room unchanged (the tour FSM stays room-scoped to whatever room
+      // context existed before); legacy room-owned nodes behave exactly as
+      // before.
+      this.currentRoomId = initialNode.roomId ?? this.currentRoomId;
+      this.visitedRoomIds =
+        initialNode.roomId === undefined
+          ? this.visitedRoomIds
+          : new Set([initialNode.roomId]);
     } else {
       // zero-node policy: a scene with no navigation nodes is a valid
       // authoring state. The session-only free camera owns the viewport and
@@ -43,7 +50,7 @@ export class RuntimeStateStore {
     return this.targetNodeId ? getNode(this.targetNodeId, this.graph) : null;
   }
 
-  get currentRoom() {
+  get currentRoom(): RoomId | undefined {
     return this.activeNode.roomId;
   }
 
@@ -58,7 +65,10 @@ export class RuntimeStateStore {
     if (this.tourMode === 'free') return true;
     if (nodeId === this.activeNode.nextNodeId) return true;
     if (nodeId !== this.activeNode.previousNodeId) return false;
-    return this.visitedRoomIds.has(getNode(nodeId, this.graph).roomId);
+    // World-local nodes (no roomId) are not room-gated; room-owned nodes
+    // keep the visited-room rule unchanged.
+    const previousRoomId = getNode(nodeId, this.graph).roomId;
+    return previousRoomId === undefined || this.visitedRoomIds.has(previousRoomId);
   }
 
   requestNode(nodeId: string) {
@@ -73,10 +83,13 @@ export class RuntimeStateStore {
   completeTransition(nodeId: string) {
     const next = getNode(nodeId, this.graph);
     this.activeNodeId = nodeId;
-    this.currentRoomId = next.roomId;
+    this.currentRoomId = next.roomId ?? this.currentRoomId;
     this.targetNodeId = null;
     this.isTransitioning = false;
-    this.visitedRoomIds = new Set([...this.visitedRoomIds, next.roomId]);
+    this.visitedRoomIds =
+      next.roomId === undefined
+        ? this.visitedRoomIds
+        : new Set([...this.visitedRoomIds, next.roomId]);
   }
 
   goNext() {

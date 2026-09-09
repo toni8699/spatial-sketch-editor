@@ -50,7 +50,7 @@ describe('camera-gizmo-adapter — authored node sessions', () => {
 		const node = store.document.navigationNodes[0]!;
 		expect(store.selectionActions.selectNavigationNode(node.id)).toBe(true);
 
-		const startWorld = store.rooms.point(node.roomId, node.position);
+		const startWorld = store.rooms.point(node.roomId!, node.position);
 		const root = makeRoot(startWorld);
 		store.registerCameraHelperRoot(node.id, 'position', root);
 
@@ -75,7 +75,7 @@ describe('camera-gizmo-adapter — authored node sessions', () => {
 		const raised = [startWorld[0]!, startWorld[1]! + 0.5, startWorld[2]!] as Vec3;
 		root.position.set(raised[0], raised[1], raised[2]);
 		session.preview({ targetKey: adapter.key, axis: 'Y' });
-		const expectedLocal = store.rooms.localPoint(node.roomId, raised);
+		const expectedLocal = store.rooms.localPoint(node.roomId!, raised);
 		const previewed = store.document.navigationNodes.find(
 			(candidate) => candidate.id === node.id
 		)!;
@@ -95,7 +95,7 @@ describe('camera-gizmo-adapter — authored node sessions', () => {
 		const node = store.document.navigationNodes[0]!;
 		expect(store.selectionActions.selectNavigationNode(node.id)).toBe(true);
 
-		const startWorld = store.rooms.point(node.roomId, node.position);
+		const startWorld = store.rooms.point(node.roomId!, node.position);
 		const root = makeRoot(startWorld);
 		store.registerCameraHelperRoot(node.id, 'position', root);
 
@@ -113,7 +113,7 @@ describe('camera-gizmo-adapter — authored node sessions', () => {
 		const movedWorld = [startWorld[0]! + 2, startWorld[1]!, startWorld[2]!] as Vec3;
 		root.position.set(movedWorld[0], movedWorld[1], movedWorld[2]);
 		session!.preview({ targetKey: adapter!.key, axis: 'X' });
-		const expectedLocal = store.rooms.localPoint(node.roomId, movedWorld);
+		const expectedLocal = store.rooms.localPoint(node.roomId!, movedWorld);
 		const previewed = store.document.navigationNodes.find(
 			(candidate) => candidate.id === node.id
 		)!;
@@ -136,7 +136,7 @@ describe('camera-gizmo-adapter — authored node sessions', () => {
 		const node = store.document.navigationNodes[0]!;
 		expect(store.selectionActions.selectNavigationNode(node.id)).toBe(true);
 
-		const startWorld = store.rooms.point(node.roomId, node.position);
+		const startWorld = store.rooms.point(node.roomId!, node.position);
 		const root = makeRoot(startWorld);
 		store.registerCameraHelperRoot(node.id, 'position', root);
 
@@ -159,7 +159,7 @@ describe('camera-gizmo-adapter — authored node sessions', () => {
 		expect(store.selectionActions.selectNavigationNode(node.id)).toBe(true);
 		expect(store.selectionActions.selectCameraHandle('target')).toBe(true);
 
-		const startWorld = store.rooms.point(node.roomId, node.cameraTarget);
+		const startWorld = store.rooms.point(node.roomId!, node.cameraTarget);
 		const root = makeRoot(startWorld);
 		store.registerCameraHelperRoot(node.id, 'target', root);
 
@@ -169,7 +169,7 @@ describe('camera-gizmo-adapter — authored node sessions', () => {
 
 		root.position.set(startWorld[0]!, startWorld[1]!, startWorld[2]! + 1.5);
 		session.preview({ targetKey: adapter.key, axis: 'Z' });
-		const expectedLocal = store.rooms.localPoint(node.roomId, [
+		const expectedLocal = store.rooms.localPoint(node.roomId!, [
 			startWorld[0]!,
 			startWorld[1]!,
 			startWorld[2]! + 1.5
@@ -189,8 +189,8 @@ describe('camera-gizmo-adapter — authored node sessions', () => {
 		const node = store.document.navigationNodes[0]!;
 		expect(store.selectionActions.selectNavigationNode(node.id)).toBe(true);
 
-		const startEyeWorld = store.rooms.point(node.roomId, node.position);
-		const startTargetWorld = store.rooms.point(node.roomId, node.cameraTarget);
+		const startEyeWorld = store.rooms.point(node.roomId!, node.position);
+		const startTargetWorld = store.rooms.point(node.roomId!, node.cameraTarget);
 		const root = makeRoot(startEyeWorld);
 		store.registerCameraHelperRoot(node.id, 'position', root);
 
@@ -215,7 +215,7 @@ describe('camera-gizmo-adapter — authored node sessions', () => {
 			expectedEye.y + offset.y,
 			expectedEye.z - offset.x
 		);
-		const previewedWorld = store.rooms.point(node.roomId, previewed.cameraTarget);
+		const previewedWorld = store.rooms.point(node.roomId!, previewed.cameraTarget);
 		expect(previewedWorld[0]!).toBeCloseTo(expected.x);
 		expect(previewedWorld[1]!).toBeCloseTo(expected.y);
 		expect(previewedWorld[2]!).toBeCloseTo(expected.z);
@@ -234,7 +234,7 @@ describe('camera-gizmo-adapter — authored node sessions', () => {
 		const originalTarget = [...node.cameraTarget] as Vec3;
 		expect(store.selectionActions.selectNavigationNode(node.id)).toBe(true);
 
-		const startEyeWorld = store.rooms.point(node.roomId, node.position);
+		const startEyeWorld = store.rooms.point(node.roomId!, node.position);
 		const root = makeRoot(startEyeWorld);
 		store.registerCameraHelperRoot(node.id, 'position', root);
 
@@ -267,7 +267,7 @@ describe('camera-gizmo-adapter — authored node sessions', () => {
 		const originalPosition = [...node.position] as Vec3;
 		expect(store.selectionActions.selectNavigationNode(node.id)).toBe(true);
 
-		const startWorld = store.rooms.point(node.roomId, originalPosition);
+		const startWorld = store.rooms.point(node.roomId!, originalPosition);
 		const root = makeRoot(startWorld);
 		store.registerCameraHelperRoot(node.id, 'position', root);
 
@@ -400,7 +400,7 @@ describe('camera-gizmo-adapter — anchor and view-target epsilon no-ops', () =>
 		expect(
 			store.selectCameraTimelineViewKeyframe(connection.id, 'forward', keyframeId)
 		).toBe(true);
-		const roomId = store.document.navigationNodes[0]!.roomId;
+		const roomId = store.document.navigationNodes[0]!.roomId!;
 		const startLocal = [...store.selectedViewKeyframe!.cameraTarget] as Vec3;
 		const start = store.rooms.point(roomId, startLocal);
 		const root = makeRoot(start);

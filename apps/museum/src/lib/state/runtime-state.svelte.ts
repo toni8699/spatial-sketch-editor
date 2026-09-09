@@ -22,8 +22,13 @@ export class RuntimeStateStore {
     const initialNode = initialNodeId === null ? undefined : graph.nodeById.get(initialNodeId);
     if (initialNode) {
       this.activeNodeId = initialNode.id;
-      this.currentRoomId = initialNode.roomId;
-      this.visitedRoomIds = new Set([initialNode.roomId]);
+      // P23.0b: world-local nodes carry no roomId — room tracking stays
+      // unchanged; legacy room-owned nodes behave exactly as before.
+      this.currentRoomId = initialNode.roomId ?? this.currentRoomId;
+      this.visitedRoomIds =
+        initialNode.roomId === undefined
+          ? this.visitedRoomIds
+          : new Set([initialNode.roomId]);
     } else {
       // zero-node policy: a scene with no navigation nodes is a valid
       // authoring state. The session-only free camera owns the viewport and
@@ -58,7 +63,10 @@ export class RuntimeStateStore {
     if (this.tourMode === 'free') return true;
     if (nodeId === this.activeNode.nextNodeId) return true;
     if (nodeId !== this.activeNode.previousNodeId) return false;
-    return this.visitedRoomIds.has(getNode(nodeId, this.graph).roomId);
+    // P23.0b: world-local nodes carry no room gate — back navigation is
+    // allowed; legacy visited-room gating is unchanged.
+    const nextRoomId = getNode(nodeId, this.graph).roomId;
+    return nextRoomId === undefined || this.visitedRoomIds.has(nextRoomId);
   }
 
   requestNode(nodeId: string) {
@@ -73,10 +81,13 @@ export class RuntimeStateStore {
   completeTransition(nodeId: string) {
     const next = getNode(nodeId, this.graph);
     this.activeNodeId = nodeId;
-    this.currentRoomId = next.roomId;
+    this.currentRoomId = next.roomId ?? this.currentRoomId;
     this.targetNodeId = null;
     this.isTransitioning = false;
-    this.visitedRoomIds = new Set([...this.visitedRoomIds, next.roomId]);
+    this.visitedRoomIds =
+      next.roomId === undefined
+        ? this.visitedRoomIds
+        : new Set([...this.visitedRoomIds, next.roomId]);
   }
 
   goNext() {

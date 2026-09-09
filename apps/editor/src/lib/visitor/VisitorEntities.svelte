@@ -31,13 +31,16 @@
 	} = $props();
 
 	const roomGroups = $derived.by(() => {
-		const entitiesByRoom = new Map<string, SceneEntity[]>();
+		const entitiesByRoom = new Map<string | undefined, SceneEntity[]>();
 		for (const entity of scene.entities) {
 			const entities = entitiesByRoom.get(entity.roomId) ?? [];
 			entities.push(entity);
 			entitiesByRoom.set(entity.roomId, entities);
 		}
 		return [...entitiesByRoom].map(([roomId, entities]) => {
+			// P23.0b: absent roomId is the world-local identity frame — entities
+			// are already project/world space and render without a room transform.
+			if (roomId === undefined) return { room: null, entities };
 			let room;
 			try {
 				room = rooms.getRequired(roomId);
@@ -46,7 +49,7 @@
 			}
 			return { room, entities };
 		}).filter((group) => group !== null) as Array<{
-			room: ReturnType<LayoutRoomRegistry['getRequired']>;
+			room: ReturnType<LayoutRoomRegistry['getRequired']> | null;
 			entities: SceneEntity[];
 		}>;
 	});
@@ -67,8 +70,8 @@
 	}
 </script>
 
-{#each roomGroups as group (group.room.id)}
-	<T.Group position={group.room.position} rotation={group.room.rotation}>
+{#each roomGroups as group (group.room?.id ?? '__world__')}
+	<T.Group position={group.room?.position ?? [0, 0, 0]} rotation={group.room?.rotation ?? [0, 0, 0]}>
 		{#each group.entities as entity (entity.id)}
 			{#if isSceneModelEntity(entity)}
 				<AssetModel

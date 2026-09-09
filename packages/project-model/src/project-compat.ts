@@ -1,68 +1,92 @@
 /**
- * `project-compat.ts` — P23.0a explicit Project-level compatible decode.
+ * `project-compat.ts` — P23.0b explicit Project-level compatible decode.
  *
  * Combines the Layout and Scene format identification boundaries into one
  * decode result for a whole saved Project (`{ id, name, layout, scene }`).
  * The Project root itself does **not** carry a second schema number: nested
  * Layout/Scene compatibility is delegated to their shared decoders (H5 §10.1).
  *
- * Target result shape (P23.0 child plan, "Compatible decode result"):
+ * Decode matrix (P23.0 child plan, "Compatible decode result"):
  *
- * ```ts
- * type CompatibleProjectDecode =
- *   | { kind: 'wall-first'; ...; sceneSpace: 'project-world' }
- *   | { kind: 'migrated'; ...; report: MigrationReport; sceneSpace: 'project-world' }
- *   | { kind: 'legacy-compatible'; ...; report; sceneSpace: 'legacy-room-local' };
+ * ```text
+ * legacy layout + legacy scene   → migrated (lossless) | legacy-compatible
+ *                                  (migration rejected → read-only compat,
+ *                                  diagnostics in the report)
+ * legacy layout + world scene    → migrated   (scene is already world-local;
+ *                                  only the Layout converts)
+ * wall-first layout + legacy scene → unrecognized
+ *                                  (`missing-legacy-room-frame-context`:
+ *                                  a wall-first project no longer carries
+ *                                  the Room frames that give legacy
+ *                                  room-local Scene values meaning — H5
+ *                                  provenance rules, never guessed)
+ * wall-first layout + world scene → wall-first (direct canonical decode)
+ * mixed unrecognized either side → named per-side rejection
  * ```
  *
- * P23.0a scaffolding status, mapped onto that contract:
- *
- * - `wall-first` requires **both** documents wall-first/world-local. The
- *   world-local Scene decoder does not exist until P23.0b, so today this
- *   result is unreachable for real payloads and is therefore not produced.
- * - `migrated` is produced by P23.0b once legacy migration (P23.8 topology
- *   middle + trusted Room-frame conversion) exists. Not produced today.
- * - `legacy-compatible` is the only reachable project-level success: both
- *   documents decode as the recognized legacy shapes. The `report` is empty
- *   at this stage (pure identification; no conversion is attempted), and
- *   `sceneSpace: 'legacy-room-local'` tells downstream runtime preparation to
- *   resolve Scene/Camera values through Room frames exactly once.
- *
- * The decode is explicit on failure: a mixed payload (one document new, one
- * legacy) names the offending document instead of guessing.
+ * `migrated` results carry the full migration report (wall/opening/room
+ * lineage + diagnostics); runtime preparation consumes `sceneSpace` to know
+ * whether Scene values still require Room-frame resolution.
  */
-import type { LayoutDocument } from '@portfolio/layout-core';
 import {
 	decodeLayoutValueCompatible,
-	type CompatibleLayoutDecode
+	migrateLegacyLayoutDocument,
+	type CompatibleLayoutDecode,
+	type LayoutDocument,
+	type LayoutDocumentWallFirst,
+	type LegacyLayoutMigrationReport
 } from '@portfolio/layout-core';
 import type { ProjectIssue } from './project-types';
 import { identifySceneFormat, type SceneFormatIdentification } from './scene-format';
+import { convertSceneDocumentToWorldLocal } from './scene-world-conversion';
+import { createLayoutRoomRegistry } from './project-layout-semantics';
 import type { SceneDocument } from './scene';
+
+/** Project payload shape shared by every success variant. */
+export type CompatibleProjectPayload = {
+	id: string;
+	name: string;
+	/** Canonical wall-first Layout (decoded directly or migrated). */
+	layout: LayoutDocumentWallFirst;
+	/** Canonical world-local Scene (decoded directly or converted). */
+	scene: SceneDocument;
+};
+
+export type WallFirstProjectDecode = {
+	kind: 'wall-first';
+	project: CompatibleProjectPayload;
+	sceneSpace: 'project-world';
+};
+
+export type MigratedProjectDecode = {
+	kind: 'migrated';
+	project: CompatibleProjectPayload;
+	report: ProjectMigrationReport;
+	sceneSpace: 'project-world';
+};
 
 export type LegacyCompatibleProjectDecode = {
 	kind: 'legacy-compatible';
 	project: {
 		id: string;
 		name: string;
-		/**
-		 * Legacy Room-owned Layout document. Kept as the legacy shape; P23.0b
-		 * owns migrating it to wall-first before editable install.
-		 */
+		/** Legacy Room-owned Layout document, kept as decoded. */
 		layout: LayoutDocument;
-		/**
-		 * Legacy room-local Scene document. P23.0b owns migrating physical
-		 * values to project/world space; until then runtime preparation
-		 * resolves Room frames exactly once.
-		 */
+		/** Scene document as decoded (legacy room-local or already world-local). */
 		scene: SceneDocument;
 	};
 	/**
-		 * Empty at the P23.0a stage: identification only, no migration attempted.
-		 * P23.0b fills this with real migration diagnostics.
-		 */
-	report: ProjectDecodeReport;
-	sceneSpace: 'legacy-room-local';
+	 * Migration was attempted and rejected; the project stays on the
+	 * read-only compatibility path with the diagnostics that name why.
+	 */
+	report: ProjectMigrationReport;
+	/**
+	 * The Scene document's coordinate space. Usually `legacy-room-local`
+	 * (the classic legacy-compatible project); `project-world` occurs when a
+	 * legacy Layout could not migrate but the Scene was already world-local.
+	 * Runtime preparation branches on this exactly once.
+	 */
+	sceneSpace: 'legacy-room-local' | 'project-world';
 };
 
 export type UnrecognizedProjectDecode = {
@@ -73,21 +97,32 @@ export type UnrecognizedProjectDecode = {
 		| 'invalid-name'
 		| 'layout-unrecognized'
 		| 'scene-unrecognized'
-		| 'mixed-format-unsupported';
+		| 'mixed-format-unsupported'
+		| 'missing-legacy-room-frame-context';
 	issues: ProjectIssue[];
 };
 
 /**
- * Explicit compatible-decode result. Only the reachable P23.0a outcomes are
- * modeled; `wall-first` and `migrated` are intentionally absent until their
- * decoders exist (P23.0b) so callers cannot mistake scaffolding for a
- * migration path.
+ * Explicit compatible-decode result. Every generation pair has exactly one
+ * named outcome; downstream runtime preparation branches once on
+ * `sceneSpace` (never re-derives format state from field shapes).
  */
-export type CompatibleProjectDecode = LegacyCompatibleProjectDecode | UnrecognizedProjectDecode;
+export type CompatibleProjectDecode =
+	| WallFirstProjectDecode
+	| MigratedProjectDecode
+	| LegacyCompatibleProjectDecode
+	| UnrecognizedProjectDecode;
 
 /** Deterministic migration/identification diagnostics. Not persisted truth. */
 export type ProjectDecodeReport = {
 	issues: ProjectIssue[];
+};
+
+/** Full migration report for `migrated` / `legacy-compatible` results. */
+export type ProjectMigrationReport = {
+	issues: ProjectIssue[];
+	/** Present when Layout migration was attempted (success or rejection). */
+	layout?: LegacyLayoutMigrationReport;
 };
 
 const ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
@@ -159,21 +194,6 @@ export function decodeProjectCompatible(input: unknown): CompatibleProjectDecode
 	const layout = decodeLayoutValueCompatible(record.layout);
 	const scene = identifySceneFormat(record.scene);
 
-	// Both legacy → the only reachable P23.0a success.
-	if (layout.kind === 'legacy' && scene.kind === 'recognized-legacy') {
-		return {
-			kind: 'legacy-compatible',
-			project: {
-				id,
-				name,
-				layout: layout.document,
-				scene: scene.document
-			},
-			report: { issues: [] },
-			sceneSpace: 'legacy-room-local'
-		};
-	}
-
 	if (layout.kind === 'unrecognized') {
 		return {
 			kind: 'unrecognized',
@@ -188,9 +208,98 @@ export function decodeProjectCompatible(input: unknown): CompatibleProjectDecode
 			issues: scene.issues.map((issue) => prefixIssue('$.scene', issue))
 		};
 	}
-	// Remaining combinations pair a wall-first Layout with the legacy Scene
-	// shape (or vice versa); no migration path exists until P23.0b, so name
-	// the mismatch instead of half-decoding.
+
+	// --- wall-first layout + world-local scene: direct canonical decode -----
+	if (layout.kind === 'wall-first' && scene.kind === 'world-local') {
+		return {
+			kind: 'wall-first',
+			project: { id, name, layout: layout.document, scene: scene.document },
+			sceneSpace: 'project-world'
+		};
+	}
+
+	// --- wall-first layout + legacy scene: untrustworthy frame context ------
+	// A wall-first Layout no longer carries the Room frames that give legacy
+	// room-local Scene values meaning. H5 provenance rules forbid guessing
+	// (no ID matching, no identity transforms); a future explicit
+	// user-supplied frame mapping import UI is the only sanctioned path.
+	if (layout.kind === 'wall-first' && scene.kind === 'recognized-legacy') {
+		return {
+			kind: 'unrecognized',
+			reason: 'missing-legacy-room-frame-context',
+			issues: [
+				{
+					path: '$.scene',
+					code: 'missing_legacy_room_frame_context',
+					message:
+						'Legacy room-local Scene values cannot be converted against a wall-first Layout: the source Room frames are not carried by this payload and must not be guessed'
+				}
+			]
+		};
+	}
+
+	// --- legacy layout: migrate (scene may be legacy or already world) ------
+	if (layout.kind === 'legacy') {
+		const migration = migrateLegacyLayoutDocument(layout.document);
+		if (migration.kind === 'rejected') {
+			// Compatibility path: keep both legacy documents as decoded, name
+			// the rejection, stay read-only (P23.0 "Read-only legacy
+			// compatibility path").
+			return {
+				kind: 'legacy-compatible',
+				project: {
+					id,
+					name,
+					layout: layout.document,
+					scene: scene.document
+				},
+				report: {
+					issues: migration.issues.map((issue) => prefixIssue('$.layout', issue))
+				},
+				sceneSpace:
+					scene.kind === 'recognized-legacy' ? ('legacy-room-local' as const) : ('project-world' as const)
+			};
+		}
+		if (scene.kind === 'recognized-legacy') {
+			// Scene conversion happens against the *trusted legacy* registry —
+			// built from the pre-migration legacy Layout (H5 provenance rule 1),
+			// before Room frames stop being authoritative.
+			const registry = createLayoutRoomRegistry(layout.document);
+			const worldScene = convertSceneDocumentToWorldLocal(scene.document, registry);
+			return {
+				kind: 'migrated',
+				project: {
+					id,
+					name,
+					layout: migration.document,
+					scene: worldScene
+				},
+				report: {
+					issues: [],
+					layout: migration.report
+				},
+				sceneSpace: 'project-world'
+			};
+		}
+		// Legacy layout + already world-local scene: Layout migrates, scene
+		// passes through untouched.
+		return {
+			kind: 'migrated',
+			project: {
+				id,
+				name,
+				layout: migration.document,
+				scene: scene.document
+			},
+			report: {
+				issues: [],
+				layout: migration.report
+			},
+			sceneSpace: 'project-world'
+		};
+	}
+
+	// Exhaustiveness: every layout/scene pairing is handled above.
 	return {
 		kind: 'unrecognized',
 		reason: 'mixed-format-unsupported',
@@ -198,8 +307,7 @@ export function decodeProjectCompatible(input: unknown): CompatibleProjectDecode
 			{
 				path: '$',
 				code: 'mixed_format_unsupported',
-				message:
-					'Project documents use different format generations; mixed Layout/Scene formats are not decodable until P23.0b migration lands'
+				message: 'Project documents use an unsupported format pairing'
 			}
 		]
 	};

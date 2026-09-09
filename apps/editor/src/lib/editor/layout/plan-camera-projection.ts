@@ -194,7 +194,7 @@ export function buildPlanCameraAuthoringProjection(
 	}
 
 	for (const node of document.navigationNodes) {
-		const world = rooms.point(node.roomId, node.position);
+		const world = rooms.pointInFrame(node.roomId, node.position);
 		const point: LayoutVec2 = [world[0], world[2]];
 		const order = orderByNodeId.get(node.id) ?? null;
 		nodes.push({

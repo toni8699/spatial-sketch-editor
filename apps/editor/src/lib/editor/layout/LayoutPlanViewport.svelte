@@ -344,15 +344,20 @@
 		if (!primaryId) return null;
 		const entity = scene.entities.find((candidate) => candidate.id === primaryId);
 		const footprint = sceneProjection?.footprints.find((candidate) => candidate.entityId === primaryId);
-		const room = entity ? sceneRooms.get(entity.roomId) : undefined;
-		if (!entity || !footprint || !room) return null;
+		// P23.0b: world-local entities have no room context — only legacy
+		// room-owned entities require a resolvable room here.
+		const room =
+			entity?.roomId !== undefined ? sceneRooms.get(entity.roomId) : undefined;
+		if (!entity || !footprint || (entity.roomId !== undefined && !room)) return null;
 		const pivot = planSceneWorldPivot(entity, sceneRooms);
 		const footprintRadius = Math.max(
 			...footprint.points.map((point) => distance(point, pivot)),
 			0.2
 		);
 		const radius = footprintRadius + 28 / interaction.planView.pixelsPerMeter;
-		const worldYaw = room.rotation[1] + entity.rotation[1];
+		// Absent roomId means the entity is already world-space: its yaw needs
+		// no room rotation composed in front of it.
+		const worldYaw = (room?.rotation[1] ?? 0) + entity.rotation[1];
 		const handle: LayoutVec2 = [
 			pivot[0] - Math.sin(worldYaw) * radius,
 			pivot[1] - Math.cos(worldYaw) * radius

@@ -50,7 +50,7 @@ function selectPlacementRoots(
 	store: EditorStore,
 	count = 2
 ): { ids: string[]; roots: Mesh[]; roomId: string } {
-	const roomId = store.document.entities[0]!.roomId;
+	const roomId = store.document.entities[0]!.roomId!;
 	const ids = store.document.entities
 		.filter((entity) => entity.roomId === roomId)
 		.slice(0, count)
@@ -113,7 +113,7 @@ describe('scene-gizmo-adapter — resolution and identity', () => {
 		// Selected placements exist, but only one of two roots is mounted —
 		// the adapter refuses the target itself, so no session can ever begin
 		// with a partial set.
-		const roomId = store.document.entities[0]!.roomId;
+		const roomId = store.document.entities[0]!.roomId!;
 		const ids = store.document.entities
 			.filter((entity) => entity.roomId === roomId)
 			.slice(0, 2)
@@ -265,7 +265,7 @@ describe('scene-gizmo-adapter — begin / preview / commit', () => {
 		expect(store.selectionActions.selectPlacement(entity.id)).toBe(true);
 
 		store.keepOnFloor = true;
-		const input = makeInput(store, { scene: makeFloorScene(entity.roomId) });
+		const input = makeInput(store, { scene: makeFloorScene(entity.roomId!) });
 		const adapter = createSceneGizmoAdapter(input)!;
 		adapter.prepare?.();
 		// Single-root prepare pivots on the root's own origin.
@@ -298,7 +298,7 @@ describe('scene-gizmo-adapter — begin / preview / commit', () => {
 		expect(store.selectionActions.selectPlacement(entity.id)).toBe(true);
 
 		store.keepOnFloor = true;
-		const input = makeInput(store, { scene: makeFloorScene(entity.roomId) });
+		const input = makeInput(store, { scene: makeFloorScene(entity.roomId!) });
 		const adapter = createSceneGizmoAdapter(input)!;
 		adapter.prepare?.();
 

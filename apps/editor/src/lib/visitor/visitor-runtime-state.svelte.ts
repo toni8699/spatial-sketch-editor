@@ -28,8 +28,14 @@ export class VisitorRuntimeState {
 			initialNodeId === null ? undefined : graph.nodeById.get(initialNodeId);
 		if (initialNode) {
 			this.activeNodeId = initialNode.id;
-			this.currentRoomId = initialNode.roomId;
-			this.visitedRoomIds = new Set([initialNode.roomId]);
+			// P23.0b: world-local nodes carry no roomId — room tracking stays
+			// unchanged (empty here, the visitor FSM has no room context). Legacy
+			// room-owned nodes behave exactly as before.
+			this.currentRoomId = initialNode.roomId ?? '';
+			this.visitedRoomIds =
+				initialNode.roomId === undefined
+					? new Set<string>()
+					: new Set([initialNode.roomId]);
 		} else {
 			// Zero-node / no-valid-start policy: empty active id, inert FSM.
 			// The surface takes the neutral orbit branch; never `getNode('')`.
@@ -70,7 +76,10 @@ export class VisitorRuntimeState {
 		if (nodeId === active.nextNodeId) return true;
 		if (nodeId !== active.previousNodeId) return false;
 		try {
-			return this.visitedRoomIds.has(getNode(nodeId, this.graph).roomId);
+			// P23.0b: world-local nodes carry no room gate — back navigation is
+			// allowed; legacy visited-room gating is unchanged.
+			const nextRoomId = getNode(nodeId, this.graph).roomId;
+			return nextRoomId === undefined || this.visitedRoomIds.has(nextRoomId);
 		} catch {
 			return false;
 		}
@@ -94,10 +103,13 @@ export class VisitorRuntimeState {
 	completeTransition(nodeId: string) {
 		const next = getNode(nodeId, this.graph);
 		this.activeNodeId = nodeId;
-		this.currentRoomId = next.roomId;
+		this.currentRoomId = next.roomId ?? this.currentRoomId;
 		this.targetNodeId = null;
 		this.isTransitioning = false;
-		this.visitedRoomIds = new Set([...this.visitedRoomIds, next.roomId]);
+		this.visitedRoomIds =
+			next.roomId === undefined
+				? this.visitedRoomIds
+				: new Set([...this.visitedRoomIds, next.roomId]);
 	}
 
 	goNext() {

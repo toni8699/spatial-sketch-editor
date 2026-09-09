@@ -49,7 +49,8 @@ import {
 export function parseNode(
 	input: unknown,
 	path: string,
-	issues: SceneDocumentIssue[]
+	issues: SceneDocumentIssue[],
+	options: { worldLocal: boolean }
 ): SceneNavigationNode | undefined {
 	if (!isRecord(input)) {
 		addIssue(issues, path, 'invalid_type', 'Expected a navigation node object');
@@ -75,7 +76,7 @@ export function parseNode(
 		issues
 	);
 	const id = readRequiredString(input, 'id', path, issues);
-	const roomId = readRoomId(input, 'roomId', path, issues);
+	const roomId = readWorldLocalRoomId(input, path, issues, options);
 	const label = readRequiredString(input, 'label', path, issues);
 	const position = readVec3(input.position, `${path}.position`, issues);
 	const cameraTarget = readVec3(input.cameraTarget, `${path}.cameraTarget`, issues);
@@ -106,7 +107,7 @@ export function parseNode(
 	const holdSeconds = readHoldSeconds(input, 'holdSeconds', path, issues);
 	if (
 		!id ||
-		!roomId ||
+		roomId === undefined ||
 		!label ||
 		!position ||
 		!cameraTarget ||
@@ -119,12 +120,12 @@ export function parseNode(
 	}
 	return {
 		id,
-		roomId,
 		label,
 		position,
 		cameraTarget,
 		fov,
 		connectedNodeIds,
+		...(roomId === undefined ? {} : { roomId }),
 		...(nextNodeId === undefined ? {} : { nextNodeId }),
 		...(previousNodeId === undefined ? {} : { previousNodeId }),
 		...(detourOfNodeId === undefined ? {} : { detourOfNodeId }),
@@ -133,7 +134,24 @@ export function parseNode(
 	};
 }
 
-export function parseWaypoint(
+function readWorldLocalRoomId(
+	input: JsonRecord,
+	path: string,
+	issues: SceneDocumentIssue[],
+	options: { worldLocal: boolean }
+): string | undefined {
+	if (!options.worldLocal) return readRoomId(input, 'roomId', path, issues);
+	if (!('roomId' in input)) return undefined;
+	addIssue(
+		issues,
+		`${path}.roomId`,
+		'room_id_forbidden_in_world_local',
+		'World-local scene documents must not carry roomId; convert legacy records instead'
+	);
+	return undefined;
+}
+
+function parseWaypoint(
 	input: unknown,
 	path: string,
 	issues: SceneDocumentIssue[]

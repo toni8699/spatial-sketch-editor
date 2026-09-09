@@ -225,9 +225,11 @@ export function createCameraGizmoAdapter(
 			store.setTransformInteractionActive(true, 'camera');
 			const startLocalPoint: Vec3 =
 				target.handle === 'position' ? [...node.position] : [...node.cameraTarget];
-			const startWorldEye = new Vector3(...store.rooms.point(node.roomId, node.position));
+			const startWorldEye = new Vector3(
+				...store.rooms.pointInFrame(node.roomId, node.position)
+			);
 			const startWorldTarget = new Vector3(
-				...store.rooms.point(node.roomId, node.cameraTarget)
+				...store.rooms.pointInFrame(node.roomId, node.cameraTarget)
 			);
 			return makeCameraSession(store, {
 				target,
@@ -282,12 +284,11 @@ function previewCameraSession(store: EditorStore, session: CameraDragSession) {
 				orbitCameraTargetAroundEye(store, session, node.roomId)
 			);
 			return;
-		}
-		store.updateNavigationNodePoint(
-			target.nodeId,
-			target.handle,
-			store.rooms.localPoint(node.roomId, world)
-		);
+		}			store.updateNavigationNodePoint(
+				target.nodeId,
+				target.handle,
+				store.rooms.localPointInFrame(node.roomId, world)
+			);
 		return;
 	}
 	if (session.target.kind === 'anchor') {
@@ -381,7 +382,7 @@ function cancelCameraSession(
 function orbitCameraTargetAroundEye(
 	store: EditorStore,
 	session: CameraDragSession,
-	roomId: string
+	roomId: string | undefined
 ): Vec3 {
 	const delta = session.root.quaternion
 		.clone()
@@ -393,5 +394,5 @@ function orbitCameraTargetAroundEye(
 		euler.y,
 		euler.x
 	);
-	return store.rooms.localPoint(roomId, targetWorld);
+	return store.rooms.localPointInFrame(roomId, targetWorld);
 }

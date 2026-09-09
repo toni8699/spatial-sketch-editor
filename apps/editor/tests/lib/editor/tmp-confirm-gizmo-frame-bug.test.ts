@@ -64,7 +64,7 @@ describe('TMP — reviewer finding falsification (camera-node gizmo frame)', () 
 		// tour-b lives in `departure` (frame origin [-17, 0], yaw -90°): local
 		// [0, 1.65, 0] resolves to world [-17, 1.65, 0].
 		const node = store.document.navigationNodes.find((n) => n.id === 'tour-b')!;
-		const trueWorld = store.rooms.point(node.roomId, node.position);
+		const trueWorld = store.rooms.point(node.roomId!, node.position);
 		const authored = store.getRuntimeNavigationNode(node.id)!;
 		expect(distance3(authored.position, trueWorld)).toBeLessThan(1e-6);
 		expect(distance3(authored.position, node.position)).toBeGreaterThan(16);
@@ -73,7 +73,7 @@ describe('TMP — reviewer finding falsification (camera-node gizmo frame)', () 
 	it('component-style helper placement lands exactly on the true camera pose', () => {
 		const store = createFixtureEditorStore();
 		const node = store.document.navigationNodes.find((n) => n.id === 'tour-b')!;
-		const trueWorld = store.rooms.point(node.roomId, node.position);
+		const trueWorld = store.rooms.point(node.roomId!, node.position);
 		const root = placeHelperRootComponentStyle(store, node.id, 'position');
 		expect(distance3(worldOf(root), trueWorld)).toBeLessThan(1e-6);
 	});
@@ -83,7 +83,7 @@ describe('TMP — reviewer finding falsification (camera-node gizmo frame)', () 
 		const node = store.document.navigationNodes.find((n) => n.id === 'tour-b')!;
 		expect(store.selectionActions.selectNavigationNode(node.id)).toBe(true);
 
-		const trueStart = store.rooms.point(node.roomId, node.position);
+		const trueStart = store.rooms.point(node.roomId!, node.position);
 		placeHelperRootComponentStyle(store, node.id, 'position');
 
 		const adapter = createCameraGizmoAdapter({ store })!;
@@ -95,7 +95,7 @@ describe('TMP — reviewer finding falsification (camera-node gizmo frame)', () 
 		session!.commit({ targetKey: adapter.key });
 
 		const committed = store.document.navigationNodes.find((n) => n.id === node.id)!;
-		const newWorld = store.rooms.point(committed.roomId, committed.position);
+		const newWorld = store.rooms.point(committed.roomId!, committed.position);
 		expect(
 			distance3(newWorld, [trueStart[0]! + 1, trueStart[1]!, trueStart[2]!])
 		).toBeLessThan(1e-6);

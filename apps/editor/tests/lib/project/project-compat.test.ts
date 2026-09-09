@@ -26,11 +26,23 @@ describe('scene format identification (P23.0a)', () => {
 		expect(identification.sceneSpace).toBe('legacy-room-local');
 	});
 
-	it('rejects any explicit scene formatVersion until the P23.0b decoder exists', () => {
+	it('decodes the world-local scene shape through the P23.0b decoder', () => {
 		const project = validProject();
 		const identification = identifySceneFormat({
 			...project.scene,
 			formatVersion: 1
+		});
+		expect(identification.kind).toBe('world-local');
+		if (identification.kind !== 'world-local') return;
+		expect(identification.sceneSpace).toBe('project-world');
+		expect(identification.document.formatVersion).toBe(1);
+	});
+
+	it('rejects unsupported scene formatVersion values by name', () => {
+		const project = validProject();
+		const identification = identifySceneFormat({
+			...project.scene,
+			formatVersion: 7
 		});
 		expect(identification.kind).toBe('unrecognized');
 		if (identification.kind !== 'unrecognized') return;
@@ -55,12 +67,122 @@ describe('scene format identification (P23.0a)', () => {
 });
 
 describe('project compatible decode (P23.0a)', () => {
+	it('migrates a floorable legacy project to wall-first layout + world-local scene', () => {
+		const project = validProject();
+		// Give the empty project one floor with a single rectangular room so
+		// migration has the frame context it needs (the empty-project case is
+		// covered by the legacy-compatible test below).
+		const floorable: Project = {
+			...project,
+			layout: {
+				units: 'meters',
+				floors: [
+					{
+						id: 'floor-1',
+						name: 'Floor 1',
+						elevation: 0,
+						height: 3,
+						rooms: [
+							{
+								id: 'room-a',
+								name: 'A',
+								frame: { origin: [0, 0], yaw: 0 },
+								wallThickness: 0.2,
+								floorThickness: 0.1,
+								ceilingThickness: 0.1,
+								boundary: {
+									closed: true,
+									segments: [
+										{ id: 's', kind: 'line', start: [0, 0], end: [4, 0] },
+										{ id: 'e', kind: 'line', start: [4, 0], end: [4, 3] },
+										{ id: 'n', kind: 'line', start: [4, 3], end: [0, 3] },
+										{ id: 'w', kind: 'line', start: [0, 3], end: [0, 0] }
+									]
+								},
+								openings: []
+							}
+						]
+					}
+				],
+				objects: []
+			}
+		};
+		const decoded = decodeProjectCompatible(floorable);
+		expect(decoded.kind).toBe('migrated');
+		if (decoded.kind !== 'migrated') return;
+		expect(decoded.sceneSpace).toBe('project-world');
+		// The layout is now the wall-first shape with the floor descriptor.
+		expect(decoded.project.layout.formatVersion).toBe(4);
+		expect(decoded.project.layout.floor.id).toBe('floor-1');
+		expect(decoded.project.layout.rooms[0]!.id).toBe('room-a');
+		// The scene is world-local (discriminated) with no room-bound entities.
+		expect(decoded.project.scene.formatVersion).toBe(1);
+		expect(decoded.project.scene.entities.every((entity) => entity.roomId === undefined)).toBe(true);
+		// The migration report carries the layout lineage.
+		expect(decoded.report.layout?.roomLineage).toEqual([
+			{ sourceRoomId: 'room-a', targetRoomId: 'room-a' }
+		]);
+		expect(decoded.report.issues).toEqual([]);
+	});
+
+	it('migrates a legacy layout + already-world-local scene (scene passes through)', () => {
+		const project = validProject();
+		const worldScene = { ...project.scene, formatVersion: 1 as const };
+		const floorable: Project = {
+			...project,
+			scene: worldScene,
+			layout: {
+				units: 'meters',
+				floors: [
+					{
+						id: 'floor-1',
+						name: 'Floor 1',
+						elevation: 0,
+						height: 3,
+						rooms: [
+							{
+								id: 'room-a',
+								name: 'A',
+								frame: { origin: [0, 0], yaw: 0 },
+								wallThickness: 0.2,
+								floorThickness: 0.1,
+								ceilingThickness: 0.1,
+								boundary: {
+									closed: true,
+									segments: [
+										{ id: 's', kind: 'line', start: [0, 0], end: [4, 0] },
+										{ id: 'e', kind: 'line', start: [4, 0], end: [4, 3] },
+										{ id: 'n', kind: 'line', start: [4, 3], end: [0, 3] },
+										{ id: 'w', kind: 'line', start: [0, 3], end: [0, 0] }
+									]
+								},
+								openings: []
+							}
+						]
+					}
+				],
+				objects: []
+			}
+		};
+		const decoded = decodeProjectCompatible(floorable);
+		expect(decoded.kind).toBe('migrated');
+		if (decoded.kind !== 'migrated') return;
+		// The world-local scene passes through the canonical decoder (deep-equal
+		// value; the decoder owns its canonical copy).
+		expect(decoded.project.scene).toStrictEqual(worldScene);
+	});
+
 	it('decodes a valid legacy project as legacy-compatible with room-local sceneSpace', () => {
 		const decoded = decodeProjectCompatible(validProject());
 		expect(decoded.kind).toBe('legacy-compatible');
 		if (decoded.kind !== 'legacy-compatible') return;
 		expect(decoded.sceneSpace).toBe('legacy-room-local');
-		expect(decoded.report.issues).toEqual([]);
+		// A floorless empty project cannot migrate (the wall-first schema
+		// requires a floor descriptor the payload does not carry) — the
+		// diagnostic names it and the project stays on the read-only path.
+		expect(decoded.report.issues).toEqual([
+			expect.objectContaining({ path: '$.layout.floors', code: 'missing_floor' })
+		]);
 		expect(decoded.project.id).toBe('project-test');
 	});
 
@@ -74,13 +196,14 @@ describe('project compatible decode (P23.0a)', () => {
 		expect(decoded.kind).toBe('legacy-compatible');
 	});
 
-	it('rejects mixed generations by name', () => {
+	it('rejects wall-first layout + legacy scene with the dedicated missing-frame-context diagnostic', () => {
 		const project = validProject();
 		const mixed = {
 			...project,
 			layout: {
 				units: 'meters',
 				formatVersion: 4,
+				floor: { id: 'floor', name: 'Floor', elevation: 0, height: 3 },
 				junctions: [],
 				walls: [],
 				rooms: [],
@@ -91,7 +214,8 @@ describe('project compatible decode (P23.0a)', () => {
 		const decoded = decodeProjectCompatible(mixed);
 		expect(decoded.kind).toBe('unrecognized');
 		if (decoded.kind !== 'unrecognized') return;
-		expect(decoded.reason).toBe('mixed-format-unsupported');
+		expect(decoded.reason).toBe('missing-legacy-room-frame-context');
+		expect(decoded.issues[0]!.code).toBe('missing_legacy_room_frame_context');
 	});
 
 	it('prefixes layout identification failures at their project path', () => {

@@ -193,7 +193,7 @@ describe('TMP — camera gizmo pointer pipeline (real TransformControls)', () =>
 		// Move the gizmo and release: the proxy follows, and the session write
 		// path moves the node in world space along the dragged handle.
 		const before = store.rooms.point(
-			node.roomId,
+			node.roomId!,
 			store.document.navigationNodes.find((n) => n.id === node.id)!.position
 		);
 		const proxyBefore = root.position.clone();
@@ -205,7 +205,7 @@ describe('TMP — camera gizmo pointer pipeline (real TransformControls)', () =>
 		expect(root.position.distanceTo(proxyBefore)).toBeGreaterThan(0);
 
 		const after = store.rooms.point(
-			node.roomId,
+			node.roomId!,
 			store.document.navigationNodes.find((n) => n.id === node.id)!.position
 		);
 		// The session write path works end-to-end: the drag moved the node in

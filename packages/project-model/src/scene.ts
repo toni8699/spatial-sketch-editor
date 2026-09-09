@@ -48,7 +48,13 @@ export const CAMERA_EASING: readonly CameraEasing[] = [
 
 export type NavigationNodeData = {
   id: string;
-  roomId: string;
+  /**
+   * Room ownership is legacy-room-local machinery. World-local (P23.0b
+   * migrated) documents leave it absent; absent means `position` and
+   * `cameraTarget` are already project/world coordinates and must never be
+   * resolved through a Room frame again.
+   */
+  roomId?: string;
   label: string;
   position: Vec3;
   cameraTarget: Vec3;
@@ -130,13 +136,14 @@ export type SceneObjectPlacement = {
   position: Vec3;
   rotation: Vec3;
   scale?: number;
-  roomId: RoomId;
+  roomId?: RoomId;
 };
 
 export type SceneObjectCluster = {
   id: string;
   name: string;
-  roomId: RoomId;
+  /** Absent in world-local documents (cluster carries no spatial frame). */
+  roomId?: RoomId;
   memberIds: string[];
 };
 
@@ -167,7 +174,13 @@ export type SceneEntityTransform = {
 export type SceneEntityBase = SceneEntityTransform & {
   id: string;
   name: string;
-  roomId: RoomId;
+  /**
+   * Room ownership is legacy-room-local machinery. World-local (P23.0b
+   * migrated) documents leave it absent; absent means `position` and
+   * `rotation` are already project/world coordinates and must never be
+   * resolved through a Room frame again.
+   */
+  roomId?: RoomId;
 };
 
 export type SceneRenderableEntityBase = SceneEntityBase & {
@@ -273,9 +286,9 @@ export type SceneNavigationNode = Omit<
   NavigationNodeData,
   'position' | 'cameraTarget'
 > & {
-  /** Room-local eye position. */
+  /** Room-local eye position (legacy) or world position (absent roomId). */
   position: Vec3;
-  /** Room-local look target. */
+  /** Room-local look target (legacy) or world target (absent roomId). */
   cameraTarget: Vec3;
 };
 
@@ -363,7 +376,13 @@ export type SceneConnection = Omit<
 };
 
 /**
- * Authoring-empty scene document: the editor boots into this state before the
+ * P23.0b world-local Scene format discriminator. Present (value `1`) only on
+ * Scene documents whose physical values are project/world coordinates;
+ * recognized legacy documents carry no `formatVersion` at all.
+ */
+export const SCENE_WORLD_LOCAL_FORMAT_VERSION = 1 as const;
+
+/** Authoring-empty scene document: the editor boots into this state before the
  * first entity, navigation node, or connection is authored. It is a valid
  * document — the runtime tour/preview guards a blank project separately, so a
  * project with no navigation graph cannot start a broken tour.
@@ -379,6 +398,12 @@ export function createEmptySceneDocument(): SceneDocument {
 }
 
 export type SceneDocument = {
+  /**
+   * P23.0b format discriminator. Absent on recognized legacy (room-local)
+   * documents; `1` on world-local documents whose physical values must never
+   * be resolved through Room frames again.
+   */
+  formatVersion?: typeof SCENE_WORLD_LOCAL_FORMAT_VERSION;
   textures: SceneTextureAsset[];
   materials: SceneMaterialInstance[];
   entities: SceneEntity[];
@@ -532,7 +557,6 @@ function resolveWaypoint(waypoint: SceneWaypoint, rooms: SceneRoomResolver): Vec
     ? rooms.point(waypoint.roomId, waypoint.position)
     : cloneVec3(waypoint.position);
 }
-
 function resolveViewKeyframe(
   keyframe: SceneCameraViewKeyframe,
   rooms: SceneRoomResolver
@@ -560,8 +584,13 @@ export function resolveSceneDocument(
 
   const navigationNodes = document.navigationNodes.map((node): NavigationNodeData => ({
     ...node,
-    position: rooms.point(node.roomId, node.position),
-    cameraTarget: rooms.point(node.roomId, node.cameraTarget),
+    // P23.0b: room-owned records resolve through the legacy Room frame;
+    // records without roomId are already world-local and pass through
+    // unchanged (never a second Room transform).
+    position: node.roomId ? rooms.point(node.roomId, node.position) : cloneVec3(node.position),
+    cameraTarget: node.roomId
+      ? rooms.point(node.roomId, node.cameraTarget)
+      : cloneVec3(node.cameraTarget),
     connectedNodeIds: [...node.connectedNodeIds],
     ...(node.holdSeconds === undefined ? {} : { holdSeconds: node.holdSeconds })
   }));

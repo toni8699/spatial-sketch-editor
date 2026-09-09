@@ -274,7 +274,7 @@
 		const clusterId = store.createCluster();
 		if (!clusterId) return;
 		const cluster = store.selectedCluster;
-		if (cluster) store.ensureRoomTreeExpanded(cluster.roomId);
+		if (cluster?.roomId !== undefined) store.ensureRoomTreeExpanded(cluster.roomId);
 		store.ensureClusterTreeExpanded(clusterId);
 		store.focusSelection();
 		await tick();

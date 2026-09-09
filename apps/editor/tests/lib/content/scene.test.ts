@@ -133,15 +133,15 @@ describe('resolveSceneDocument', () => {
 
 		for (const [index, node] of document.navigationNodes.entries()) {
 			expect(resolved.navigationNodes[index].position).toEqual(
-				roomPoint(node.roomId, node.position)
+				roomPoint(node.roomId!, node.position)
 			);
 			expect(resolved.navigationNodes[index].cameraTarget).toEqual(
-				roomPoint(node.roomId, node.cameraTarget)
+				roomPoint(node.roomId!, node.cameraTarget)
 			);
 		}
 
 		for (const object of resolved.objects) {
-			expect(() => getRoom(object.roomId)).not.toThrow();
+			expect(() => getRoom(object.roomId!)).not.toThrow();
 			expect(object.position).toEqual(
 				document.entities.find((candidate) => candidate.id === object.id)?.position
 			);

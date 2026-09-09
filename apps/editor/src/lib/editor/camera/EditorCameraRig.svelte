@@ -136,8 +136,8 @@
 		) {
 			const node = store.selectedNavigationNode;
 			if (!node) return;
-			previewPosition.set(...store.rooms.point(node.roomId, node.position));
-			previewTarget.set(...store.rooms.point(node.roomId, node.cameraTarget));
+			previewPosition.set(...store.rooms.pointInFrame(node.roomId, node.position));
+			previewTarget.set(...store.rooms.pointInFrame(node.roomId, node.cameraTarget));
 			previewSample.fov = node.fov;
 			return;
 		}
