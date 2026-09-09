@@ -93,16 +93,17 @@ export type CompilerFloorEntry = {
 
 /** Legacy compiler source: identity mapping onto the shared core. */
 export function legacyCompilerSource(document: LayoutDocument): CompilerSource {
-	const floors: CompilerFloorEntry[] = document.floors.length === 0
-		? [{ floor: { id: 'floor', elevation: 0, height: 3 }, rooms: [] }]
-		: document.floors.map((floor) => ({
-				floor,
-				rooms: floor.rooms.map((room) => ({
-					room,
-					boundary: room.boundary,
-					openings: room.openings
-				}))
-			}));
+	// Identity mapping with no placeholder: an empty-floors document compiles
+	// to zero floors, exactly as the pre-cutover per-floor loop did (review
+	// round 1 nit).
+	const floors: CompilerFloorEntry[] = document.floors.map((floor) => ({
+		floor,
+		rooms: floor.rooms.map((room) => ({
+			room,
+			boundary: room.boundary,
+			openings: room.openings
+		}))
+	}));
 	return { floors, objects: document.objects };
 }
 
@@ -132,7 +133,8 @@ export function compileWallFirstLayoutGeometry(
 	const wallThicknessBySegmentId: Record<string, number> = {};
 	for (const wall of document.walls) wallThicknessBySegmentId[wall.id] = wall.thickness;
 
-	const rooms: CompilerRoomSource[] = document.rooms.map((room) => {		const segments: DraftSegment[] = [];
+	const rooms: CompilerRoomSource[] = document.rooms.map((room) => {
+		const segments: DraftSegment[] = [];
 		const roomOpenings: CompilerOpening[] = [];
 		for (const ref of room.boundary) {
 			const wall = wallById.get(ref.wallId);

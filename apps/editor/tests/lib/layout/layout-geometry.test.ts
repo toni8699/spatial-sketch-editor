@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { chopinProject } from '$lib/content/chopin-project';
 import { compileLayoutGeometry } from '$lib/layout/layout-geometry';
+import type { LayoutDocument } from '$lib/layout/layout-types';
 import {
 	g1AutoBezierDocument,
 	g1DocumentWithRooms,
@@ -309,5 +310,17 @@ describe('compileLayoutGeometry', () => {
 		for (const issue of issues) {
 			expect(issue.path.startsWith('floors[1].rooms[1]')).toBe(true);
 		}
+	});
+
+	// Review round 1 nit: an empty-floors document must compile to zero
+	// floors — exactly what the pre-cutover per-floor loop produced — with
+	// no placeholder floor materialized.
+	it('compiles an empty-floors document to zero floors (pre-cutover parity)', () => {
+		const empty: LayoutDocument = { units: 'meters', floors: [], objects: [] };
+		const { geometry, issues } = compileLayoutGeometry(empty);
+		expect(issues).toEqual([]);
+		expect(geometry.floors).toEqual([]);
+		expect(geometry.rooms).toEqual([]);
+		expect(geometry.bounds).toBeNull();
 	});
 });
