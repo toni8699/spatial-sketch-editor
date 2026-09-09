@@ -12,6 +12,14 @@ import {
 	type ScenePrimitiveKind
 } from '$lib/content/scene';
 import type { LayoutRoomRegistry } from '$lib/project/project-layout-semantics';
+import {
+	classifyLayoutFormat,
+	classifySceneFormat,
+	LAYOUT_MUTATION_POLICY,
+	SCENE_MUTATION_POLICY,
+	type LayoutFormatKey,
+	type SceneFormatKey
+} from '$lib/editor/store/document-format-policy.svelte';
 
 import {
 	serializeSceneDocument,
@@ -282,6 +290,22 @@ export class EditorStore {
 	get rooms(): LayoutRoomRegistry {
 		return this.documentStore.rooms;
 	}
+
+	/**
+	 * The live layout document, for the central format-dispatch guard
+	 * (P23.0 F0 stage 1). Empty until the layout preview initializes — an
+	 * empty layout is not authorable, which is the correct refusal.
+	 */
+	private get layoutDocumentForFormatPolicy(): unknown {
+		return this.#layoutFormatPolicySource?.().project.layout ?? null;
+	}
+
+	/** Composition-root hook: point the format guard at the live preview. */
+	setLayoutFormatPolicySource(source: () => { project: { layout: unknown } }): void {
+		this.#layoutFormatPolicySource = source;
+	}
+
+	#layoutFormatPolicySource: (() => { project: { layout: unknown } }) | null = null;
 	/** public read over the private `relicMode` flag. */
 	get isRelic(): boolean {
 		return this.relicMode;
@@ -2791,6 +2815,22 @@ export class EditorStore {
 
 	beginLayoutTransaction(): boolean {
 		if (this.isDocumentMutationBlocked || this.historyController.isDocumentUndoBlocked) return false;
+		// P23.0 F0 stage 1 — central document-format dispatch: the live layout
+		// format must be `adapted` before any layout mutator opens a
+		// transaction. Wall-first/unrecognized layouts refuse here until the
+		// stage-2 canonical writers land. An unregistered source classifies
+		// as legacy (see `layoutDocumentForFormatPolicy`).
+		const layoutFormat: LayoutFormatKey = this.layoutDocumentForFormatPolicy === null
+			? 'legacy'
+			: classifyLayoutFormat(this.layoutDocumentForFormatPolicy);
+		if (LAYOUT_MUTATION_POLICY[layoutFormat] !== 'adapted') {
+			this.setStatusMessage(
+				layoutFormat === 'wall-first'
+					? 'Wall-first layout mutation enables with the canonical writers (P23.0 stage 2)'
+					: 'Unrecognized layout format cannot be authored'
+			);
+			return false;
+		}
 		return this.historyController.beginLayout();
 	}
 
@@ -2814,6 +2854,16 @@ export class EditorStore {
 		if (this.isDocumentMutationBlocked || this.historyController.isDocumentUndoBlocked) {
 			return false;
 		}
+		// P23.0 F0 stage 1 — central document-format dispatch: the candidate
+		// Scene format must be `adapted` before any scene mutator opens a
+		// transaction. Both scene formats are adapted in stage 1 (the P23.0b
+		// adapter audit made every scene mutator world-local aware), so this
+		// guard is behavioral only for future formats.
+		const sceneFormat = classifySceneFormat(this.document);
+		if (SCENE_MUTATION_POLICY[sceneFormat] !== 'adapted') {
+			this.setStatusMessage('This document format is read-only');
+			return false;
+		}
 		return this.historyController.beginDocument();
 	}
 
@@ -2822,6 +2872,13 @@ export class EditorStore {
 			this.isCameraFramingMutationBlocked ||
 			this.historyController.isDocumentUndoBlocked
 		) {
+			return false;
+		}
+		// P23.0 F0 stage 1 — same central format dispatch as scene document
+		// mutations (framing edits are camera/scene-domain writes).
+		const framingFormat = classifySceneFormat(this.document);
+		if (SCENE_MUTATION_POLICY[framingFormat] !== 'adapted') {
+			this.setStatusMessage('This document format is read-only');
 			return false;
 		}
 		return this.historyController.beginFraming();

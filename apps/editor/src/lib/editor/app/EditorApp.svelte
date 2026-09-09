@@ -254,6 +254,11 @@
 		replace: (snapshot) => restoreLayoutPreviewSnapshot(layoutPreview, snapshot as ReturnType<typeof captureLayoutPreviewSnapshot>),
 		matches: (a, b) => JSON.stringify((a as { project: { layout: unknown } }).project.layout) === JSON.stringify((b as { project: { layout: unknown } }).project.layout)
 	});
+	// P23.0 F0 stage 1 — point the central format-dispatch guard at the live
+	// layout preview so `beginLayoutTransaction` classifies the document the
+	// mutators are about to write. Reactive: `$state` proxies make each
+	// guard call read the current `layoutPreview.project.layout`.
+	store.setLayoutFormatPolicySource(() => layoutPreview);
 
 	// keep the store's room registry live: every layout mutation
 	// replaces `layoutPreview.project`, so re-derive the registry from the
