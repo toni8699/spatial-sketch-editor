@@ -292,4 +292,36 @@ describe('face geometry helpers', () => {
 		];
 		expect(polygonIntersectionArea(a, b)).toBe(0);
 	});
+
+	// P23 review round 1: a fully-degenerate boundary graph (every wall is a
+	// dangle) previously kept the unstripped walls as the face graph, so the
+	// walk emitted bogus `zero_area_face` + `boundary_cut_edge` diagnostics
+	// alongside the correct dangle set.
+	it('emits only dangle diagnostics for an all-dangle boundary graph', () => {
+		const allDangle = document(
+			[
+				['j-a', 0, 0],
+				['j-b', 4, 0],
+				['j-c', 8, 0],
+				['j-d', 8, 4],
+				['j-e', 12, 4]
+			],
+			[
+				{ id: 'wall-a', start: 'j-a', end: 'j-b' },
+				{ id: 'wall-b', start: 'j-b', end: 'j-c' },
+				{ id: 'wall-c', start: 'j-c', end: 'j-d' },
+				{ id: 'wall-d', start: 'j-d', end: 'j-e' }
+			]
+		);
+
+		const result = extractBoundaryCandidateFaces(allDangle);
+		expect(result.faces).toEqual([]);
+		expect(new Set(result.danglingWallIds)).toEqual(new Set(['wall-a', 'wall-b', 'wall-c', 'wall-d']));
+		expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+			'boundary_dangle',
+			'boundary_dangle',
+			'boundary_dangle',
+			'boundary_dangle'
+		]);
+	});
 });

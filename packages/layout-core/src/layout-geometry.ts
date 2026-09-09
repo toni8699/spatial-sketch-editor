@@ -80,18 +80,30 @@ export type CompilerFloorSource = Pick<LayoutFloor, 'id' | 'elevation' | 'height
  * generation compiles through the same code path.
  */
 export type CompilerSource = {
+	/** One entry per floor, in document order (P23 review round 1 / B1). */
+	floors: readonly CompilerFloorEntry[];
+	objects: readonly LayoutObject[];
+};
+
+/** One floor's worth of compiler input: the floor frame plus its rooms. */
+export type CompilerFloorEntry = {
 	floor: CompilerFloorSource;
 	rooms: readonly CompilerRoomSource[];
-	objects: readonly LayoutObject[];
 };
 
 /** Legacy compiler source: identity mapping onto the shared core. */
 export function legacyCompilerSource(document: LayoutDocument): CompilerSource {
-	return {
-		floor: document.floors[0] ?? { id: 'floor', name: 'Floor', elevation: 0, height: 3 },
-		rooms: (document.floors[0]?.rooms ?? []).map((room) => ({ room, boundary: room.boundary, openings: room.openings })),
-		objects: document.objects
-	};
+	const floors: CompilerFloorEntry[] = document.floors.length === 0
+		? [{ floor: { id: 'floor', elevation: 0, height: 3 }, rooms: [] }]
+		: document.floors.map((floor) => ({
+				floor,
+				rooms: floor.rooms.map((room) => ({
+					room,
+					boundary: room.boundary,
+					openings: room.openings
+				}))
+			}));
+	return { floors, objects: document.objects };
 }
 
 /**
@@ -120,8 +132,7 @@ export function compileWallFirstLayoutGeometry(
 	const wallThicknessBySegmentId: Record<string, number> = {};
 	for (const wall of document.walls) wallThicknessBySegmentId[wall.id] = wall.thickness;
 
-	const rooms: CompilerRoomSource[] = document.rooms.map((room) => {
-		const segments: DraftSegment[] = [];
+	const rooms: CompilerRoomSource[] = document.rooms.map((room) => {		const segments: DraftSegment[] = [];
 		const roomOpenings: CompilerOpening[] = [];
 		for (const ref of room.boundary) {
 			const wall = wallById.get(ref.wallId);
@@ -175,8 +186,7 @@ export function compileWallFirstLayoutGeometry(
 	});
 
 	return compileLayoutGeometrySource({
-		floor: document.floor,
-		rooms,
+		floors: [{ floor: document.floor, rooms }],
 		objects: document.objects
 	});
 }
@@ -195,14 +205,18 @@ export function compileLayoutGeometrySource(source: CompilerSource): CompiledLay
 
 	const objects = compileObjects(source.objects, issues, queryBuilder);
 
-	const floor = source.floor;
-	{
+	// Per-floor loop (P23 review round 1 / B1): the pre-cutover legacy
+	// compiler iterated every floor; the cutover must not regress that. Each
+	// floor compiles its own rooms with its own elevation frame, and issue
+	// paths stay legacy-identical (`floors[i].rooms[j]`).
+	for (const [floorIndex, floorEntry] of source.floors.entries()) {
+		const floor = floorEntry.floor;
 		const floorRoomIds: string[] = [];
 		let floorMin: Vec3 = [Infinity, Infinity, Infinity];
 		let floorMax: Vec3 = [-Infinity, -Infinity, -Infinity];
 
-		for (const [roomIndex, roomSource] of source.rooms.entries()) {
-			const path = `floors[0].rooms[${roomIndex}]`;
+		for (const [roomIndex, roomSource] of floorEntry.rooms.entries()) {
+			const path = `floors[${floorIndex}].rooms[${roomIndex}]`;
 			const prepared = prepareLayoutRoomSegments(
 				{ id: roomSource.room.id, boundary: roomSource.boundary },
 				path
@@ -231,7 +245,7 @@ export function compileLayoutGeometrySource(source: CompilerSource): CompiledLay
 
 		for (const object of objects) {
 			if (!object.roomId) continue;
-			const owned = source.rooms.some((roomSource) => roomSource.room.id === object.roomId);
+			const owned = floorEntry.rooms.some((roomSource) => roomSource.room.id === object.roomId);
 			if (owned) includeBounds3(floorMin, floorMax, object.worldAabb.min, object.worldAabb.max);
 		}
 

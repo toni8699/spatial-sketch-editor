@@ -130,4 +130,60 @@ describe('typed straight-wall intersection classifier (H3 §8)', () => {
 		const shared = classifyWallIntersection(a, b, ['j-a']);
 		expect(shared).toMatchObject({ kind: 'shared-explicit-junction', junctionId: 'j-a' });
 	});
+
+	// P23 review round 1 / B2: the pre-fix classifier compared the
+	// perpendicular coordinate of a.start vs b.start with exact equality,
+	// which only works for axis-aligned walls — a diagonally collinear pair
+	// was misread as `intersection_numeric_unstable`.
+	it('classifies diagonal collinear overlap (B2 regression)', () => {
+		const a = segment('a', [0, 0], [4, 4]);
+		const b = segment('b', [1, 1], [5, 5]);
+		expect(classifyWallIntersection(a, b)).toEqual({
+			kind: 'collinear-overlap',
+			start: [1, 1],
+			end: [4, 4]
+		});
+	});
+
+	it('classifies diagonal collinear endpoint touch', () => {
+		const a = segment('a', [0, 0], [4, 4]);
+		const b = segment('b', [4, 4], [8, 8]);
+		expect(classifyWallIntersection(a, b)).toEqual({
+			kind: 'collinear-endpoint-touch',
+			point: [4, 4]
+		});
+	});
+
+	it('classifies diagonal collinear disjoint spans as none', () => {
+		const a = segment('a', [0, 0], [4, 4]);
+		const b = segment('b', [5, 5], [8, 8]);
+		expect(classifyWallIntersection(a, b)).toEqual({ kind: 'none' });
+	});
+
+	it('classifies reverse-argument T junctions symmetrically', () => {
+		const stem = segment('stem', [2, 2], [2, 4]);
+		const host = segment('host', [0, 4], [4, 4]);
+		const forward = classifyWallIntersection(stem, host);
+		const reverse = classifyWallIntersection(host, stem);
+		expect(forward).toEqual({
+			kind: 'endpoint-on-interior',
+			endpointWallId: 'stem',
+			interiorWallId: 'host',
+			point: [2, 4]
+		});
+		expect(reverse).toEqual(forward);
+	});
+
+	it('classifies a reversed-argument diagonal T with role fidelity', () => {
+		const stem = segment('stem', [8, 2], [5, 5]);
+		const host = segment('host', [0, 0], [8, 8]);
+		const result = classifyWallIntersection(stem, host);
+		expect(result).toEqual({
+			kind: 'endpoint-on-interior',
+			endpointWallId: 'stem',
+			interiorWallId: 'host',
+			point: [5, 5]
+		});
+		expect(classifyWallIntersection(host, stem)).toEqual(result);
+	});
 });

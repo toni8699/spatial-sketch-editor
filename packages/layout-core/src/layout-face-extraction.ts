@@ -239,8 +239,16 @@ function stripDangles(
 		}
 		return true;
 	});
-	if (dangling.length === 0 || kept.length === 0) {
+	if (dangling.length === 0) {
 		return { faceGraphWalls: [...walls], danglingWallIds: dangling };
+	}
+	if (kept.length === 0) {
+		// Fully degenerate: every boundary wall was stripped, so the working
+		// graph is empty. A tree carries no bounded faces — returning the
+		// unstripped walls here made the face walk emit spurious
+		// `zero_area_face` / `boundary_cut_edge` noise alongside the correct
+		// dangle diagnostics (review round 1).
+		return { faceGraphWalls: [], danglingWallIds: dangling };
 	}
 	// Recurse: stripping a dangle may expose another.
 	const nested = stripDangles(kept, junctionById);

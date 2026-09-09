@@ -505,4 +505,388 @@ describe('Room reconciliation — rejection guards', () => {
 			})
 		});
 	});
+
+	// P23 review round 1: takenNames started empty and allocation saw only
+	// the already-created finalRooms, so a birth during a multi-component
+	// operation could collide with a pre-existing baseline Room id/name.
+	it('seeds allocation with baseline Room ids and names (multi-component collision)', () => {
+		const baseline: LayoutDocumentWallFirst = {
+			...RECT,
+			rooms: [
+				room('room-new-1', 'Room 1', RECT_FACE.boundary.map((ref) => ({ ...ref })))
+			]
+		};
+		const result = reconcileRooms({
+			baseline,
+			candidateDocument: RECT,
+			extraction: extractBoundaryCandidateFaces({ ...RECT, rooms: [] }),
+			components: [{ candidateFaceKeys: [RECT_FACE.key], predecessorRoomIds: [] }],
+			allocator: allocator()
+		});
+		if (!('document' in result)) {
+			throw new Error('expected success');
+		}
+		const created = result.document.rooms.find((candidate) => candidate.id !== 'room-new-1');
+		expect(created).toBeDefined();
+		// Without baseline seeding the allocator would hand back the very id
+		// and name the baseline room already owns.
+		expect(created!.id).not.toBe('room-new-1');
+		expect(created!.name).not.toBe('Room 1');
+	});
+
+	it('keeps allocations distinct across two birth components in one operation', () => {
+		const twoRects = document(
+			[
+				['j-a', 0, 0],
+				['j-b', 6, 0],
+				['j-c', 6, 4],
+				['j-d', 0, 4],
+				['j-e', 20, 0],
+				['j-f', 26, 0],
+				['j-g', 26, 4],
+				['j-h', 20, 4]
+			],
+			[
+				{ id: 'wall-a1', start: 'j-a', end: 'j-b' },
+				{ id: 'wall-a2', start: 'j-b', end: 'j-c' },
+				{ id: 'wall-a3', start: 'j-c', end: 'j-d' },
+				{ id: 'wall-a4', start: 'j-d', end: 'j-a' },
+				{ id: 'wall-b1', start: 'j-e', end: 'j-f' },
+				{ id: 'wall-b2', start: 'j-f', end: 'j-g' },
+				{ id: 'wall-b3', start: 'j-g', end: 'j-h' },
+				{ id: 'wall-b4', start: 'j-h', end: 'j-e' }
+			]
+		);
+		const extraction = extractBoundaryCandidateFaces({ ...twoRects, rooms: [] });
+		expect(extraction.faces).toHaveLength(2);
+		const leftFace = extraction.faces.find((face) =>
+			face.boundary.some((ref) => ref.wallId === 'wall-a1')
+		)!;
+		const rightFace = extraction.faces.find((face) =>
+			face.boundary.some((ref) => ref.wallId === 'wall-b1')
+		)!;
+
+		const result = reconcileRooms({
+			baseline: { ...twoRects, rooms: [] },
+			candidateDocument: twoRects,
+			extraction,
+			components: [
+				{ candidateFaceKeys: [leftFace.key], predecessorRoomIds: [] },
+				{ candidateFaceKeys: [rightFace.key], predecessorRoomIds: [] }
+			],
+			allocator: allocator()
+		});
+		if (!('document' in result)) {
+			throw new Error('expected success');
+		}
+		expect(result.document.rooms).toHaveLength(2);
+		expect(new Set(result.document.rooms.map((candidate) => candidate.id)).size).toBe(2);
+		expect(new Set(result.document.rooms.map((candidate) => candidate.name)).size).toBe(2);
+		expect(result.lineage.every((record) => record.kind === 'created')).toBe(true);
+	});
+
+	it('rejects a predecessor claimed by two components', () => {
+		const baseline: LayoutDocumentWallFirst = {
+			...SPLIT_CANDIDATE,
+			rooms: [
+				room(
+					'room-main',
+					'Main',
+					SPLIT_LEFT_FACE.boundary.map((ref) => ({ ...ref }))
+				)
+			]
+		};
+		const result = reconcileRooms({
+			baseline,
+			candidateDocument: SPLIT_CANDIDATE,
+			extraction: SPLIT_EXTRACTION,
+			components: [
+				{ candidateFaceKeys: [SPLIT_LEFT_FACE.key], predecessorRoomIds: ['room-main'] },
+				{ candidateFaceKeys: [SPLIT_RIGHT_FACE.key], predecessorRoomIds: ['room-main'] }
+			],
+			allocator: allocator()
+		});
+		expect(result).toEqual({
+			kind: 'rejected',
+			rejection: expect.objectContaining({
+				code: 'ambiguous_room_correspondence',
+				roomIds: ['room-main']
+			})
+		});
+	});
+
+	it('rejects when a candidate face is claimed by no component', () => {
+		const baseline: LayoutDocumentWallFirst = {
+			...SPLIT_CANDIDATE,
+			rooms: [
+				room(
+					'room-left',
+					'Left',
+					SPLIT_LEFT_FACE.boundary.map((ref) => ({ ...ref }))
+				),
+				room(
+					'room-right',
+					'Right',
+					SPLIT_RIGHT_FACE.boundary.map((ref) => ({ ...ref }))
+				)
+			]
+		};
+		const result = reconcileRooms({
+			baseline,
+			candidateDocument: SPLIT_CANDIDATE,
+			extraction: SPLIT_EXTRACTION,
+			// Only the left face is claimed; the right face is silently
+			// dropped unless the correspondence is rejected.
+			components: [
+				{ candidateFaceKeys: [SPLIT_LEFT_FACE.key], predecessorRoomIds: ['room-left'] }
+			],
+			allocator: allocator()
+		});
+		expect(result).toEqual({
+			kind: 'rejected',
+			rejection: expect.objectContaining({
+				code: 'unsupported_component',
+				faceKey: SPLIT_RIGHT_FACE.key
+			})
+		});
+	});
+
+	// P23 review round 1 fixture: promoting a partition to boundary and
+	// closing an annex in one operation — identity preserved on the original
+	// room while two births allocate distinct ids/names across components.
+	it('creates Rooms from partition→boundary promotion: preserved room plus two births', () => {
+		const candidate = document(
+			[
+				['j-a', 0, 0],
+				['j-m', 3, 0],
+				['j-b', 6, 0],
+				['j-c', 6, 4],
+				['j-n', 3, 4],
+				['j-d', 0, 4],
+				['j-f', 10, 0],
+				['j-g', 10, 4]
+			],
+			[
+				{ id: 'wall-a1', start: 'j-a', end: 'j-m' },
+				{ id: 'wall-a2', start: 'j-m', end: 'j-b' },
+				{ id: 'wall-b', start: 'j-b', end: 'j-c' },
+				{ id: 'wall-c1', start: 'j-c', end: 'j-n' },
+				{ id: 'wall-c2', start: 'j-n', end: 'j-d' },
+				{ id: 'wall-d', start: 'j-d', end: 'j-a' },
+				{ id: 'wall-e', start: 'j-m', end: 'j-n' },
+				{ id: 'wall-f', start: 'j-b', end: 'j-f' },
+				{ id: 'wall-g', start: 'j-f', end: 'j-g' },
+				{ id: 'wall-h', start: 'j-g', end: 'j-c' }
+			]
+		);
+		const extraction = extractBoundaryCandidateFaces({ ...candidate, rooms: [] });
+		expect(extraction.faces).toHaveLength(3);
+		const faceByWall = (wallId: string) =>
+			extraction.faces.find((face) => face.boundary.some((ref) => ref.wallId === wallId))!;
+		const leftFace = faceByWall('wall-a1');
+		const rightFace = faceByWall('wall-a2');
+		const annexFace = faceByWall('wall-f');
+
+		const baseline: LayoutDocumentWallFirst = {
+			...RECT,
+			rooms: [room('room-main', 'Main', RECT_FACE.boundary.map((ref) => ({ ...ref })))]
+		};
+		const result = reconcileRooms({
+			baseline,
+			candidateDocument: candidate,
+			extraction,
+			components: [
+				{ candidateFaceKeys: [leftFace.key], predecessorRoomIds: ['room-main'] },
+				{ candidateFaceKeys: [rightFace.key], predecessorRoomIds: [] },
+				{ candidateFaceKeys: [annexFace.key], predecessorRoomIds: [] }
+			],
+			predecessorWitnesses: new Map([['room-main', [1, 2]]]),
+			allocator: allocator()
+		});
+		if (!('document' in result)) {
+			throw new Error('expected success');
+		}
+		expect(result.document.rooms).toHaveLength(3);
+		const preserved = result.document.rooms.find((entry) => entry.id === 'room-main')!;
+		expect(preserved.boundary).toEqual(leftFace.boundary.map((ref) => ({ ...ref })));
+		const newborns = result.document.rooms.filter((entry) => entry.id !== 'room-main');
+		expect(newborns).toHaveLength(2);
+		expect(new Set(newborns.map((entry) => entry.id)).size).toBe(2);
+		expect(new Set(newborns.map((entry) => entry.name)).size).toBe(2);
+		expect(newborns.every((entry) => entry.floorThickness === ROOM_CREATION_DEFAULTS.floorThickness)).toBe(true);
+		expect(result.lineage.find((record) => record.roomId === 'room-main')!.kind).toBe('preserved');
+		expect(result.retiredRoomIds).toEqual([]);
+	});
+
+	it('subdivides end-to-end: split, portal preserved, association retains the survivor', () => {
+		const baseline: LayoutDocumentWallFirst = {
+			...RECT,
+			rooms: [room('room-main', 'Main', RECT_FACE.boundary.map((ref) => ({ ...ref })))],
+			openings: [
+				{
+					id: 'door-perimeter',
+					wallId: 'wall-b',
+					kind: 'door',
+					offset: 1,
+					width: 0.9,
+					height: 2.1,
+					sillHeight: 0,
+					profile: 'rectangular'
+				}
+			],
+			objects: [
+				{ id: 'object-1', kind: 'box', position: [4, 0, 1], rotation: [0, 0, 0], dimensions: [1, 1, 1], roomId: 'room-main' }
+			]
+		};
+		const result = reconcileRooms({
+			baseline,
+			candidateDocument: { ...SPLIT_CANDIDATE, openings: baseline.openings, objects: baseline.objects },
+			extraction: SPLIT_EXTRACTION,
+			components: [
+				{
+					candidateFaceKeys: [SPLIT_LEFT_FACE.key, SPLIT_RIGHT_FACE.key],
+					predecessorRoomIds: ['room-main']
+				}
+			],
+			predecessorPolygons: new Map([['room-main', [[0, 0], [6, 0], [6, 4], [0, 4]]]]),
+			predecessorWitnesses: new Map([['room-main', [1, 2]]]),
+			allocator: allocator()
+		});
+		if (!('document' in result)) {
+			throw new Error('expected success');
+		}
+		expect(result.document.rooms).toHaveLength(2);
+		expect(result.document.rooms.find((entry) => entry.id === 'room-main')).toBeDefined();
+		const newborn = result.document.rooms.find((entry) => entry.id !== 'room-main')!;
+		// P23.8: on split the association retains the survivor ID "without
+		// choosing by object position" — even though the object sits in the
+		// newborn half, it stays with room-main and is never moved.
+		expect(result.document.objects[0]!.roomId).toBe('room-main');
+		expect(result.document.objects[0]!.position).toEqual([4, 0, 1]);
+		expect(newborn.id).not.toBe('room-main');
+		// The perimeter door carries over untouched (still hosted by wall-b).
+		expect(result.document.openings).toHaveLength(1);
+		expect(result.document.openings[0]!.id).toBe('door-perimeter');
+		expect(result.lineage.map((record) => record.kind).sort()).toEqual(['created', 'split-survivor']);
+	});
+
+	it('rejects the whole command when one component is unsupported alongside valid ones', () => {
+		const baseline: LayoutDocumentWallFirst = {
+			...SPLIT_CANDIDATE,
+			rooms: [
+				room(
+					'room-left',
+					'Left',
+					SPLIT_LEFT_FACE.boundary.map((ref) => ({ ...ref }))
+				),
+				room(
+					'room-right',
+					'Right',
+					SPLIT_RIGHT_FACE.boundary.map((ref) => ({ ...ref }))
+				)
+			]
+		};
+		const result = reconcileRooms({
+			baseline,
+			candidateDocument: RECT,
+			extraction: extractBoundaryCandidateFaces({ ...RECT, rooms: [] }),
+			// First component is a valid 2→1 merge; the second references an
+			// unknown face. The whole command must reject — never a partial
+			// commit of the valid half.
+			components: [
+				{
+					candidateFaceKeys: [RECT_FACE.key],
+					predecessorRoomIds: ['room-left', 'room-right']
+				},
+				{ candidateFaceKeys: ['face-does-not-exist'], predecessorRoomIds: [] }
+			],
+			allocator: allocator()
+		});
+		expect(result).toEqual({
+			kind: 'rejected',
+			rejection: expect.objectContaining({
+				code: 'unsupported_component'
+			})
+		});
+		expect('document' in result).toBe(false);
+	});
+
+	it('remaps a portal to distinct rooms when one endpoint retires into a merge survivor', () => {
+		const candidate = document(
+			[
+				...RECT_JUNCTIONS,
+				['j-e', 20, 0],
+				['j-f', 26, 0],
+				['j-g', 26, 4],
+				['j-h', 20, 4]
+			],
+			[
+				...RECT_WALLS,
+				{ id: 'wall-annex-a', start: 'j-e', end: 'j-f' },
+				{ id: 'wall-annex-b', start: 'j-f', end: 'j-g' },
+				{ id: 'wall-annex-c', start: 'j-g', end: 'j-h' },
+				{ id: 'wall-annex-d', start: 'j-h', end: 'j-e' }
+			]
+		);
+		const extraction = extractBoundaryCandidateFaces({ ...candidate, rooms: [] });
+		expect(extraction.faces).toHaveLength(2);
+		const rectFace = extraction.faces.find((face) =>
+			face.boundary.some((ref) => ref.wallId === 'wall-a')
+		)!;
+		const annexFace = extraction.faces.find((face) =>
+			face.boundary.some((ref) => ref.wallId === 'wall-annex-a')
+		)!;
+		const baseline: LayoutDocumentWallFirst = {
+			...candidate,
+			rooms: [
+				room('room-left', 'Left', RECT_FACE.boundary.map((ref) => ({ ...ref }))),
+				room('room-right', 'Right', RECT_FACE.boundary.map((ref) => ({ ...ref }))),
+				room(
+					'room-annex',
+					'Annex',
+					annexFace.boundary.map((ref) => ({ ...ref }))
+				)
+			],
+			openings: [
+				{
+					id: 'door-corridor',
+					wallId: 'wall-d',
+					kind: 'door',
+					offset: 1,
+					width: 0.9,
+					height: 2.1,
+					sillHeight: 0,
+					profile: 'rectangular',
+					connectsRoomIds: ['room-right', 'room-annex']
+				}
+			]
+		};
+		const result = reconcileRooms({
+			baseline,
+			candidateDocument: { ...candidate, openings: baseline.openings, objects: [] },
+			extraction,
+			components: [
+				{ candidateFaceKeys: [rectFace.key], predecessorRoomIds: ['room-left', 'room-right'] },
+				{ candidateFaceKeys: [annexFace.key], predecessorRoomIds: ['room-annex'] }
+			],
+			predecessorPolygons: new Map([
+				['room-left', [[0, 0], [3, 0], [3, 4], [0, 4]]],
+				['room-right', [[3, 0], [6, 0], [6, 4], [3, 4]]]
+			]),
+			// Witness in the left half pins room-left as the merge survivor,
+			// so room-right retires into room-left.
+			predecessorWitnesses: new Map([
+				['room-left', [1, 2]],
+				['room-right', [4, 2]]
+			]),
+			allocator: allocator()
+		});
+		if (!('document' in result)) {
+			throw new Error('expected success');
+		}
+		expect(result.retiredRoomIds).toEqual(['room-right']);
+		const door = result.document.openings.find((opening) => opening.id === 'door-corridor')!;
+		// Retired endpoint remaps to its successor; surviving endpoint stays.
+		expect(door.connectsRoomIds).toEqual(['room-left', 'room-annex']);
+	});
 });

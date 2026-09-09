@@ -93,11 +93,11 @@ export function classifyWallIntersection(
 	const bCollinear = ob1 === 0 && ob2 === 0;
 
 	if (aCollinear || bCollinear) {
-		// At least one segment is collinear with the other's supporting line.
-		// If only one side is collinear but signs disagree on the other, the
-		// geometry is numerically inconsistent — classify by the collinear
-		// side's interval logic below.
-		return classifyCollinear(a, b, aCollinear && bCollinear);
+		// At least one segment is fully collinear with the other's supporting
+		// line — which already places all four endpoints on one common line
+		// (the converse holds too, except for a vacuously-collinear degenerate
+		// zero-length segment, which the interval logic classifies leniently).
+		return classifyCollinear(a, b);
 	}
 
 	// Proper crossing: strictly opposite signs on both segments. A zero sign
@@ -158,21 +158,17 @@ function endpointOnInterior(
 
 /**
  * Collinear classification via interval projection on the dominant axis
- * (H3 §8 rule 5). Works for full or partial collinearity; when only one
- * segment is robustly collinear with the other's line but the other shows
- * sign disagreement, treat the collinear pair's endpoints on the shared
- * line as the interval.
+ * (H3 §8 rule 5). Reached only when the orientation bar has proven all four
+ * endpoints share one supporting line, so the interval endpoints are
+ * recovered by lerping along `a` — exact for axis-aligned walls and correct
+ * for diagonals (review round 1 / B2: a perpendicular-coordinate equality
+ * check misread diagonally collinear segments as numerically unstable,
+ * because the perpendicular coordinate of a diagonal line varies along it).
  */
-function classifyCollinear(
-	a: TopologySegment,
-	b: TopologySegment,
-	bothCollinear: boolean
-): WallIntersection {
-	void bothCollinear;
+function classifyCollinear(a: TopologySegment, b: TopologySegment): WallIntersection {
 	// Project onto the dominant axis of the shared direction.
 	const dir: LayoutVec2 = [a.end[0] - a.start[0], a.end[1] - a.start[1]];
 	const axis = Math.abs(dir[0]) >= Math.abs(dir[1]) ? 0 : 1;
-	const other = axis === 0 ? 1 : 0;
 	const aMin = Math.min(a.start[axis], a.end[axis]);
 	const aMax = Math.max(a.start[axis], a.end[axis]);
 	const bMin = Math.min(b.start[axis], b.end[axis]);
@@ -185,26 +181,29 @@ function classifyCollinear(
 
 	const overlapStart = Math.max(aMin, bMin);
 	const overlapEnd = Math.min(aMax, bMax);
-	// Both segments are robustly collinear with the same supporting line, so
-	// the perpendicular coordinate is shared; verify it agrees before
-	// interval classification.
-	const axisPerp = other;
-	if (a.start[axisPerp] !== b.start[axisPerp]) {
-		return { kind: 'invalid', reason: 'intersection_numeric_unstable' };
-	}
+
+	// Recover an interval endpoint as the point on `a` at the given
+	// dominant-axis coordinate. `span === 0` only for a degenerate
+	// zero-length segment; return its start.
+	const pointAt = (coordinate: number): LayoutVec2 => {
+		const span = a.end[axis] - a.start[axis];
+		if (span === 0) return [a.start[0], a.start[1]];
+		const t = (coordinate - a.start[axis]) / span;
+		return [
+			a.start[0] + t * (a.end[0] - a.start[0]),
+			a.start[1] + t * (a.end[1] - a.start[1])
+		];
+	};
 
 	if (overlapStart === overlapEnd) {
 		// Touching at exactly one point of the shared line.
-		return {
-			kind: 'collinear-endpoint-touch',
-			point: axis === 0 ? [overlapStart, a.start[1]] : [a.start[0], overlapStart]
-		};
+		return { kind: 'collinear-endpoint-touch', point: pointAt(overlapStart) };
 	}
 
 	return {
 		kind: 'collinear-overlap',
-		start: axis === 0 ? [overlapStart, a.start[1]] : [a.start[0], overlapStart],
-		end: axis === 0 ? [overlapEnd, a.start[1]] : [a.start[0], overlapEnd]
+		start: pointAt(overlapStart),
+		end: pointAt(overlapEnd)
 	};
 }
 

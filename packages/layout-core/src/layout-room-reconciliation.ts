@@ -131,10 +131,13 @@ export function reconcileRooms(options: {
 	const facesByKey = new Map(extraction.faces.map((face) => [face.key, face]));
 
 	const claimedFaces = new Set<string>();
+	const claimedPredecessors = new Set<string>();
 	const lineage: RoomLineageRecord[] = [];
 	const retiredRoomIds: string[] = [];
 	const finalRooms: LayoutWallFirstRoom[] = [];
-	const takenNames = new Set<string>();
+	// Baseline names seed the allocator namespace (review round 1): births
+	// during multi-component operations must never reuse a pre-existing name.
+	const takenNames = new Set(baseline.rooms.map((room) => room.name));
 
 	for (const component of components) {
 		for (const faceKey of component.candidateFaceKeys) {
@@ -160,6 +163,27 @@ export function reconcileRooms(options: {
 					message: `Component references unknown predecessor room '${predecessorId}'`
 				});
 			}
+			if (claimedPredecessors.has(predecessorId)) {
+				return failure({
+					code: 'ambiguous_room_correspondence',
+					message: `Predecessor room '${predecessorId}' is claimed by multiple components`,
+					roomIds: [predecessorId]
+				});
+			}
+			claimedPredecessors.add(predecessorId);
+		}
+	}
+
+	// Every candidate face must be claimed by exactly one component (review
+	// round 1): an unclaimed face would otherwise silently vanish from the
+	// correspondence — the mirror hazard of a double-claimed face.
+	for (const face of extraction.faces) {
+		if (!claimedFaces.has(face.key)) {
+			return failure({
+				code: 'unsupported_component',
+				message: `Candidate face '${face.key}' is not claimed by any lineage component`,
+				faceKey: face.key
+			});
 		}
 	}
 
@@ -174,7 +198,7 @@ export function reconcileRooms(options: {
 			for (const faceKey of sortedKeys) {
 				const face = facesByKey.get(faceKey)!;
 				const roomId = allocator.nextRoomId(
-					{ ...candidateDocument, rooms: finalRooms },
+					{ ...candidateDocument, rooms: [...baseline.rooms, ...finalRooms] },
 					faceKey
 				);
 				const name = allocator.nextRoomName([...takenNames]);
@@ -227,7 +251,7 @@ export function reconcileRooms(options: {
 			}
 			const loser = candidates.find((face) => face !== winner)!;
 			const newRoomId = allocator.nextRoomId(
-				{ ...candidateDocument, rooms: finalRooms },
+				{ ...candidateDocument, rooms: [...baseline.rooms, ...finalRooms] },
 				loser.key
 			);
 			const newName = allocator.nextRoomName([...takenNames]);
