@@ -359,6 +359,68 @@ Bulk transform/material multi-edit, Scene/asset integrity diagnostics surface, a
 7. Post-F0 seam recheck — blocked on F0.
 8. Child plans + owner review — last.
 
+## R9 pre-freeze closeout — DRAFT (not a freeze; no child plans; no schema/API/code changes)
+
+Consolidates the pre-F0 packet into freeze-ready input. Legend: [F0-FREE] resolved pre-F0 · [POST-F0 RECHECK] blocked on F0 seam recheck · [R9-PICK] F0-independent inclusion call at freeze.
+
+### 1. Final capability maturity matrix (draft)
+
+| Capability | Verified behavior + owner | Disposition | Sensitivity |
+|---|---|---|---|
+| Selection / multi-select | Room-scoped ordered multi-select; canonical ordered selection; R4 continuity ratified | KEEP; room-gate removal rechecked | [POST-F0 RECHECK] |
+| Transform / pivot | One host, bounds-center pivot, scalar v6 scale; Local/World wire direction, no stored state | POLISH wire + Inspector sync + snap-winner feedback | [F0-FREE] direction; pivot rigidity + multi-select Local frame [POST-F0 RECHECK] |
+| Align / distribute | Absent (only CSS/triangle-align matches); deterministic Scene ops direction | DEEPEN direction | [F0-FREE]; exact op set [R9-PICK], frames [POST-F0 RECHECK] |
+| Duplicate | +0.5 XZ clone, one history entry, no collision/re-ground, partial clusters silently skipped (`placement-cluster-mutator.svelte.ts:639-669`) | Duplicate-then-move + collision/bounds + warn fix | [F0-FREE]; re-ground support source [POST-F0 RECHECK] |
+| Groups / clusters | Flat same-room, required `roomId` (`:486-508`) | KEEP flat, no nesting | [F0-FREE]; Room-gate removal [POST-F0 RECHECK] |
+| Box selection | Absent (only camera-plan rubber band) | FOLLOW-UP | [F0-FREE] |
+| Visibility / lock | Absent from Scene schema | FOLLOW-UP | [F0-FREE] |
+| Placement / grounding | Tagged-floor-only 5-ray Drop/Keep-on-Floor; no stacked/support choice, no Layout-query lookup | KEEP pipeline; wall/support direction one-time-placement-first | [F0-FREE]; support source + stacked choice [POST-F0 RECHECK] |
+| Replacement | No replace-asset path found | New op preserving placement via normalized metadata | [F0-FREE] direction; bounds/pivot variance [POST-F0 RECHECK] |
+| Placement entry points | Click-to-place 3D only; model Place via Inspector; no Plan entry/drag | POLISH entries, no new framework | [F0-FREE] |
+| Snapping | Room-local steps + Shift-bypass; no winner feedback | KEEP seams; winner feedback | [F0-FREE]; step values under world-local [POST-F0 RECHECK] |
+| Materials | 6-entry catalogue; shared/unique + Make Unique; single-select Inspector; roughness/metalness + one map override; read-only repeat path | KEEP model; tint + PBR set + tile scale + multi-apply + preview feedback | [F0-FREE]; import consumption [POST-F0 RECHECK / R1] |
+| Lights | Point/spot/directional + 0.12m proxy, -Z aim, 2.5m drop, radian UI, authored `castShadow` | KEEP authority; range viz + cone handles + degree angle + gallery Scene-op preset + raw units | [F0-FREE]; HDRI consumption pending supply |
+| Environment | Fixed ambient+directional rig, no authored env | Tonemap system-owned; global-vs-per-room + exposure/IBL/HDRI model pending supply + renderer inspection | Partly [F0-FREE]; model [POST-F0 RECHECK / R1] |
+| Outliner / Inspector | Shared selection, commit-only numerics, single-select panels, existing density treatment | KEEP + POLISH; bulk edit | [F0-FREE]; bulk edit [R9-PICK] |
+| History | Single stack (`HISTORY_LIMIT=100`), 1-gesture-1-entry, `begin/commit/cancelDocumentTransaction` (`editor-store.svelte.ts:2813-2867`) | KEEP; cross-view fixture pins at freeze | [F0-FREE]; operation-owner tags [POST-F0 RECHECK] |
+| Editor / visitor boundary | Zero editor imports in museum; texture-only resolution; GLB ingest = P24A.4 gap | KEEP boundary; P24A extends registry | [POST-F0 RECHECK / R1] |
+| P24A supply | Proven pipeline (normalize-asset.sh determinism, rights gate, OBB, 12-proof set); static-first registry; `gltfpack` deferred | Direction closed | [F0-FREE]; registry/codec/pinning [POST-F0 RECHECK] |
+
+No new direct-reference study needed: every disposition above is grounded in current-code evidence from R0–R8. Reference inspection reopens only for a concrete unresolved question surviving the post-F0 recheck.
+
+### 2. Deterministic operation / history ownership matrix (draft)
+
+One completed gesture = one history entry; cancel/no-op = none. All Scene ops target `SceneDocument`; acquisition workflow state never enters `SceneDocument` or editor undo.
+
+| Operation | Owner | Inputs | History | Sensitivity |
+|---|---|---|---|---|
+| `placeSceneAsset` | Placement pipeline (`pendingPlacement*` → commit) | asset id + pose intent | One entry on commit | Support/Y resolution [POST-F0 RECHECK] |
+| `commitPlacementTransform` (gizmo / Inspector numeric / staging gesture) | `editor-store.commitPlacementTransform` | entity ids + owned components | One entry; no-op none | Frames [POST-F0 RECHECK]; sync [F0-FREE] |
+| `duplicateSelection` | `placement-cluster-mutator` | selection set | One entry; partial warns (fix directed) | Re-ground [POST-F0 RECHECK] |
+| `createCluster` / `deleteCluster` | `placement-cluster-mutator` on `SceneDocument.clusters` | member ids + roomId | One entry | Room-gate [POST-F0 RECHECK] |
+| Align / distribute (new) | Deterministic Scene ops | entity set + mode | One entry each | Exact set [R9-PICK]; frames [POST-F0 RECHECK] |
+| `replaceSceneAsset` (new) | Scene op via normalized metadata | entity id + asset id | One entry | Bounds behavior [POST-F0 RECHECK] |
+| `applyMaterialPatch` / `makeMaterialInstanceUnique` | `material-resource-mutator` via `store.requestMaterialEdit` | entity/material ids + patch | One entry (confirm at freeze) | [F0-FREE] |
+| `createLight` / `updateLight` / `deleteLight` + gallery preset op | Light mutators (`editor-lights.ts`, preset as ordinary Scene ops) | kind + props | One entry | [F0-FREE] |
+| P24A acquire / normalize / approve | Pipeline-owned lifecycle, not editor undo | source + recipe + rights evidence | Promotion gated by acceptance, never half-approved | Boundary [F0-FREE]; registry/codec [POST-F0 RECHECK] |
+
+No mixed Layout/Scene transaction and no persistent cross-document support reference without a separately specified ownership/delete/history contract (umbrella invariant; addendum entity-ownership rule).
+
+### 3. Museum-owned acceptance fixtures (draft)
+
+- F1 same-ID Plan/3D mutation: place in 3D → move X/Z + yaw in Plan → Y/pitch/roll/scale preserved; one entity identity throughout. [POST-F0 RECHECK projection source]
+- F2 Plan-ineligible-but-selected: select light in Plan → stays selected, no transform handles, `Not editable in Plan` reason shown in viewport + Inspector badge.
+- F3 view-switch cancel: mid-drag placement/transform + switch view → gesture cancelled, no history result, committed state untouched.
+- F4 preview/state consistency: ghost/proxy/overlay treatment never appears in serialized `SceneDocument`.
+- F5 preview/commit agreement: final displayed preview equals committed result for one staging gesture.
+- F6 one-handle-drag-one-history: single yaw-handle drag → exactly one history entry; failed/no-op drag → none.
+- F7 duplicate-then-move: +0.5 XZ clone, collision/bounds checked, one entry; partial-cluster duplicate warns. [re-ground POST-F0 RECHECK]
+- F8 material assign + Make Unique: shared edit prompts choice; unique clone `-copy`; visitor renders resolved material identically.
+- F9 light authoring: create point/spot → Inspector sync (incl. degree angle, `castShadow`) → visitor renders same lights with no editor helpers.
+- F10 Save/Load + cold visitor: staged Scene/materials/lights survive round-trip; cold visitor renders canonical meaning with no editor-only state. [codec + resolution POST-F0 RECHECK]
+- F11 gallery preset: one preset op yields ordinary Scene lights only; no persistent rig entity.
+- F12 explicit support choice: ambiguous stacked surface forces a visible choice; never silent `Y = 0`. [POST-F0 RECHECK]
+
 ## R9 — B6 minimum freeze / child-plan gate
 
 Only after R0–R8 have enough evidence:
