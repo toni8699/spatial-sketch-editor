@@ -316,22 +316,22 @@ Code-verified on main: 3 light kinds, fixed -Z aim, 0.12m proxy (`EntityLight.sv
 - Preview/commit agreement: pending placement, Plan staging gestures (`previewSceneGesture`/`commitSceneGesture`/`cancelSceneGesture` with immutable baselines), and gizmo drags (transient preview, single-history commit, cancel rollback) all keep preview distinct from committed state. Final displayed preview and committed result must agree (R4).
 - Inspector/Outliner sync: shared selection identity, commit-only numerics (`EditorNumberField` draft/commit/Escape), single-select panels; multi-select shows Duplicate/Delete + session placement only.
 - Feedback baseline: no-floor-below, ineligible/cluster staging, geometry warnings (`role=alert`), and blocked deletes already surface with reasons. Density/readability treatment exists (group headers, filters, empty states, sectioned Inspector).
-- Discoverability rule: disabling a control without a reason is a defect. Known uneven spots (toolbar `toolDisabled`, inert outliner rows, camera framing handles) are polish backlog for the R9 inclusion decision, not new-framework work.
-- No active-rule/event or invalid-reference diagnostic surface exists; that surface belongs to P25 authoring test lenses (E5), not P24. No action here.
+- Discoverability rule: disabling a control without a reason is a defect. Known uneven spots (toolbar `toolDisabled`, inert outliner rows) are polish backlog for the R9 inclusion decision, not new-framework work.
+- Experience rule/event/reference diagnostics belong to P25 authoring test lenses (E5), not P24. Scene/asset integrity diagnostics are a separate optional R9 choice below; legacy `roomId` diagnostics wait for the post-F0 recheck.
 
 ### Fixed pre-F0: silent-skip → warn
 
-Partial drop-to-floor (warns only when `groundedCount===0`), partial cluster duplicate (`continue` with no status), and selection-blocked Plan clicks (reason only in context-menu path) must produce a status/warning instead of failing silently. Footprint-builder skips for intentionally non-projected entities (lights) stay silent by design. New invalid-reference diagnostics UI (dangling `roomId`/`assetId`) is an R9 inclusion decision.
+Partial drop-to-floor (warns only when `groundedCount===0`), partial cluster duplicate (`continue` with no status), and selection-blocked Plan clicks (reason only in context-menu path) must produce a status/warning instead of failing silently. Footprint-builder skips for intentionally non-projected entities (lights) stay silent by design. Scene/asset integrity diagnostics (dangling `assetId`) are an R9 inclusion decision; legacy `roomId` diagnostics wait for the post-F0 recheck.
 
 ### Left for R9 (not F0-dependent)
 
-Bulk transform/material multi-edit, invalid-reference diagnostics surface, and the disabled-without-reason polish backlog: include in minimum or defer as depth tail.
+Bulk transform/material multi-edit, Scene/asset integrity diagnostics surface, and the disabled-without-reason polish backlog: include in minimum or defer as depth tail.
 
 ## Pre-F0 R9 freeze packet — DRAFT (not a freeze; R9 stays open until the post-F0 recheck)
 
 ### A. Product choices resolved pre-F0 (no F0-dependent seam; R9 only decides minimum inclusion)
 
-- R5: one-host/no-second-gizmo authority; Inspector↔gizmo commit sync polish; snap-winner feedback polish (no new framework); flat non-nested cluster concept; duplicate collision/bounds check + silent-skip→warn; align/distribute op set (frames rechecked post-F0); Local/World wire direction with no stored state.
+- R5: one-host/no-second-gizmo authority; Inspector↔gizmo commit sync polish; snap-winner feedback polish (no new framework); flat non-nested cluster concept; duplicate collision/bounds check + silent-skip→warn; align/distribute semantic direction (exact op set + frames at R9/post-F0); Local/World wire direction with no stored state.
 - R6: shared/unique model, no slot/UV/graph; tint override; PBR map set on definitions; physical tile scale via existing repeat path; Apply-to-multiselection; shared/unique preview feedback; per-addition editor/visitor parity as acceptance requirement.
 - R7: `SceneLightEntity` authority, no second light gizmo; range viz, cone/direction handles, pick proxies, degree-presented spot angle (storage unchanged); per-light `castShadow` authored, map policy system-owned; raw units; temperature deferred; one gallery preset as ordinary Scene ops; HDRI/exposure/tonemap/IBL scope boundaries as stated.
 - R8: all presentation rules above; silent-skip→warn fixes.
@@ -340,13 +340,13 @@ Bulk transform/material multi-edit, invalid-reference diagnostics surface, and t
 
 - Selection-Center pivot rigidity in the world frame; multi-selection Local frame semantics.
 - Align/distribute reference-frame behavior; duplicate re-ground support source; cluster Room-gate removal.
-- Room/grouping semantics for Destination-ready staging; Plan projection source changes; adapter inverse-resolve removal effects.
+- Post-F0 Scene grouping/selection semantics; Plan projection source changes; adapter inverse-resolve removal effects.
 - P24A import consumption, Save/Load codec + P22 model resolution/pinning (R1 open items).
 
 ### C. R9 inclusion decisions (not F0-dependent; include-in-minimum vs depth tail at freeze)
 
-- Bulk transform/material multi-edit; invalid-reference diagnostics surface; disabled-without-reason polish backlog.
-- Exact align/distribute op set; video-adjacent staging polish beyond the R8 rules.
+- Bulk transform/material multi-edit; Scene/asset integrity diagnostics surface; disabled-without-reason polish backlog.
+- Exact align/distribute op set beyond the R8 rules.
 
 ### D. Remaining R9 gate checklist status
 
