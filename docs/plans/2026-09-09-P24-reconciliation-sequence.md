@@ -19,7 +19,7 @@ This reconciliation may run **in parallel with P23 implementation**. It does not
 
 ```text
 P23 implementation
-→ proceeds independently through its existing child-plan dependencies
+→ proceeds independently through its existing child-plan dependencies (P23.1 and P23.2 already shipped on `main`; P23.9 is the current slice)
 
 P24 reconciliation
 → may inspect current code + ratified P23 target in parallel
@@ -204,9 +204,9 @@ Closed now (pipeline-side evidence, no runtime changes):
 - Registry decision: Wave-1 remains static-only through the append-only shipped-static compatibility path first. Dynamic project/upload/provider GLB support through P20/R2 + P22 release pinning is a deferred depth path, not the P24A minimum. The remaining static runtime gap is narrower: visitor model loading must take its production source from shipped-static authority rather than validating there and then resolving from the mutable live catalogue.
 - `gltfpack` disposition: **DEFER** — Meshopt decode already runs at runtime (`useMeshopt`); encode-side size wins are unmeasured and unnecessary for the minimum. Revisit as **BENCHMARK FIRST during P24A.3** if derivative sizes demand it. `meshoptimizer` stays transitively available; no new dependency.
 
-### R1 post-F0 closeout — 2026-09-10
+### R1 post-F0 closeout — 2026-09-10 (after P23.1 / P23.2 shipped)
 
-**R1 COMPLETE.** The P24A annex advances to `evidence complete — reconciliation pending`; R9 still owns minimum freeze and implementation-ready child-plan creation.
+**R1 COMPLETE.** The P24A annex advances to `evidence complete — reconciliation pending`; R9 still owns minimum freeze and implementation-ready child-plan creation. P23.1 shipped via PR #9 (`d5ec0df`) and P23.2 via PR #13 (`a369a15`); P23.9 is the current P23 slice. P24.0’s remaining task is canonical Stage readiness on top of that shipped P23 minimum, not reopening P23.1 persistence.
 
 Closed architecture/readiness decisions:
 
@@ -214,7 +214,7 @@ Closed architecture/readiness decisions:
 - canonical world-local Plan projection already uses the identity frame when `roomId` is absent; legacy Room transforms remain compatibility-only;
 - the `furniture-floor` normalization recipe establishes a zero floor-contact offset for that normalized recipe only; broader wall/ceiling/stacked support metadata is not inferred;
 - static-first is the P24A minimum: accepted Wave-1 GLBs use stable shipped-static identities + retention; generic project/upload/provider GLB ingestion is deferred unless R9 explicitly promotes it;
-- P23.1 closes basic wall-first/world-local project format acceptance in the shared codec used by live cloud Save/Load; no model-specific serializer or separate P24A persistence system is needed;
+- P23.1 shipped on `main` via PR #9 (`d5ec0df`) and closes basic wall-first/world-local project format acceptance in the shared codec used by live cloud Save/Load; no model-specific serializer or separate P24A persistence system is needed;
 - future dynamic models, if later selected, must extend the existing P20/R2 + P22 release path with model kind/MIME/validation/hash-pinning rather than create a parallel registry;
 - normalization, rights gate, proof-set selection, material/HDRI supply pointers and `gltfpack` benchmark-first disposition remain accepted from the dry run.
 

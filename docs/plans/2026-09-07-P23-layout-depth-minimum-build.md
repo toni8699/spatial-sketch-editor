@@ -6,7 +6,7 @@
 **Depends on:** P22 complete, including hosted cold-visitor acceptance.  
 **Owner reconciliation ratified:** 2026-09-09.  
 **Evidence basis:** completed `P23-H1`, `P23-H2`, `P23-H3`, `P23-H5`, current Museum Editor code, and the staging wall-first proposal.  
-**Implementation status:** Foundation Gate shipped — P23.0/P23.8 F0 acceptance passed 2026-09-10 and the stage-6 flip (branch `p23-stage6-flip`) enabled wall-first writes; legacy room-owned behavior persists only as the compatibility read path. The Build-set slices below (P23.1 → P23.2 → P23.9 → P23.3 → P23.4/P23.5 → P23.6 → P23.7) are the live implementation order; P23.1 is implemented on `codex/p23-implementation` pending owner review.
+**Implementation status:** Foundation Gate shipped — P23.0/P23.8 F0 acceptance passed 2026-09-10 and the stage-6 flip (branch `p23-stage6-flip`) enabled wall-first writes; legacy room-owned behavior persists only as the compatibility read path. The Build-set slices below (P23.1 → P23.2 → P23.9 → P23.3 → P23.4/P23.5 → P23.6 → P23.7) are the live implementation order; P23.1 and P23.2 are merged on `main` (PRs #9 and #13); **current slice: P23.9** (branch `p23.9`).
 
 This is the reconciled P23 umbrella. The accepted reconciliation — informed by the harvests — supersedes conflicting earlier P23 and North-Star direction. Harvest artifacts remain evidence, not implementation authority.
 
@@ -432,17 +432,23 @@ P23.8 consumes P23.0a schema scaffolding and must complete before P23.0b migrati
 
 [Child plan](2026-09-08-P23.1-precise-placement-and-dimensions.md)
 
+**Status:** shipped on `main` via PR #9 (`d5ec0df`).
+
 Retain exact numeric LayoutObject editing. Reinterpret architectural precision around Junction X/Z, exact straight-Wall length, fixed endpoint, bounded angle editing, Wall thickness where supported, and rectangle sizing as a multi-Wall/Junction operation. `LayoutRoom.frame` is not a target authoring primitive after world-space migration. Rectangle resize fixes an explicit anchor Junction and incident width Wall; P23.1 defines stable defaults and corner mapping, including squares and rotated rectangles.
 
 ## P23.2 — Predictable Plan snapping and alignment
 
 [Child plan](2026-09-08-P23.2-snapping-and-alignment.md)
 
+**Status:** shipped on `main` via PR #13 (`a369a15`).
+
 Keep H2's deterministic snap/acquisition/guide model and map it to Junctions, Walls, Openings, Partitions and compiled object geometry. Snap suggestions never create topology until the committed operation records explicit Junction/Wall relationships.
 
 ## P23.9 — Wall / Partition sketching
 
 [Child plan](2026-09-09-P23.9-wall-partition-sketching.md)
+
+**Status:** `in progress` — current P23 slice.
 
 Primary architectural authoring workflow: continuous Wall/Partition chains, ephemeral draft, Backspace, Finish/Close, Escape, H2 snap/precision integration, and Rectangle/Polygon convenience tools that produce the same canonical Walls/Junctions. Valid open chains need not create Rooms.
 

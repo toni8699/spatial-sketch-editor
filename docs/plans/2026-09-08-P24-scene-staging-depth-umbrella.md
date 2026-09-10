@@ -1,6 +1,6 @@
 # P24 — Scene / Staging Depth umbrella
 
-**R9 closeout (2026-09-10):** [Minimum freeze](2026-09-10-P24-R9-minimum-freeze.md) is the current inclusion/maturity/operation/acceptance authority; [P24.0–P24.5 child briefs](2026-09-10-P24-minimum-child-plans.md) are implementation-ready for owner review. Earlier draft/pending-minimum wording below is superseded by R9. Source rechecks are closed as planning evidence; implementation and runtime ship gates remain open. P24 remains proposed; execution waits for the accepted P23 minimum and approval.
+**R9 closeout (2026-09-10):** [Minimum freeze](2026-09-10-P24-R9-minimum-freeze.md) is the current inclusion/maturity/operation/acceptance authority; [P24.0–P24.5 child briefs](2026-09-10-P24-minimum-child-plans.md) are implementation-ready for owner review. Earlier draft/pending-minimum wording below is superseded by R9. Source rechecks are closed as planning evidence; implementation and runtime ship gates remain open. P24 remains proposed; execution waits for the accepted P23 minimum and approval. P23.1 shipped via PR #9 (`d5ec0df`) and P23.2 via PR #13 (`a369a15`); P23.9 is the current P23 slice.
 
 
 **Ratified cross-view direction:** [Unified Plan / 3D authoring addendum](2026-09-09-P23-P24-unified-plan-3d-authoring-addendum.md) — read alongside this plan for entity-owned mutations, selection continuity, gesture cancellation and PlanProxy/placement ownership. Existing scope, status and dependency gates remain unchanged.
@@ -178,7 +178,7 @@ remains open to evidence-led improvement.
 
 ## Known live baseline — preserve, then audit maturity
 
-P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code, but F0 acceptance remains open and wall-first writer enablement remains gated.
+P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code, F0 acceptance is closed on `main` through PR #7 (`32b2e8f`) and wall-first writers are enabled. P23.1 shipped via PR #9 (`d5ec0df`) and P23.2 via PR #13 (`a369a15`); P23.9 is the current P23 slice.
 
 Preserve the following canonical foundations; legacy room-frame behavior is an
 explicit compatibility concern, not a permanent P24 storage invariant:

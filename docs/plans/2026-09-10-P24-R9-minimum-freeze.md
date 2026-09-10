@@ -1,7 +1,7 @@
 # P24 R9 — minimum freeze and implementation gate
 
 **Date:** 2026-09-10 · **Source baseline:** `bdd99bf5b88c65dcd9aa7a9a326279a3ddd81936`  
-**Status:** planning freeze complete; implementation-ready briefs for owner review. No implementation authorized or accepted. P24 remains proposed and execution depends on the accepted P23 minimum.  
+**Status:** planning freeze complete; implementation-ready briefs for owner review. No implementation authorized or accepted. P24 remains proposed and execution depends on the accepted P23 minimum. P23.1 and P23.2 are already shipped on `main` (PRs #9 / #13); P23.9 is the current P23 slice.  
 **Parents:** [umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md), [P24A annex](2026-09-08-P24A-asset-supply-canonical-ingest-annex.md), [R0–R8 sequence](2026-09-09-P24-reconciliation-sequence.md).  
 **Execution briefs:** [P24.0–P24.5](2026-09-10-P24-minimum-child-plans.md). These parent-derived IDs do not replace annex research stages P24A.0–A.6 or B0–B6.
 
@@ -46,7 +46,7 @@ Paths are repository-relative locators, inspected at the baseline above.
 | `scene-gizmo-adapter.svelte.ts` grounds at commit | P24.2 resolves support in the preview candidate and commits that validated candidate; late invalidity refuses/rolls back. |
 | Both `museum/assets/AssetModel.svelte` copies use `getAsset().productionFile`; `shipped-static.ts` owns retained mapping | P24.1 supplies visitor-safe source authority to actual loading, not just validation; production output/old-release proof required. |
 
-These source rechecks close R9 planning uncertainty. Their implementation gates are all OPEN; accepted P23 completion must recheck these locators for intervening changes before execution, without reopening ownership.
+These source rechecks close R9 planning uncertainty. Their implementation gates are all OPEN; accepted P23 completion must recheck these locators for intervening changes before execution, without reopening ownership. P23.1 and P23.2 already shipped; P23.9 continues on `p23.9` and is the next P23 dependency for P24 execution readiness.
 
 ## Operation and history ownership
 

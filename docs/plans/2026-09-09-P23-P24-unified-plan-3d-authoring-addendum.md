@@ -108,7 +108,7 @@ The shared Plan substrate should **extend existing infrastructure only under con
 
 P24 remains `proposed` / research-reconciliation; its minimum is still unfrozen.
 
-The active planning sequence is now [`2026-09-09-P24-reconciliation-sequence.md`](2026-09-09-P24-reconciliation-sequence.md). P24 research/planning may proceed in parallel with P23 implementation, but P24 implementation still depends on the accepted P23 minimum. Any P24 seam marked as changed by P23 must receive a targeted post-F0 recheck before an implementation-ready P24 child plan freezes.
+The active planning sequence is now [`2026-09-09-P24-reconciliation-sequence.md`](2026-09-09-P24-reconciliation-sequence.md). P24 research/planning may proceed in parallel with P23 implementation, but P24 implementation still depends on the accepted P23 minimum. Any P24 seam marked as changed by P23 must receive a targeted post-F0 recheck before an implementation-ready P24 child plan freezes. P23.1 shipped via PR #9 (`d5ec0df`) and P23.2 via PR #13 (`a369a15`); P23.9 is the current P23 slice.
 
 Conceptually describe P24B's destination as **Rich Scene / Staging Authoring**, with 3D as the richest representation but not the only authoring client.
 

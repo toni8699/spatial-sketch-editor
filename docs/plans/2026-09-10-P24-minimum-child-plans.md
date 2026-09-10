@@ -1,6 +1,6 @@
 # P24 minimum — implementation-ready child briefs
 
-**Date:** 2026-09-10 · **Status:** implementation-ready planning artifacts for owner review; execution blocked on accepted P23 minimum and P24 approval. Stop before implementation.  
+**Date:** 2026-09-10 · **Status:** implementation-ready planning artifacts for owner review; execution blocked on accepted P23 minimum and P24 approval. P23.1 and P23.2 are already shipped on `main` (PRs #9 / #13); P23.9 is the current slice. Stop before P24 implementation.  
 **Scope/acceptance authority:** [R9 freeze](2026-09-10-P24-R9-minimum-freeze.md). R3/R4 and R5–R8 contracts linked there apply. Tracker owns status/order. Paths below are repository-relative; new names are proposed, existing names identify reuse seams.
 
 ## Dependency order and common contract
