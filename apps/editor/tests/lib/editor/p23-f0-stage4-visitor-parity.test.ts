@@ -428,3 +428,60 @@ describe('P23.0 stage 4 — cold-load byte-identity (no stored-byte rewrites)', 
 		}
 	});
 });
+
+// ---------------------------------------------------------------------------
+// 4. F0 review — legacy composer-vs-composer parity + true-compat identity
+// ---------------------------------------------------------------------------
+
+describe('P23.0 stage 4 — legacy composer parity on a true compat shape (F0 review)', () => {
+	/** Curved boundary keeps migration rejected: genuinely legacy-compatible. */
+	function compatPayload() {
+		const room = legacyRoom({ id: 'room-a', name: 'A', origin: [10, 5], curve: true });
+		return legacyProject({
+			id: 'project-compat-parity',
+			name: 'Compat Parity',
+			rooms: [room],
+			nodes: [{ id: 'node-1', roomId: 'room-a', position: [1, 2, 3] }]
+		});
+	}
+
+	it('both composers agree on a true legacy-compatible payload', () => {
+		const payload = compatPayload();
+		const preview = composeDetachedPreviewBundle({
+			scene: payload.scene as never,
+			layout: payload.layout as never,
+			projectId: payload.id,
+			projectName: payload.name,
+			textureStore: stubTextureStore
+		});
+		const visitor = composeColdReleaseBundle({
+			projectId: payload.id,
+			projectName: payload.name,
+			layout: payload.layout,
+			scene: payload.scene,
+			manifest: coldManifest()
+		});
+		try {
+			// Preview returns the render-model geometry, the visitor the
+			// adapter geometry — both compile the same decoded legacy layout
+			// through the shared core, so they must agree.
+			expect(visitor.geometry).toEqual(preview.geometry);
+			expect(visitor.scene).toEqual(preview.scene);
+		} finally {
+			preview.textures.dispose();
+			visitor.dispose();
+		}
+	});
+
+	it('a true legacy-compatible payload serializes identically across the load', () => {
+		const payload = compatPayload();
+		const canonicalBytes = serializeProject(payload);
+		const parsed: unknown = JSON.parse(canonicalBytes);
+		const snapshot = structuredClone(parsed);
+		const prepared = prepareCompatibleRuntime(parsed);
+		if (prepared.kind === 'rejected') throw new Error('expected ready');
+		expect(prepared.decodeKind).toBe('legacy-compatible');
+		expect(parsed).toEqual(snapshot);
+		expect(serializeProject(parsed)).toBe(canonicalBytes);
+	});
+});

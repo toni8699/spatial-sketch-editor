@@ -16,7 +16,9 @@ import {
 	classifyLayoutFormat,
 	classifySceneFormat,
 	LAYOUT_MUTATION_POLICY,
+	LAYOUT_MUTATION_REASONS,
 	SCENE_MUTATION_POLICY,
+	SCENE_MUTATION_REASONS,
 	type LayoutFormatKey,
 	type SceneFormatKey
 } from '$lib/editor/store/document-format-policy.svelte';
@@ -293,12 +295,14 @@ export class EditorStore {
 
 	/**
 	 * The live layout document for the central format-dispatch guard
-	 * (P23.0 F0 stage 1). Null when no source is registered: only unit-test
-	 * stores and the frozen relic hit that path — the production composition
-	 * root always registers (the architecture test pins the EditorApp
-	 * wiring), and null classifies as legacy so fixture stores keep
-	 * authoring. This fallback is deliberately NOT a production fail-open:
-	 * `p23-f0-stage1-format-policy.test.ts` asserts the registration.
+	 * (P23.0 F0 stage 1). Null when no source is registered: unit-test
+	 * fixture stores and the frozen relic (`MuseumEditorApp`, which holds
+	 * the legacy Chopin layout and gates layout mutation elsewhere) hit
+	 * that path — the main composition root always registers (the
+	 * architecture test pins the `EditorApp` wiring). Null classifies as
+	 * legacy, which is the correct outcome for both null holders today
+	 * (fixtures author legacy; the relic holds legacy), not a production
+	 * fail-open for future formats.
 	 */
 	private get layoutDocumentForFormatPolicy(): unknown {
 		return this.#layoutFormatPolicySource?.().project.layout ?? null;
@@ -2829,9 +2833,7 @@ export class EditorStore {
 			: classifyLayoutFormat(this.layoutDocumentForFormatPolicy);
 		if (LAYOUT_MUTATION_POLICY[layoutFormat] !== 'adapted') {
 			this.setStatusMessage(
-				layoutFormat === 'wall-first'
-					? 'Wall-first layout mutation enables with the canonical writers (P23.0 stage 2)'
-					: 'Unrecognized layout format cannot be authored'
+				LAYOUT_MUTATION_REASONS[layoutFormat] ?? 'Unrecognized layout format cannot be authored'
 			);
 			return false;
 		}
@@ -2852,9 +2854,7 @@ export class EditorStore {
 		if (LAYOUT_MUTATION_POLICY[layoutFormat] !== 'adapted') {
 			this.historyController.cancel();
 			this.setStatusMessage(
-				layoutFormat === 'wall-first'
-					? 'Wall-first layout mutation enables with the canonical writers (P23.0 stage 2)'
-					: 'Unrecognized layout format cannot be authored'
+				LAYOUT_MUTATION_REASONS[layoutFormat] ?? 'Unrecognized layout format cannot be authored'
 			);
 			return false;
 		}
@@ -2883,7 +2883,7 @@ export class EditorStore {
 		// guard is behavioral only for future formats.
 		const sceneFormat = classifySceneFormat(this.document);
 		if (SCENE_MUTATION_POLICY[sceneFormat] !== 'adapted') {
-			this.setStatusMessage('This document format is read-only');
+			this.setStatusMessage(SCENE_MUTATION_REASONS[sceneFormat] ?? 'This document format is read-only');
 			return false;
 		}
 		return this.historyController.beginDocument();
@@ -2900,7 +2900,7 @@ export class EditorStore {
 		// mutations (framing edits are camera/scene-domain writes).
 		const framingFormat = classifySceneFormat(this.document);
 		if (SCENE_MUTATION_POLICY[framingFormat] !== 'adapted') {
-			this.setStatusMessage('This document format is read-only');
+			this.setStatusMessage(SCENE_MUTATION_REASONS[framingFormat] ?? 'This document format is read-only');
 			return false;
 		}
 		return this.historyController.beginFraming();
@@ -2933,6 +2933,17 @@ export class EditorStore {
 			return false;
 		}
 		if (!this.historyController.isDocumentUndoBlocked) return false;
+		// P23.0 F0 review — scene-side twin of the layout commit re-check: a
+		// document swap landing mid-transaction (begin saw an adapted format,
+		// the live document is now unrecognized) must not commit through an
+		// entry-guarded-only bracket — roll back instead. Framing commits
+		// share this path and the same scene-domain classification.
+		const commitFormat = classifySceneFormat(this.document);
+		if (SCENE_MUTATION_POLICY[commitFormat] !== 'adapted') {
+			this.historyController.cancel();
+			this.setStatusMessage(SCENE_MUTATION_REASONS[commitFormat] ?? 'This document format is read-only');
+			return false;
+		}
 		if (this.historyController.isFramingTransactionActive) {
 			this.cameraPreviewCommands.seedEmptyReverseForSelectedForwardTrack();
 		}

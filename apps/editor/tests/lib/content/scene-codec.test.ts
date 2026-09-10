@@ -941,3 +941,80 @@ describe('scene document codec', () => {
 		expectIssue(missingMaterials, 'invalid_type', '$.materials');
 	});
 });
+
+describe('world-local roomId discipline (P23.0 F0 review)', () => {
+	function worldDocument() {
+		return {
+			formatVersion: 1,
+			textures: [],
+			materials: [],
+			entities: [],
+			navigationNodes: [
+				{ id: 'n1', label: 'N1', position: [0, 0, 0], cameraTarget: [1, 0, 0], fov: 60, connectedNodeIds: [] },
+				{ id: 'n2', label: 'N2', position: [5, 0, 0], cameraTarget: [6, 0, 0], fov: 60, connectedNodeIds: [] }
+			],
+			connections: []
+		};
+	}
+
+	function connectionWith(extra: Record<string, unknown>) {
+		return {
+			id: 'c1',
+			fromNodeId: 'n1',
+			toNodeId: 'n2',
+			clearance: 1,
+			positionPath: { kind: 'rounded-polyline', anchors: [] as unknown[] },
+			...extra
+		};
+	}
+
+	it('rejects roomId on position-path anchors, waypoints and view keys by name', () => {
+		const anchored = worldDocument();
+		anchored.connections = [
+			connectionWith({
+				positionPath: {
+					kind: 'rounded-polyline',
+					anchors: [{ id: 'a1', roomId: 'room-x', position: [1, 0, 0] }]
+				}
+			})
+		] as never;
+		expectIssue(anchored, 'room_id_forbidden_in_world_local', '$.connections[0].positionPath.anchors[0].roomId');
+
+		const waypointed = worldDocument();
+		waypointed.connections = [
+			connectionWith({ targetWaypoints: [{ roomId: 'room-x', position: [1, 0, 0] }] })
+		] as never;
+		expectIssue(waypointed, 'room_id_forbidden_in_world_local', '$.connections[0].targetWaypoints[0].roomId');
+
+		const keyed = worldDocument();
+		keyed.connections = [
+			connectionWith({
+				viewTracks: {
+					forward: [{ id: 'k1', progress: 0.5, cameraTarget: [1, 0, 0], roomId: 'room-x', fov: 60 }],
+					reverse: [{ id: 'k2', progress: 0.5, cameraTarget: [1, 0, 0], fov: 60 }]
+				}
+			})
+		] as never;
+		expectIssue(keyed, 'room_id_forbidden_in_world_local', '$.connections[0].viewTracks.forward[0].roomId');
+	});
+
+	it('canonicalizes directional lights without a roomId key (round-trip green)', () => {
+		const document = worldDocument();
+		(document as { entities: unknown[] }).entities = [
+			{ kind: 'light', id: 'sun', name: 'Sun', light: 'directional', color: '#ffffff', intensity: 1, castShadow: false, position: [0, 5, 0], rotation: [0, 0, 0] }
+		];
+		const first = validateSceneDocument(document);
+		expect(first.success).toBe(true);
+		if (!first.success) return;
+		// The omit-undefined invariant holds in memory, not just in JSON.
+		expect('roomId' in (first.document.entities[0] as Record<string, unknown>)).toBe(false);
+		const second = parseSceneDocumentJson(first.canonicalJson);
+		expect(second.success).toBe(true);
+	});
+
+	it('tolerates a present-but-undefined node roomId (value-based guard)', () => {
+		const document = worldDocument();
+		(document.navigationNodes[0] as Record<string, unknown>).roomId = undefined;
+		expect(validateSceneDocument(document).success).toBe(true);
+	});
+});

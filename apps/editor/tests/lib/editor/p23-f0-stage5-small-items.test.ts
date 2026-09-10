@@ -81,7 +81,7 @@ function legacyRoom(config: {
 	};
 }
 
-function legacyScene(nodes: Array<{ id: string; roomId?: string; position: [number, number, number] }>) {
+function legacyScene(nodes: Array<{ id: string; roomId?: string; position: [number, number, number]; adjacent?: string[] }>) {
 	return {
 		textures: [],
 		materials: [],
@@ -93,16 +93,16 @@ function legacyScene(nodes: Array<{ id: string; roomId?: string; position: [numb
 			position: node.position,
 			cameraTarget: [node.position[0] + 1, node.position[1], node.position[2]] as [number, number, number],
 			fov: 60,
-			connectedNodeIds: []
+			connectedNodeIds: node.adjacent ?? []
 		})),
 		connections: []
 	};
 }
 
-function worldScene(nodes: Array<{ id: string; position: [number, number, number] }>) {
+function worldScene(nodes: Array<{ id: string; position: [number, number, number]; adjacent?: string[] }>) {
 	return {
 		formatVersion: 1,
-		...legacyScene(nodes.map((node) => ({ id: node.id, position: node.position })))
+		...legacyScene(nodes.map((node) => ({ id: node.id, position: node.position, ...(node.adjacent ? { adjacent: node.adjacent } : {}) })))
 	};
 }
 
@@ -374,6 +374,11 @@ describe('P23.0 stage 5 — no second Room transform at the museum/visitor seams
 			end: [0, 4],
 			interiorAnchors: [{ id: 'room-a-a1', point: [3, 5] }]
 		};
+		// A connection requires mutual adjacency claims.
+		const scene = worldScene([
+			{ id: 'node-1', position: [1, 2, 3], adjacent: ['node-2'] },
+			{ id: 'node-2', position: [7, 2, 3], adjacent: ['node-1'] }
+		]);
 		return {
 			id: 'project-adversarial',
 			name: 'Adversarial',
@@ -382,8 +387,45 @@ describe('P23.0 stage 5 — no second Room transform at the museum/visitor seams
 				floors: [{ id: 'floor-1', name: 'Floor 1', elevation: 0, height: 3, rooms: [room] }],
 				objects: []
 			},
-			scene: worldScene([{ id: 'node-1', position: [1, 2, 3] }])
+			scene: {
+				...scene,
+				// Every connection-scoped record shape, all room-less: a
+				// second transform has nowhere to hide.
+				connections: [
+					{
+						id: 'conn-1',
+						fromNodeId: 'node-1',
+						toNodeId: 'node-2',
+						clearance: 1,
+						positionPath: {
+							kind: 'rounded-polyline',
+							anchors: [{ id: 'anchor-1', position: [2, 0, 2] }]
+						},
+						targetWaypoints: [{ position: [3, 0, 3] }],
+						viewTracks: {
+							forward: [{ id: 'key-f', progress: 0.5, cameraTarget: [4, 0, 4], fov: 60 }],
+							reverse: [{ id: 'key-r', progress: 0.5, cameraTarget: [4, 0, 4], fov: 60 }]
+						}
+					}
+				]
+			}
 		};
+	}
+
+	function expectConnectionPassthrough(scene: { connections: Array<{ positionPath: { anchors: Array<{ id: string; position: [number, number, number] }> }; targetWaypoints?: Array<[number, number, number]>; viewTracks?: { forward: Array<{ cameraTarget: [number, number, number] }>; reverse: Array<{ cameraTarget: [number, number, number] }> } }> }) {
+		const connection = scene.connections[0]!;
+		// Interior records survive between the derived node endpoints
+		// (resolve prepends/appends endpoint positions/targets; runtime
+		// waypoints are bare Vec3s).
+		expect(connection.positionPath.anchors.find((anchor) => anchor.id === 'anchor-1')!.position).toEqual([2, 0, 2]);
+		expect(connection.positionPath.anchors[0]!.position).toEqual([1, 2, 3]);
+		expect(connection.targetWaypoints).toEqual([
+			[2, 2, 3],
+			[3, 0, 3],
+			[8, 2, 3]
+		]);
+		expect(connection.viewTracks!.forward[0]!.cameraTarget).toEqual([4, 0, 4]);
+		expect(connection.viewTracks!.reverse[0]!.cameraTarget).toEqual([4, 0, 4]);
 	}
 
 	it('resolveSceneDocument passes world records through a frame-carrying registry untouched', () => {
@@ -396,6 +438,7 @@ describe('P23.0 stage 5 — no second Room transform at the museum/visitor seams
 		const resolved = resolveSceneDocument(payload.scene, rooms);
 		expect(resolved.navigationNodes[0]!.position).toEqual([1, 2, 3]);
 		expect(resolved.navigationNodes[0]!.cameraTarget).toEqual([2, 2, 3]);
+		expectConnectionPassthrough(resolved);
 	});
 
 	it('the adversarial pairing prepares legacy-compatible/project-world with passthrough', () => {
@@ -426,6 +469,7 @@ describe('P23.0 stage 5 — no second Room transform at the museum/visitor seams
 			for (const bundle of [preview, visitor]) {
 				expect(bundle.scene.navigationNodes[0]!.position).toEqual([1, 2, 3]);
 				expect(bundle.scene.navigationNodes[0]!.cameraTarget).toEqual([2, 2, 3]);
+				expectConnectionPassthrough(bundle.scene);
 			}
 			expect(visitor.geometry).toEqual(preview.geometry);
 		} finally {

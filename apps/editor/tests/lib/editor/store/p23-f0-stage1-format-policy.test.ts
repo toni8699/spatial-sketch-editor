@@ -20,7 +20,14 @@
  * 2. every file with a DIRECT document-array write must be on the reviewed
  *    exception list with a named reason (else it may write outside the
  *    transaction bracket);
- * 3. the facade's three begin methods must textually consult the policy.
+ * 3. the facade's begin AND commit methods must textually consult the
+ *    policy (the commit re-check closes the mid-transaction swap hazard).
+ *
+ * Scope note (F0 review): scan 2 covers structural collection writes
+ * (assignment + mutating array methods). Scalar field writes
+ * (`node.position = …`) match no pattern — they are covered instead by
+ * scan 1: every bracket that could host them opens through the guarded
+ * facade, and the commit re-checks above refuse a swapped format.
  */
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -75,7 +82,7 @@ const ALL_SOURCE_FILES = walkSourceFiles(EDITOR_SRC_LIB);
 
 /** Files that CALL a document-transaction method on the store/facade. */
 const TRANSACTION_CALL_PATTERN =
-	/\.(beginLayoutTransaction|commitLayoutTransaction|cancelLayoutTransaction|beginDocumentTransaction|commitDocumentTransaction|beginCameraFramingTransaction)\(/;
+	/\.(beginLayoutTransaction|commitLayoutTransaction|cancelLayoutTransaction|beginDocumentTransaction|commitDocumentTransaction|cancelDocumentTransaction|beginCameraFramingTransaction)\(/;
 
 /**
  * The reviewed guarded-family inventory: files allowed to reference the
@@ -156,7 +163,7 @@ const DIRECT_WRITE_EXCEPTIONS: Record<string, string> = {
 describe('P23.0 F0 stage 1 — central format-dispatch policy tables', () => {
 	it('classifies every domain × format; nothing is unclassified', () => {
 		const layoutFormats = ['legacy', 'wall-first', 'unrecognized'] as const;
-		const sceneFormats = ['legacy-room-local', 'project-world'] as const;
+		const sceneFormats = ['legacy-room-local', 'project-world', 'unrecognized'] as const;
 		for (const format of layoutFormats) {
 			expect(LAYOUT_MUTATION_POLICY[format]).toBeDefined();
 		}
@@ -205,6 +212,19 @@ describe('P23.0 F0 stage 1 — central format-dispatch policy tables', () => {
 		expect(sceneMutationClassFor(worldLocal).policy).toBe('adapted');
 		expect(SCENE_MUTATION_REASONS['project-world']).toBeNull();
 	});
+
+	it('unrecognized scene versions are disabled, never legacy (F0 review fail-closed)', () => {
+		expect(SCENE_MUTATION_POLICY.unrecognized).toBe('disabled');
+		expect(SCENE_MUTATION_REASONS.unrecognized).toBeTruthy();
+		const future = { ...(chopinProject.scene as object), formatVersion: 2 } as unknown as Parameters<typeof classifySceneFormat>[0];
+		expect(classifySceneFormat(future)).toBe('unrecognized');
+		const refused = sceneMutationClassFor(future);
+		expect(refused.policy).toBe('disabled');
+		expect(refused.reason).toBe(SCENE_MUTATION_REASONS.unrecognized);
+		expect(isMutationAllowed(refused)).toBe(false);
+		// The discriminated formats still classify exactly.
+		expect(classifySceneFormat(chopinProject.scene)).toBe('legacy-room-local');
+	});
 });
 
 describe('P23.0 F0 stage 1 — exhaustive mutation-entry-point inventory', () => {
@@ -239,7 +259,7 @@ describe('P23.0 F0 stage 1 — exhaustive mutation-entry-point inventory', () =>
 		}
 	});
 
-	it('the facade begin methods consult the central policy (guard wiring)', () => {
+	it('the facade begin AND commit methods consult the central policy (guard wiring)', () => {
 		const storeSource = readFileSync(join(EDITOR_SRC_LIB, 'editor', 'editor-store.svelte.ts'), 'utf8');
 		const beginLayout = storeSource.slice(
 			storeSource.indexOf('beginLayoutTransaction(): boolean'),
@@ -248,12 +268,30 @@ describe('P23.0 F0 stage 1 — exhaustive mutation-entry-point inventory', () =>
 		expect(beginLayout).toContain('classifyLayoutFormat');
 		expect(beginLayout).toContain('LAYOUT_MUTATION_POLICY');
 
+		// F0 review: the commit re-check is the highest-risk line — pin that
+		// it consults the policy (and the named reasons table) too.
+		const commitLayout = storeSource.slice(
+			storeSource.indexOf('commitLayoutTransaction(snapshot'),
+			storeSource.indexOf('cancelLayoutTransaction(): boolean')
+		);
+		expect(commitLayout).toContain('classifyLayoutFormat');
+		expect(commitLayout).toContain('LAYOUT_MUTATION_POLICY');
+		expect(commitLayout).toContain('LAYOUT_MUTATION_REASONS');
+
 		const beginDocument = storeSource.slice(
 			storeSource.indexOf('beginDocumentTransaction()'),
 			storeSource.indexOf('beginCameraFramingTransaction()')
 		);
 		expect(beginDocument).toContain('classifySceneFormat');
 		expect(beginDocument).toContain('SCENE_MUTATION_POLICY');
+
+		const commitDocument = storeSource.slice(
+			storeSource.indexOf('commitDocumentTransaction()'),
+			storeSource.indexOf('cancelDocumentTransaction()')
+		);
+		expect(commitDocument).toContain('classifySceneFormat');
+		expect(commitDocument).toContain('SCENE_MUTATION_POLICY');
+		expect(commitDocument).toContain('SCENE_MUTATION_REASONS');
 
 		const beginFraming = storeSource.slice(storeSource.indexOf('beginCameraFramingTransaction()'));
 		expect(beginFraming).toContain('classifySceneFormat');
@@ -324,5 +362,44 @@ describe('P23.0 F0 stage 1 — behavioral guard contract', () => {
 		holder.project.layout = chopinProject.layout;
 		expect(store.beginLayoutTransaction()).toBe(true);
 		store.cancelLayoutTransaction();
+	});
+
+	it('a layout swap landing mid-transaction refuses commit and closes the bracket (F0 review)', () => {
+		const store = createFixtureEditorStore();
+		const holder = attachLayoutHost(store, chopinProject.layout);
+		expect(store.beginLayoutTransaction()).toBe(true);
+
+		// The swap lands while the transaction is open: begin saw legacy,
+		// the live layout is now wall-first.
+		holder.project.layout = wallFirstLayout;
+		expect(store.commitLayoutTransaction(null)).toBe(false);
+		expect(store.statusMessage).toBe(
+			'Wall-first layout mutation enables with the canonical writers (P23.0 stage 2)'
+		);
+
+		// The refused commit rolled back via cancel(): no open transaction
+		// leaks — swapping back to legacy re-opens cleanly. (begin() leaves
+		// the earlier refusal message in place; it only sets on refusal.)
+		holder.project.layout = chopinProject.layout;
+		expect(store.beginLayoutTransaction()).toBe(true);
+		store.cancelLayoutTransaction();
+	});
+
+	it('a scene swap landing mid-transaction refuses document commit and closes the bracket (F0 review)', () => {
+		const store = createFixtureEditorStore();
+		expect(store.beginDocumentTransaction()).toBe(true);
+
+		// No public swap primitive preserves an open transaction, so the
+		// test triggers the re-check branch directly: the live document
+		// carries a future (unrecognized) format at commit time.
+		(store.document as unknown as Record<string, unknown>).formatVersion = 2;
+		expect(store.commitDocumentTransaction()).toBe(false);
+		expect(store.statusMessage).toBe('Unrecognized scene format cannot be authored');
+
+		// cancel() restored the pre-transaction snapshot (legacy): authoring
+		// re-opens with no leaked bracket. (The refusal message persists;
+		// begin() only sets on refusal.)
+		expect(store.beginDocumentTransaction()).toBe(true);
+		store.cancelDocumentTransaction();
 	});
 });

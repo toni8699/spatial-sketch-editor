@@ -15,10 +15,16 @@
  *   byte-identical transforms, dangling associations reject at the canonical
  *   gate, replay restores exact associations, inputs are never mutated;
  * - Subdivision: a writer-born Room flows through `planWallSplit` + 1→1
- *   reconciliation with its ID preserved, boundaries rewritten, openings
- *   rebased, and interior splits rejected without mutation;
+ *   reconciliation with its ID preserved, boundaries rewritten
+ *   (forward and reverse arms), openings rebased (before/after plus exact
+ *   opening-edge splits), interior splits rejected without mutation, and an
+ *   associated object retaining the split survivor per the P23.8 rule.
+ *   Split/merge remap and disappearance clearing live one layer down in
+ *   `layout-room-reconciliation.test.ts` (births have no predecessors, so
+ *   there is nothing to remap from here).
  * - Portal: perimeter doors survive births unchanged, relations to unknown
- *   rooms reject, and a valid born relation survives the Save round-trip.
+ *   rooms reject, and a valid ADJACENT born relation (shared-wall pair per
+ *   the stage-5 Save-blocker contract) survives the Save round-trip.
  *
  * Writers stay disabled (pre-F0 stance) — this suite only calls the planners
  * as pure functions; the `wall-first` layout mutation policy remains
@@ -133,6 +139,21 @@ const RECT_CLOSED: readonly WallSeed[] = [
 function expectSuccess(plan: WallFirstOpPlan): asserts plan is Extract<WallFirstOpPlan, { kind: 'success' }> {
 	expect(plan.kind).toBe('success');
 	if (plan.kind !== 'success') throw new Error(`expected success, got: ${JSON.stringify(plan)}`);
+}
+
+/** Cyclic rotation equivalence of two oriented boundary cycles (directions included). */
+function isBoundaryRotation(
+	a: readonly { wallId: string; direction: 'forward' | 'reverse' }[],
+	b: readonly { wallId: string; direction: 'forward' | 'reverse' }[]
+): boolean {
+	if (a.length !== b.length || a.length === 0) return false;
+	return a.some((_, start) =>
+		a.every(
+			(entry, index) =>
+				entry.wallId === b[(start + index) % b.length]!.wallId &&
+				entry.direction === b[(start + index) % b.length]!.direction
+		)
+	);
 }
 
 function expectRejected(plan: WallFirstOpPlan, code: string): void {
@@ -259,21 +280,21 @@ describe('P23.0 stage 3 — Room identity fixtures against the birth writers', (
 		// Face keys (and therefore IDs/names/defaults) are rotation-
 		// canonicalized, so both orders birth the same Room identity — but the
 		// stored boundary cycle may start at a different wall depending on
-		// traversal start. Assert cycle equivalence, not byte equality.
+		// traversal start. Assert rotation equivalence with directions, not
+		// byte equality (extraction normalizes traversal orientation once,
+		// so a pure rotation — never a reversal — relates the two).
 		expect(reversed.document.rooms.map((room) => room.id)).toEqual(
 			forward.document.rooms.map((room) => room.id)
 		);
 		expect(reversed.document.rooms.map((room) => room.name)).toEqual(
 			forward.document.rooms.map((room) => room.name)
 		);
-		expect(reversed.document.rooms[0]!.boundary).toHaveLength(
-			forward.document.rooms[0]!.boundary.length
-		);
-		const wallSet = (boundary: readonly { wallId: string }[]) =>
-			[...boundary.map((ref) => ref.wallId)].sort();
-		expect(wallSet(reversed.document.rooms[0]!.boundary)).toEqual(
-			wallSet(forward.document.rooms[0]!.boundary)
-		);
+		expect(
+			isBoundaryRotation(
+				forward.document.rooms[0]!.boundary,
+				reversed.document.rooms[0]!.boundary
+			)
+		).toBe(true);
 	});
 
 	it('a partial partition flip that leaves the chain open births no Room', () => {
@@ -417,22 +438,16 @@ describe('P23.0 stage 3 — subdivision fixtures against writer-born Rooms', () 
 		return plan.document;
 	}
 
-	it('splitting a born Room wall preserves the Room ID and rewrites the boundary', () => {
-		const born = bornRectWithDoor();
-		const bornRoomId = born.rooms[0]!.id;
-		const split = planWallSplit(born, 'wall-a', 2, nodingAllocator());
-		expect(split.kind).toBe('success');
-		if (split.kind !== 'success') return;
-		const fragmentId = split.createdWallIds[0]!;
-
-		const extraction = extractBoundaryCandidateFaces({ ...split.document, rooms: [] });
+	/** 1→1 subdivision reconciliation with an allocator that must never run. */
+	function reconcileSubdivision(baseline: LayoutDocumentWallFirst, split: LayoutDocumentWallFirst) {
+		const extraction = extractBoundaryCandidateFaces({ ...split, rooms: [] });
 		expect(extraction.faces).toHaveLength(1);
 		const reconciled = reconcileRooms({
-			baseline: born,
-			candidateDocument: split.document,
+			baseline,
+			candidateDocument: split,
 			extraction,
 			components: [
-				{ candidateFaceKeys: [extraction.faces[0]!.key], predecessorRoomIds: [bornRoomId] }
+				{ candidateFaceKeys: [extraction.faces[0]!.key], predecessorRoomIds: [baseline.rooms[0]!.id] }
 			],
 			allocator: {
 				nextRoomId: () => {
@@ -444,20 +459,88 @@ describe('P23.0 stage 3 — subdivision fixtures against writer-born Rooms', () 
 			}
 		});
 		if (!('document' in reconciled)) throw new Error('expected success');
+		return reconciled.document;
+	}
+
+	it('splitting a born Room wall preserves the Room ID and rewrites the boundary', () => {
+		const born = bornRectWithDoor();
+		const bornRoomId = born.rooms[0]!.id;
+		const split = planWallSplit(born, 'wall-a', 2, nodingAllocator());
+		expect(split.kind).toBe('success');
+		if (split.kind !== 'success') return;
+		const fragmentId = split.createdWallIds[0]!;
+
 		// Subdivision that preserves face count is a 1→1 lineage case: the
 		// born identity survives, no allocator involved.
-		expect(reconciled.document.rooms).toHaveLength(1);
-		expect(reconciled.document.rooms[0]!.id).toBe(bornRoomId);
-		expect(reconciled.document.rooms[0]!.name).toBe('Draft Room 1');
-		const wallIds = new Set(reconciled.document.rooms[0]!.boundary.map((ref) => ref.wallId));
+		const document = reconcileSubdivision(born, split.document);
+		expect(document.rooms).toHaveLength(1);
+		expect(document.rooms[0]!.id).toBe(bornRoomId);
+		expect(document.rooms[0]!.name).toBe('Draft Room 1');
+		const wallIds = new Set(document.rooms[0]!.boundary.map((ref) => ref.wallId));
 		expect(wallIds.has('wall-a')).toBe(true);
 		expect(wallIds.has(fragmentId)).toBe(true);
 		// Object association + transform untouched by the subdivision.
-		expect(reconciled.document.objects[0]).toMatchObject({
+		expect(document.objects[0]).toMatchObject({
 			id: 'crate-1',
 			position: [4, 0, 2]
 		});
-		expect(reconciled.document.objects[0]!.roomId).toBeUndefined();
+		expect(document.objects[0]!.roomId).toBeUndefined();
+	});
+
+	it('an associated object retains the survivor through born-room subdivision (P23.8 survivor rule)', () => {
+		const born = bornRectWithDoor();
+		const bornRoomId = born.rooms[0]!.id;
+		// Births accept no predecessors, so association attaches post-birth
+		// to the born identity — the survivor of the coming split.
+		const associated: LayoutDocumentWallFirst = {
+			...born,
+			objects: [
+				{
+					id: 'crate-1',
+					kind: 'box',
+					position: [1, 0, 1],
+					rotation: [0, 0, 0],
+					dimensions: [1, 1, 1],
+					roomId: bornRoomId
+				}
+			]
+		};
+		const split = planWallSplit(associated, 'wall-a', 2, nodingAllocator());
+		expect(split.kind).toBe('success');
+		if (split.kind !== 'success') return;
+		const document = reconcileSubdivision(associated, split.document);
+		// The association retains the predecessor ID without choosing by
+		// object position — and the transform never moves.
+		expect(document.objects).toHaveLength(1);
+		expect(document.objects[0]!.roomId).toBe(bornRoomId);
+		expect(document.objects[0]!.position).toEqual([1, 0, 1]);
+	});
+
+	it('reverse born boundaries rewrite [W reverse] → [W2 reverse, W reverse]', () => {
+		const born = bornRectWithDoor();
+		const reversed: LayoutDocumentWallFirst = {
+			...born,
+			rooms: [
+				{
+					...born.rooms[0]!,
+					boundary: born.rooms[0]!.boundary.map((ref) => ({ ...ref, direction: 'reverse' as const }))
+				}
+			]
+		};
+		const split = planWallSplit(reversed, 'wall-a', 2, nodingAllocator());
+		expect(split.kind).toBe('success');
+		if (split.kind !== 'success') return;
+		const fragmentId = split.createdWallIds[0]!;
+		const boundary = split.document.rooms[0]!.boundary;
+		const at = boundary.findIndex((ref) => ref.wallId === fragmentId);
+		expect(at).toBeGreaterThanOrEqual(0);
+		// Reverse arm: the new fragment precedes the retained wall, both reversed.
+		expect(boundary.slice(at, at + 2)).toEqual([
+			{ wallId: fragmentId, direction: 'reverse' },
+			{ wallId: 'wall-a', direction: 'reverse' }
+		]);
+		const document = reconcileSubdivision(reversed, split.document);
+		expect(document.rooms[0]!.id).toBe(born.rooms[0]!.id);
 	});
 
 	it('openings rebase by meter offset when a born wall splits around them', () => {
@@ -470,6 +553,31 @@ describe('P23.0 stage 3 — subdivision fixtures against writer-born Rooms', () 
 		const door = split.document.openings.find((opening) => opening.id === 'door-1')!;
 		expect(door.wallId).toBe(split.createdWallIds[0]!);
 		expect(door.offset).toBe(2);
+	});
+
+	it('splitting exactly at a born opening edge rebases deterministically', () => {
+		const plan = planFirstEnclosureCreation({
+			candidateDocument: birthDocument({
+				junctions: RECT_JUNCTIONS,
+				walls: RECT_CLOSED,
+				openings: [{ id: 'door-edge', wallId: 'wall-a', kind: 'door', offset: 2, width: 1 }]
+			})
+		});
+		expectSuccess(plan);
+		// Split exactly at the opening start: moves to the new wall at offset 0.
+		const atStart = planWallSplit(plan.document, 'wall-a', 2, nodingAllocator());
+		expect(atStart.kind).toBe('success');
+		if (atStart.kind !== 'success') return;
+		const moved = atStart.document.openings.find((opening) => opening.id === 'door-edge')!;
+		expect(moved.wallId).toBe(atStart.createdWallIds[0]!);
+		expect(moved.offset).toBe(0);
+		// Split exactly at the opening end: remains on the retained wall.
+		const atEnd = planWallSplit(plan.document, 'wall-a', 3, nodingAllocator());
+		expect(atEnd.kind).toBe('success');
+		if (atEnd.kind !== 'success') return;
+		const kept = atEnd.document.openings.find((opening) => opening.id === 'door-edge')!;
+		expect(kept.wallId).toBe('wall-a');
+		expect(kept.offset).toBe(2);
 	});
 
 	it('splitting through a born door interior rejects and mutates nothing', () => {
@@ -653,10 +761,8 @@ describe('P23.0 stage 3 — Save writer round-trip of born content', () => {
 		expect(decoded.kind).toBe('wall-first');
 		if (decoded.kind !== 'wall-first') return;
 		const layout = decoded.project.layout as LayoutDocumentWallFirst;
-		expect(layout.rooms).toEqual(birth.document.rooms);
-		expect(layout.openings).toEqual(birth.document.openings);
-		expect(layout.objects).toEqual(birth.document.objects);
-		expect(layout.walls).toEqual(birth.document.walls);
+		// Full byte-identity: junctions, floor frame and every collection.
+		expect(layout).toEqual(birth.document);
 	});
 
 	it('the Save writer still rejects born content with dangling references', () => {

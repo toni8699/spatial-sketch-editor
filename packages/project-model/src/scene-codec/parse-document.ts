@@ -141,10 +141,11 @@ function readWorldLocalRoomId(
 	options: { worldLocal: boolean }
 ): string | undefined {
 	if (!options.worldLocal) return readRoomId(input, 'roomId', path, issues);
-	if (!('roomId' in input)) return undefined;
-	// P23.0b: a present roomId is rejected by name (and reported here so the
-	// aggregate issue check sees it); an absent key is legal — world
-	// coordinates — and must not fail the `roomId === undefined` guard below.
+	// Value-based like the entity parser: an absent key is legal world
+	// coordinates, a present value is rejected by name (and reported so the
+	// aggregate issue check sees it). A present-but-undefined key (e.g. a
+	// pre-fix canonical artifact) is tolerated, never a second transform.
+	if (input.roomId === undefined) return undefined;
 	addIssue(
 		issues,
 		`${path}.roomId`,

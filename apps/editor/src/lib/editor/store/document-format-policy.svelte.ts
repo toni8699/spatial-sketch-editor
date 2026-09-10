@@ -44,8 +44,8 @@ import { decodeLayoutValueCompatible } from '$lib/layout/layout-compat';
 /** The three P23.0 adapter classifications. */
 export type DocumentFormatMutationPolicy = 'adapted' | 'read-only' | 'disabled';
 
-/** Scene format discriminators (P23.0b world-local Scene). */
-export type SceneFormatKey = 'legacy-room-local' | 'project-world';
+/** Scene format discriminators (P23.0b world-local Scene + fail-closed unknown). */
+export type SceneFormatKey = 'legacy-room-local' | 'project-world' | 'unrecognized';
 
 /**
  * Layout format discriminators (P23.0a compat decode kinds). The legacy
@@ -66,20 +66,24 @@ export type DocumentFormatMutationClass = {
 };
 
 /**
- * Scene-domain policy. Both scene formats stay `adapted` in stage 1: the
- * Scene mutators already carry the world-local branch (P23.0b adapter
+ * Scene-domain policy. Both known scene formats stay `adapted` in stage 1:
+ * the Scene mutators already carry the world-local branch (P23.0b adapter
  * audit — identity frame for absent `roomId`), and legacy scene mutation
- * is the current authoring behavior.
+ * is the current authoring behavior. Unknown scene versions are `disabled`
+ * by construction (F0 review: the classifier used to fold them into
+ * legacy-room-local; a future formatVersion must never author as legacy).
  */
 export const SCENE_MUTATION_POLICY: Record<SceneFormatKey, DocumentFormatMutationPolicy> = {
 	'legacy-room-local': 'adapted',
-	'project-world': 'adapted'
+	'project-world': 'adapted',
+	unrecognized: 'disabled'
 };
 
-/** Refusal reasons for the scene domain (empty while everything is adapted). */
+/** Refusal reasons for the scene domain (null while the format is adapted). */
 export const SCENE_MUTATION_REASONS: Record<SceneFormatKey, string | null> = {
 	'legacy-room-local': null,
-	'project-world': null
+	'project-world': null,
+	unrecognized: 'Unrecognized scene format cannot be authored'
 };
 
 /**
@@ -103,11 +107,18 @@ export const LAYOUT_MUTATION_REASONS: Record<LayoutFormatKey, string | null> = {
 	unrecognized: 'Unrecognized layout format cannot be authored'
 };
 
-/** Classify a Scene document by its P23.0b format discriminator. */
+/**
+ * Classify a Scene document by its P23.0b format discriminator. Fail-closed:
+ * an explicit `formatVersion` that is neither the world-local version nor
+ * absent (legacy) is `unrecognized`, never legacy — a future format must not
+ * author through the legacy mutators. The typed `SceneDocument` cannot carry
+ * such a value, but runtime JSON (casts, future imports) can.
+ */
 export function classifySceneFormat(document: SceneDocument): SceneFormatKey {
-	return document.formatVersion === SCENE_WORLD_LOCAL_FORMAT_VERSION
-		? 'project-world'
-		: 'legacy-room-local';
+	const version = (document as { formatVersion?: unknown }).formatVersion;
+	if (version === SCENE_WORLD_LOCAL_FORMAT_VERSION) return 'project-world';
+	if (version === undefined) return 'legacy-room-local';
+	return 'unrecognized';
 }
 
 /** Classify an unknown layout value through the P23.0a compat decoder. */

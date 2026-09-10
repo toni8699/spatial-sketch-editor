@@ -91,6 +91,8 @@ export type WallFirstOpRejection = {
 	/** Involved authored IDs where available. */
 	wallIds?: string[];
 	roomIds?: string[];
+	/** Candidate face key, when the rejection names a face (not a wall). */
+	faceKey?: string;
 	/** Face-extraction diagnostics that caused the rejection, if any. */
 	topology?: readonly TopologyDiagnostic[];
 	/** The final canonical gate's issues, when validation rejects. */
@@ -178,7 +180,7 @@ function runRoomBirthOperation(options: {
 			code: 'room_reconciliation_rejected',
 			message: result.rejection.message,
 			...(result.rejection.roomIds ? { roomIds: result.rejection.roomIds } : {}),
-			...(result.rejection.faceKey ? { wallIds: [result.rejection.faceKey] } : {})
+			...(result.rejection.faceKey ? { faceKey: result.rejection.faceKey } : {})
 		});
 	}
 

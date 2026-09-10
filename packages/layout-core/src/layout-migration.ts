@@ -273,10 +273,11 @@ export function migrateLegacyLayoutDocument(
 	// Legacy relations migrate verbatim (never silently cleared) so old
 	// projects stay readable; a relation that violates the strict new-schema
 	// adjacency contract is diagnosed here and blocks new-schema Save later
-	// (P23.0 portal Save-blocker), instead of failing this migration.
+	// (P23.0 portal Save-blocker), instead of failing this migration. Path
+	// scheme matches the Save gate (`$.openings[<index>].connectsRoomIds`).
 	for (const portal of validateWallFirstPortalRelations(finalDocument)) {
 		diagnostics.push({
-			path: `$.openings.${portal.openingId}.connectsRoomIds`,
+			path: portal.path,
 			code: portal.code,
 			message: `Carried legacy portal relation: ${portal.message}`,
 			targetId: portal.openingId

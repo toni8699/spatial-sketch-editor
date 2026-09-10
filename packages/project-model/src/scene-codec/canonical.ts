@@ -123,7 +123,7 @@ export function cloneEntity(entity: SceneEntity): SceneEntity {
 		kind: 'light',
 		id: entity.id,
 		name: entity.name,
-		roomId: entity.roomId,
+		...(entity.roomId === undefined ? {} : { roomId: entity.roomId }),
 		light: 'directional',
 		color: entity.color,
 		intensity: entity.intensity,
