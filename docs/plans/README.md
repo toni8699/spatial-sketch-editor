@@ -161,9 +161,11 @@ gate) now lives in the archived docs, not here.
   was owner-ratified 2026-09-09 after H1/H2/H3/H5. F0 is one gate across P23.0 +
   P23.8: schema/compat scaffolding → topology/Room reconciliation →
   migration/compiler/editor-adapter cutover → compatibility acceptance →
-  enable wall-first writers. Wall-first Layout + world-local Scene authoring is
-  now the live foundation; legacy room-owned/room-local documents remain only
-  through compatibility import/read paths. The Pascal harvest is closed optional
+  enable wall-first writers. Wall-first Layout + canonical world-local Scene
+  **library/runtime contract** is now the live foundation; live editor Scene
+  authoring/persistence still carries explicit legacy Room-context seams tracked
+  by P24 R0/R9. Legacy room-owned/room-local documents remain only through
+  compatibility import/read paths. The Pascal harvest is closed optional
   evidence and does not delay F0 or any P23 child whose documented dependencies
   are otherwise met.
 - Long-term tiers renumbered 2026-09-05 (owner): P23 Layout Depth, P24

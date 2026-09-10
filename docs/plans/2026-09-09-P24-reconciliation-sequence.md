@@ -25,7 +25,7 @@ P24 reconciliation
 
 P24 implementation still depends on the accepted P23 minimum useful Build set. Any P24 decision touching coordinates, placement ownership, selection routing, Plan projection or Scene/Camera migration must consume the coordinate/ownership model accepted through P23, not assume the earlier Room-local baseline remains permanent.
 
-P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code. P23 F0 closed on 2026-09-10; this sequence is now in its targeted post-F0 seam recheck before the R9 minimum freeze.
+P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code. P23 F0 closed on 2026-09-10. The R0 post-F0 delta refresh below is complete; selected P24 placement, selection, support-query and persistence integration seams still carry explicit R9 rechecks before the minimum can freeze.
 
 ## Authority and evidence order
 
@@ -111,7 +111,7 @@ irrelevant to P24
 
 R0 prevents P24 from freezing around code that P23 is already scheduled to replace.
 
-### R0 result — 2026-09-09 audit
+### R0 result — 2026-09-09 audit (historical)
 
 R0 audit baseline:
 remote parent: `e030038fa3708f578baf97a6bc4f8b6c77b5f689`
@@ -122,25 +122,54 @@ At that audit baseline, F0 scaffolding decoded nothing wall-first and authoring
 remained Room-owned/Room-local. The table below is historical evidence, not a claim
 about today's implementation.
 
-**Current-state qualification:** P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code, but F0 acceptance remains open and wall-first writer enablement remains gated.
-Current Scene/footprint code includes world-local handling and optional legacy
-`roomId`; the earlier no-discriminator/required-room observations must not be used
-as current invariants. R2/R5–R8 and the draft freeze packet carry dated pre-F0
-observations/line references; refresh affected rows against the accepted baseline
-at R9 rather than treating compatibility code as F0 acceptance.
+**Superseded qualification (2026-09-09):** the first audit ran before F0 acceptance and writer enablement. Its observations remain useful only as the pre-F0 delta baseline. Do not use its required-room assumptions or `requires post-F0 recheck` labels as current conclusions; the 2026-09-10 refresh below supersedes them.
 
-| Seam | Class |
+| Seam | Historical class |
 |---|---|
-| Scene transform storage + world conversion (`packages/project-model/src/scene.ts`) | changes in F0 / requires post-F0 recheck (world-local migration is P23.0b) |
-| Plan footprint/proxy (`plan-scene-footprint.ts`) | logic stable / requires recheck (`rooms` source becomes wall-first registry) |
-| Plan translate/rotate adapters (`plan-scene-transform.ts`) | stable / requires recheck (inverse-resolve disappears under world-local) |
-| Placement + floor assumptions (`editor-placement.ts`, `placement-cluster-mutator.svelte.ts`) | stable / requires recheck (no stacked/support choice, no Layout-query lookup) |
-| Selection identity (`selection-store.svelte.ts`) | stable / recheck for R4 continuity only |
-| History/gesture (`history-controller.svelte.ts`) | stable / recheck operation-owner tags |
+| Scene transform storage + world conversion (`packages/project-model/src/scene.ts`) | changes in F0 / required post-F0 recheck (world-local migration was P23.0b) |
+| Plan footprint/proxy (`plan-scene-footprint.ts`) | logic stable / required recheck (`rooms` source changed under F0) |
+| Plan translate/rotate adapters (`plan-scene-transform.ts`) | stable / required recheck (world-local identity-frame behavior not yet accepted) |
+| Placement + floor assumptions (`editor-placement.ts`, `placement-cluster-mutator.svelte.ts`) | stable / required recheck (no stacked/support choice, no Layout-query lookup) |
+| Selection identity (`selection-store.svelte.ts`) | stable / required R4 continuity recheck |
+| History/gesture (`history-controller.svelte.ts`) | stable / required operation-owner recheck |
 | Camera records in Scene | changes in F0 where touching shared resolver; pure tour routing irrelevant |
-| Layout/Scene ownership boundary | changes in F0 (Layout side) / recheck — no persistent support dep without contract |
-| `compileLayoutGeometry()` / query / editor-adapter | changes in F0 / recheck — support resolution source |
-| Save/Load + P22 visitor | stable / recheck after world migration; Project Save/Load codec has no active Scene schema discriminator (package export versioning is a separate seam); `/museum` isolation holds |
+| Layout/Scene ownership boundary | changes in F0 (Layout side) / required recheck — no persistent support dep without contract |
+| `compileLayoutGeometry()` / query / editor-adapter | changes in F0 / required recheck — support resolution source |
+| Save/Load + P22 visitor | required recheck after world migration; package export versioning remained a separate seam |
+
+### R0 post-F0 delta refresh — 2026-09-10
+
+**Accepted baseline:** P23 Foundation Gate F0 is closed on `main` through PR #7 (`32b2e8f`), including the stage-6 wall-first writer flip (`455f587`), cross-format transaction-invariant restoration (`93111a2`), and final proof tightening (`79b3551`). Earlier F0 stages established the shared compatible Preview/visitor runtime (`2c9b04d`) and the no-second-transform / standalone Scene import proofs (`0d66aed`).
+
+F0 closes the coordinate-meaning ambiguity. Canonical new Scene state is now **project/world-space** with `formatVersion: 1`; entities, clusters, navigation nodes, path anchors/waypoints and view keyframes must not carry `roomId`. Legacy room-local Scene remains an explicit compatibility input only. Successful legacy migration resolves physical values exactly once through the trusted legacy Room registry, removes `roomId`, and writes world-local meaning. A wall-first Layout paired with a legacy room-local Scene is rejected when the source Room frames are no longer available; the runtime never guesses them.
+
+The refresh also exposes a narrower truth than “F0 made Stage world-local”: the canonical project/runtime model is world-local, but several live **editor authoring** paths still carry legacy Room context. P24 must not freeze those paths as future semantics.
+
+| Seam | F0 delta / live code | Post-F0 status | Later P24 recheck |
+|---|---|---|---|
+| Scene transform storage + world conversion (`scene.ts`, `scene-format.ts`, `scene-world-conversion.ts`, `project-compat.ts`) | `formatVersion: 1` explicitly identifies project/world Scene; canonical world-local records forbid `roomId`; legacy conversion resolves position/target and full rotation once against trusted legacy frames, then strips room ownership | **STABLE F0 contract** | No semantic redecision. Keep legacy compatibility branch while old inputs remain supported; stale room-local comments may be cleaned separately |
+| `LayoutDocument` / `SceneDocument` ownership boundary | F0 changes Layout's canonical generation to wall-first and Scene coordinates to project/world; it does **not** merge document ownership. Layout structure stays Layout-owned; staged models/primitives/lights/materials/cameras stay Scene-owned | **STABLE ownership** | Support/floor lookup stays a transient Layout-geometry calculation by default. Any future persistent support reference needs its own ownership/delete/history contract |
+| Room resolver / coordinate adapter (`project-layout-semantics.ts`) | `pointInFrame` / `localPointInFrame` resolve a present legacy `roomId`; absent `roomId` is identity. Wall-first/world-local runtime uses an empty registry whose undefined-frame helpers are identity and whose named-room lookups fail closed | **STABLE compatibility seam** | Do not remove inverse/frame adapters merely because canonical Scene is world-local; legacy-compatible input still needs them |
+| Scene Plan footprint/proxy (`plan-scene-footprint.ts`) | Projection accepts optional legacy `roomId`; world-local entities pass through identity frame after scale/yaw/translation. Y still drops only at Plan projection; lights remain non-footprinted | **STABLE projection math** | R3/R4 acceptance still must pin same-ID Plan/3D continuity, Plan eligibility and preservation of Y/pitch/roll/scale on canonical world-local entities |
+| Plan Scene translate/rotate (`plan-scene-transform.ts`) | Baselines carry optional `roomId`; world pivot and inverse write use identity frame for world-local Scene, legacy frame conversion for compatibility input | **STABLE adapter math** | Recheck only integration/fixtures when P24 shared placement uses canonical world-local Scene. “Remove inverse-resolve” is no longer a requirement |
+| Scene placement / grounding (`editor-placement.ts`, `placement-cluster-mutator.svelte.ts`) | Grounding remains rendered tagged-floor / 5-ray based and does not consume compiled Layout query geometry. More importantly, placement creation still accepts/writes `roomId`, and selectability still depends on selected Room context | **NOT CLOSED for canonical world-local authoring** | Before a P24 child freeze: decouple canonical placement/selectability from Room ownership; resolve floor/support Y from an explicit surface source; decide stacked-surface choice; keep persistent cross-document support links out unless separately designed; recheck duplicate re-ground |
+| Selection identity / cross-view selection (`selection-store.svelte.ts`, `editor-types.ts`, `selection-actions.svelte.ts`) | Entity IDs and the existing workspace/navigation reducer remain canonical. Selection actions contain a world-local branch, but `WorkspaceSelection` still requires `roomId` and the placement selectability host remains Room-gated | **IDENTITY STABLE; ROOM CONTEXT NOT CLOSED** | Remove Room ownership as a requirement for world-local Scene selection without creating a second selection store; pin R4 Plan↔3D continuity and Plan-ineligible-selected behavior |
+| Scene history / gesture lifecycle (`history-controller.svelte.ts`, format policy) | One chronological stack still tags `scene` vs `layout`; one Scene transaction validates/commits one document result, no-op commits none. F0 adds fail-closed format dispatch and cross-format transaction invariants rather than a new history model | **STABLE history architecture** | R9 still names operation owner/history behavior for each selected P24 op. No mixed Layout/Scene transaction or hidden support-side write without an explicit atomic contract |
+| Layout compiler + query geometry (`layout-geometry.ts`, `layout-geometry-types.ts`, `plan-hit.ts`) | Legacy and wall-first compiler entries converge through the shared compiler core. `CompiledLayoutGeometry.queries` remains the render-neutral point/span/polygon/AABB query contract; wall-first physical-wall identity comes from canonical wall-first inputs | **STABLE compiler/query core** | P24 support placement must consume this seam rather than create another geometry/query system. Recheck exact floor/wall/support metadata needed by selected placement operations because current Stage placement does not use it yet |
+| Camera records inside Scene | Nodes, path anchors/waypoints and view keyframes participate in the same one-time world-local conversion; runtime graph builds after compatible preparation | **STABLE for P24** | Pure topology/Sequence/motion stays outside P24. Do not introduce a second route or motion system; only recheck if a selected P24 capability directly touches shared Scene persistence |
+| Canonical project writer / compatible decode (`wall-first-project.ts`, `project-compat.ts`) | F0 now has a canonical wall-first + world-local project writer and explicit compatible decode/migration matrix | **STABLE library boundary** | P24 persistence must use this meaning; no fallback to guessed Room frames |
+| Live editor cloud Save/Load (`EditorApp.svelte`, `project-codec.ts`) | Live `captureValidatedSaveSnapshot()` and `loadProject()` still call legacy `validateProject`; `createEmptyProject()` also boots the legacy project shape. This is distinct from the new canonical writer/compat runtime | **NOT CLOSED** | Before P24 world-local authoring freezes: reconcile live Save/Load with compatible decode + canonical wall-first/world-local persistence, while preserving project/asset readiness and save guards. Package manifest/versioning stays a separate reviewed seam |
+| Preview + P22 cold visitor (`compat-runtime.ts`, `preview-coordinator.ts`, `visitor-cold-runtime.ts`) | Both now open through shared `prepareCompatibleRuntime()`: decode compatibly, compile through the single shared geometry core, resolve legacy frames at most once, then operate on one runtime/world representation. F0 parity tests pin wall-first Preview/cold-visitor equality | **STABLE coordinate/runtime seam** | Only capability-specific P24 parity remains: model registry/retention, added materials/lights/environment and asset resolution if selected. No coordinate migration re-open |
+| Visitor/editor isolation | Shared compatibility work lives in visitor-safe project/runtime packages; Preview and cold visitor consume canonical data/runtime meaning rather than editor selection/history/gizmo/session state | **STABLE boundary** | P24 helpers, proxies, selection, gizmos and acquisition UI remain editor-only; verify new selected capabilities do not leak them into cold visitor bundles |
+
+**R0 conclusion:** F0 has stabilized the canonical coordinate model, Layout/Scene ownership, shared compiler/query core, Plan transform/projection math, history architecture, and Preview/cold-visitor coordinate/runtime preparation. P24 no longer waits on those semantics. The remaining post-F0 blockers are narrower and concrete:
+
+1. **Stage authoring Room coupling:** placement/selectability and workspace-selection context still assume Room ownership even though canonical world-local Scene forbids `roomId`.
+2. **Live persistence cutover:** canonical writer/compatible decode exist, but editor cloud Save/Load still routes through legacy `validateProject`.
+3. **Support/surface integration:** the compiled Layout query core is stable, but current Scene grounding/placement still uses rendered tagged floors and has no explicit stacked/support resolver.
+4. **Capability-specific asset/runtime parity:** P24A model registry/pinning and any selected material/light/environment additions still need Save/Load + cold-visitor acceptance, without reopening the now-stable coordinate runtime.
+
+These are R9 inputs, not authorization to implement them in R0. R2/R5–R8 remain dated pre-F0 evidence where labeled; when they conflict with this refresh, this 2026-09-10 R0 result wins.
 
 ## R1 — P24A implementation-readiness reconciliation
 
@@ -408,10 +437,11 @@ Bulk transform/material multi-edit, Scene/asset integrity diagnostics surface, a
 
 ### B. Decisions pending post-F0 recheck (decided at R9, after R0 gate item 7)
 
-- Selection-Center pivot rigidity in the world frame; multi-selection Local frame semantics.
-- Align/distribute reference-frame behavior; duplicate re-ground support source; cluster Room-gate removal.
-- Post-F0 Scene grouping/selection semantics; Plan projection source changes; adapter inverse-resolve removal effects.
-- P24A import consumption, Save/Load codec + P22 model resolution/pinning (R1 open items).
+- Selection-Center pivot rigidity in the project/world frame; multi-selection Local frame semantics.
+- Align/distribute reference-frame behavior; duplicate re-ground support source; cluster/workspace Room-context removal for canonical world-local Scene.
+- Plan projection/transform integration with the world-local identity-frame path; retain inverse-resolve only for explicit legacy compatibility rather than treating its removal as a goal.
+- Canonical Scene placement/selectability against wall-first Layout support/surface queries; no persistent Layout/Scene support dependency by default.
+- P24A import consumption; live Save/Load compatible/canonical cutover; P22 model resolution/pinning and selected-capability cold-visitor parity (R1 open items).
 
 ### C. R9 inclusion decisions (not F0-dependent; include-in-minimum vs depth tail at freeze)
 
@@ -440,8 +470,8 @@ instruction to run them all or automatically adopt its numerical budgets.
 3. Final maturity matrix — R2 baseline done; final pass at freeze.
 4. Operation/history ownership per capability — open.
 5. Plan/3D acceptance — themes + R3/R4/R8 rules done; fixtures at freeze.
-6. Save/Load + P22 acceptance — open, post-F0.
-7. Post-F0 seam recheck — in progress after F0 closure; required before R9 freeze.
+6. Save/Load + P22 acceptance — open; R0 now names live legacy-codec cutover + capability-specific visitor/asset parity as the remaining work.
+7. Post-F0 seam recheck — **R0 delta refresh complete 2026-09-10**; selected P24 placement/selection/support-query/persistence integration checks remain named blockers before R9 freeze.
 8. Renderer/dependency baseline + acceptance definition — open; conditional upgrade comparison, no r186 pin.
 9. Child plans + owner review — last.
 
@@ -521,7 +551,7 @@ Only after R0–R8 have enough evidence:
 4. define deterministic operation/history ownership for every included capability;
 5. define Plan/3D acceptance where both views participate;
 6. define Save/Load + P22 visitor acceptance;
-7. run a targeted post-P23-F0 seam recheck for every item R0 marked `requires post-F0 recheck`;
+7. consume the completed R0 post-F0 delta refresh and close the named capability-specific placement/selection/support-query/persistence rechecks before freezing any affected child plan;
 8. select the conditional Three/types/Threlte renderer/dependency baseline and define its acceptance gate (F13); an upgrade is separately scoped, not implied by the harvest or required for already-available capabilities. Record required compatibility/visual/lifetime/performance proof as an implementation ship gate; no changed baseline enters production until it passes;
 9. then update/write implementation-ready P24 child plans and request owner review.
 
