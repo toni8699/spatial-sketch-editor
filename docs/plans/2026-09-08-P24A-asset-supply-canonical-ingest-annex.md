@@ -1,11 +1,14 @@
 # P24A — Asset Supply + Canonical Ingest annex
 
+**R9 closeout (2026-09-10):** [Minimum freeze](2026-09-10-P24-R9-minimum-freeze.md) is the current inclusion/maturity/operation/acceptance authority; [P24.0–P24.5 child briefs](2026-09-10-P24-minimum-child-plans.md) are implementation-ready for owner review. Earlier draft/pending-minimum wording below is superseded by R9. Source rechecks are closed as planning evidence; implementation and runtime ship gates remain open. P24 remains proposed; execution waits for the accepted P23 minimum and approval.
+
+
 **Ratified cross-view direction:** [Unified Plan / 3D authoring addendum](2026-09-09-P23-P24-unified-plan-3d-authoring-addendum.md) — read alongside this plan for entity-owned mutations, selection continuity, gesture cancellation and PlanProxy/placement ownership. Existing scope, status and dependency gates remain unchanged.  
 **P24 reconciliation sequence:** [2026-09-09-P24-reconciliation-sequence.md](2026-09-09-P24-reconciliation-sequence.md)
 
 **Created:** 2026-09-08  
 **Parent:** [P24 — Scene / Staging Depth umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md)  
-**Status:** `evidence complete — reconciliation pending` — Phase 2 research plus the bounded R1 implementation-readiness pass are complete; implementation still waits for R9 minimum freeze and the named integration blockers below.  
+**Status:** `minimum frozen — implementation pending` — R1 evidence and R9 planning reconciliation complete; P24.1 executes the static-first supply minimum under the child dependencies.
 **Tracker:** P24 remains the registered plan number. `P24A` is an umbrella-internal label, not a new tracker number.  
 **Planning model:** child seed of the [P24 umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md) — implementation detail preserved here; evidence (Phase 2 research + the readiness reconciliation) informs but never overrides the umbrella contract.
 
@@ -78,7 +81,7 @@ That future project-model path is **DEFERRED from the static-first P24A minimum*
 
 **Decision 5 — cold visitor coordinate preparation is closed; capability delivery remains to prove.** F0's shared `prepareCompatibleRuntime()` already gives Preview and cold visitor the same world-local coordinate meaning. P24A must not reopen coordinate migration. The remaining P24A visitor proof is resource-level: selected static models resolve through the shipped-static authority, required files are retained, selected material/HDRI dependencies resolve, and no editor-warmed/global source state is required.
 
-**R1 remaining blockers before implementation-ready P24A child plans freeze:**
+**R1 implementation blockers allocated by R9 to P24.0–P24.4 (all runtime gates remain open):**
 
 1. shared Stage placement/selectability must stop requiring Room ownership for canonical world-local Scene, **and reachable canonical authoring must ensure the Scene is `formatVersion: 1` before world-local Stage writes occur; legacy Scene mutation remains compatibility-only or must be explicitly adapted without mixing coordinate meanings**;
 2. cold static-model rendering must take its production source from the shipped-static compatibility authority rather than the mutable live catalogue;

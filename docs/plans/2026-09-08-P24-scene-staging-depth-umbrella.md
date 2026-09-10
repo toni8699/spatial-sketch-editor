@@ -1,10 +1,13 @@
 # P24 — Scene / Staging Depth umbrella
 
+**R9 closeout (2026-09-10):** [Minimum freeze](2026-09-10-P24-R9-minimum-freeze.md) is the current inclusion/maturity/operation/acceptance authority; [P24.0–P24.5 child briefs](2026-09-10-P24-minimum-child-plans.md) are implementation-ready for owner review. Earlier draft/pending-minimum wording below is superseded by R9. Source rechecks are closed as planning evidence; implementation and runtime ship gates remain open. P24 remains proposed; execution waits for the accepted P23 minimum and approval.
+
+
 **Ratified cross-view direction:** [Unified Plan / 3D authoring addendum](2026-09-09-P23-P24-unified-plan-3d-authoring-addendum.md) — read alongside this plan for entity-owned mutations, selection continuity, gesture cancellation and PlanProxy/placement ownership. Existing scope, status and dependency gates remain unchanged.
 
 **Created:** 2026-09-08 · **Status:** proposed (tracker authoritative)
 **Depends on:** P23 minimum useful Build set complete.
-**Detail status:** P24 remains an umbrella/research-reconciliation plan, not an implementation-ready brief. P24A Phase 2 research has been reviewed and has a linked annex; the checked-in Phase 4 compact research has now been reviewed directionally for P24B, and the Three source harvest is complete; remaining current-code rechecks, bounded unresolved questions and R9 minimum inclusion must close before its implementation contract can be frozen.
+**Detail status:** R0–R9 planning reconciliation complete; minimum and child briefs frozen for owner review. Implementation and acceptance remain open.
 **Planning model:** progressive — this umbrella owns WHAT/WHY/BOUNDARIES/ORDER/RESEARCH GATES/high-level acceptance. Evidence artifacts (Phase 2 research, the P24B B0–B6 studies) inform but never override the umbrella contract. Child plans carry implementation detail: the [P24A annex](2026-09-08-P24A-asset-supply-canonical-ingest-annex.md) is the P24A child seed (`seed — evidence pending`: pipeline-side readiness evidence recorded in reconciliation R1; registry/runtime integration and the required post-F0 recheck remain open); the P24B child brief is deliberately **not written yet** — B0–B5 must close first, and no speculative P24B.x seeds are created to fill filenames. Child status vocabulary and the evidence-selection rule (no research for research's sake) live in the [tracker rules](README.md).
 
 ## Outcome
@@ -720,8 +723,7 @@ P25 Experience Foundation should wait for the **accepted useful minimum from P24
 not optional asset-catalogue or DCC-depth tails.
 
 P24A's current annex gives a candidate bounded supply/ingest minimum, but the
-**combined P24 gate is still not frozen** because P24B has not completed the
-remaining reconciliation and acceptance work above.
+**combined P24 gate is frozen in R9**; its implementation and acceptance remain open.
 
 A future combined gate is expected to prove enough Stage depth to:
 
