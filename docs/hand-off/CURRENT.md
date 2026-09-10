@@ -5,7 +5,8 @@ slice plus one next action only.
 
 ## Working tree
 
-- **P23.0 F0 stage 2 committed 2026-09-09 on `main`** (canonical writers for the P23 minimum, all writes still disabled): authoring planners `planFirstEnclosureRoomCreation` + `planPartitionToBoundaryRoomBirth` over the P23.8 engine (`packages/layout-core/src/layout-wall-topology-ops.ts`), canonical wall-first Save writer (`packages/project-model/src/wall-first-project.ts`), package manifest `formatVersion: 2` (`PACKAGE_MANIFEST_FORMAT_VERSION`, old manifests stay importable). Stage status recorded in the P23.0 plan's F0 execution order addendum.
+- **P23.0 F0 stage 3 committed 2026-09-09 on `main`** (`421fcdc`, test-only slice, no product code): P23.8 defaults/allocation/replay fixture suite against the stage-2 writers — `apps/editor/tests/lib/editor/p23-f0-stage3-writer-fixtures.test.ts` (18 tests: birth identity/defaults/canonical order/wall-order cycle-equivalence/partial-flip rejection/tiny birth; object preserve/dangling-reject/replay/input-immutability; subdivision integration birth→`planWallSplit`→1→1 with ID preserved + opening rebase + interior-split rejection + ID replay; portal perimeter-survive/unknown-relation-reject/born-relation Save round-trip; born-content Save byte-identity). One expectation corrected en route (boundary start offset rotates with input wall order; ID/name/wall-set stay canonical — test asserts cycle equivalence, no product change).
+- **P23.0 F0 stage 2 committed 2026-09-09 on `main`** (`b5427d8`: canonical writers for the P23 minimum, all writes still disabled): authoring planners `planFirstEnclosureRoomCreation` + `planPartitionToBoundaryRoomBirth` over the P23.8 engine (`packages/layout-core/src/layout-wall-topology-ops.ts`), canonical wall-first Save writer (`packages/project-model/src/wall-first-project.ts`), package manifest `formatVersion: 2` (`PACKAGE_MANIFEST_FORMAT_VERSION`, old manifests stay importable). Stage status recorded in the P23.0 plan's F0 execution order addendum.
 - Fixed en route (latent P23.0b defect): world-local Scene decode failed on every document with entities/navigation nodes — parser guards treated a legally absent `roomId` as failure and the canonicalizer re-serialized `roomId: undefined` keys. Guards are mode-aware now; present roomIds still reject (`room_id_forbidden_in_world_local`). `scene-codec/canonical.ts`, `parse-document.ts`, `parse-entities.ts`.
 - Immediate previous slice: **P23.0 F0 stage 1** (mutator inventory + dual-dispatch guards, `Stage 1 wriing p23` / `Stage 1 p23 nits`), itself after P24 reconciliation work.
 - User's parallel commits (P24 reconciliation, R186 research) interleaved on `main`; no overlap with stage-2 files.
@@ -13,13 +14,13 @@ slice plus one next action only.
 
 ## Next action
 
-- **P23.0 F0 stage 3**: P23.8 defaults/allocation/replay fixture suite against the stage-2 writers (subdivision / Room identity / portal fixtures from the P23.8 plan), then gate + commit.
-- Then stage 4 (visitor parity + cold-load byte-identity proofs), stage 5 (standalone Scene import frame mapping, portal Save-blocker, no-second-transform regression) — each committed. **Stop at the F0 boundary; do not run the stage-6 flip / enable new-schema writes.**
+- **P23.0 F0 stage 4**: visitor parity + cold-load byte-identity proofs (new wall-first Project compiles identically for editor Preview and visitor; old published Project cold-loads without rewriting stored bytes), then gate + commit.
+- Then stage 5 (standalone Scene import frame mapping, portal Save-blocker, no-second-transform regression) — each committed. **Stop at the F0 boundary; do not run the stage-6 flip / enable new-schema writes.**
 
 ## Verification
 
-- Stage-2 full gate on the dirty tree immediately before commit: Vitest 208 files / 2745 tests passed (+1 skipped), `layout-core` + `project-model` tsc clean, editor + museum svelte-check 0/0.
-- New coverage: `apps/editor/tests/lib/editor/p23-f0-stage2-writers.test.ts` (26 tests — deterministic IDs/names, 0.1 m defaults, undo/redo exact replay, custom allocator, rejection taxonomy, Save round-trip through `decodeProjectCompatible`, legacy-payload rejection by name, manifest versioning, wall-first mutation gate), `package-format.test.ts` manifest key pin, codec suites green after the world-local fix.
+- Stage-3 full gate on the dirty tree immediately before commit: Vitest 209 files / 2763 tests passed (+1 skipped file/suite, pre-existing), `layout-core` + `project-model` tsc clean, editor + museum svelte-check 0/0.
+- New coverage: `apps/editor/tests/lib/editor/p23-f0-stage3-writer-fixtures.test.ts` (18 tests — birth defaults/canonical allocation/cycle-equivalence/partial-flip + tiny-birth identity, object preserve/dangling-reject/exact-replay/input-immutability, subdivision birth→split→1→1 ID preservation + opening rebase + interior-split rejection + split ID replay, portal perimeter-survive/unknown-reject/born-relation round-trip, born-content Save byte-identity); stage-2 `p23-f0-stage2-writers.test.ts` (26 tests) still green.
 
 ## Known bugs / deferred
 
