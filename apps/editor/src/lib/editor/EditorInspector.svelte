@@ -53,9 +53,10 @@
 	} from './editor-store.svelte';
 	import type { EditorActiveSelectionStore } from './app/active-editor-selection.svelte';
 	import type { EditorViewMode } from './app/editor-view-mode';
-	import { buildPlanSceneFootprintProjection } from './layout/plan-scene-footprint';
-	import { resolveEditorPlacementScale } from './scale-vector';
-	import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall, LayoutWallFirstRoom } from '$lib/layout/layout-wall-first-types';
+import { buildPlanSceneFootprintProjection } from './layout/plan-scene-footprint';
+import { resolveEditorPlacementScale } from './scale-vector';
+import { resolveRectangle } from '$lib/layout/layout-wall-first-precision';
+import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall, LayoutWallFirstRoom } from '$lib/layout/layout-wall-first-types';
 
 	let {
 		store,
@@ -248,6 +249,16 @@
 			? precisionRectangleMetrics(wallFirstLayout, selectedPrecisionRoom)
 			: null
 	);
+	const precisionRectangleWidthWallOptions = $derived.by(() => {
+		if (!wallFirstLayout || !selectedPrecisionRoom) return [];
+		const resolved = resolveRectangle(
+			wallFirstLayout,
+			selectedPrecisionRoom.id,
+			precisionRectangleAnchor ? { anchorJunctionId: precisionRectangleAnchor } : {}
+		);
+		if ('rejection' in resolved) return [];
+		return [resolved.widthWallId, resolved.depthWallId];
+	});
 	const selectedLayoutRoom = $derived(
 		selectedLayoutRoomId(layoutInteraction)
 			? layoutRooms.find((room) => room.id === selectedLayoutRoomId(layoutInteraction))
@@ -848,41 +859,23 @@
 		width: number;
 		depth: number;
 	} | null {
-		const wallById = new Map(layout.walls.map((wall) => [wall.id, wall]));
-		const edges = room.boundary.map((ref) => {
-			const wall = wallById.get(ref.wallId);
-			if (!wall) return null;
-			return {
-				wall,
-				wallId: wall.id,
-				startId: ref.direction === 'forward' ? wall.startJunctionId : wall.endJunctionId,
-				endId: ref.direction === 'forward' ? wall.endJunctionId : wall.startJunctionId
-			};
-		}).filter((edge): edge is NonNullable<typeof edge> => edge !== null);
-		if (edges.length !== 4 || edges.some((edge, index) => edge.endId !== edges[(index + 1) % edges.length]?.startId)) return null;
-		const cornerIds = [...new Set(edges.flatMap((edge) => [edge.startId, edge.endId]))].sort((a, b) => a.localeCompare(b));
-		if (cornerIds.length !== 4) return null;
-		const anchorId = precisionRectangleAnchor && cornerIds.includes(precisionRectangleAnchor) ? precisionRectangleAnchor : cornerIds[0]!;
-		const incident = edges.filter((edge) => edge.startId === anchorId || edge.endId === anchorId).sort((a, b) => a.wallId.localeCompare(b.wallId));
-		if (incident.length !== 2) return null;
-		const widthEdge = precisionRectangleWidthWall && incident.some((edge) => edge.wallId === precisionRectangleWidthWall)
-			? incident.find((edge) => edge.wallId === precisionRectangleWidthWall)!
-			: incident[0]!;
-		const depthEdge = incident.find((edge) => edge.wallId !== widthEdge.wallId)!;
-		const widthEndpointId = widthEdge.startId === anchorId ? widthEdge.endId : widthEdge.startId;
-		const depthEndpointId = depthEdge.startId === anchorId ? depthEdge.endId : depthEdge.startId;
 		const points = new Map(layout.junctions.map((junction) => [junction.id, junction.point]));
-		const anchor = points.get(anchorId);
-		const widthEndpoint = points.get(widthEndpointId);
-		const depthEndpoint = points.get(depthEndpointId);
+		const resolved = resolveRectangle(layout, room.id, {
+			...(precisionRectangleAnchor ? { anchorJunctionId: precisionRectangleAnchor } : {}),
+			...(precisionRectangleWidthWall ? { widthWallId: precisionRectangleWidthWall } : {})
+		});
+		if ('rejection' in resolved) return null;
+		const anchor = points.get(resolved.anchorJunctionId);
+		const widthEndpoint = points.get(resolved.widthEndpointId);
+		const depthEndpoint = points.get(resolved.depthEndpointId);
 		if (!anchor || !widthEndpoint || !depthEndpoint) return null;
 		return {
-			anchorId,
-			widthWallId: widthEdge.wallId,
-			depthWallId: depthEdge.wallId,
-			widthEndpointId,
-			depthEndpointId,
-			cornerIds,
+			anchorId: resolved.anchorJunctionId,
+			widthWallId: resolved.widthWallId,
+			depthWallId: resolved.depthWallId,
+			widthEndpointId: resolved.widthEndpointId,
+			depthEndpointId: resolved.depthEndpointId,
+			cornerIds: resolved.corners.map((junction) => junction.id),
 			width: Math.hypot(widthEndpoint[0] - anchor[0], widthEndpoint[1] - anchor[1]),
 			depth: Math.hypot(depthEndpoint[0] - anchor[0], depthEndpoint[1] - anchor[1])
 		};
@@ -1039,7 +1032,7 @@
 								<strong>Rectangle {selectedPrecisionRoom.name}</strong>
 								<span>Four boundary Walls · shared-boundary edits reject when ambiguous.</span>
 								<label>Anchor Junction<select value={precisionRectangleAnchor ?? selectedPrecisionRectangle.anchorId} onchange={(event) => precisionRectangleAnchor = (event.currentTarget as HTMLSelectElement).value || null}>{#each selectedPrecisionRectangle.cornerIds as id}<option value={id}>{id}</option>{/each}</select></label>
-								<label>Width Wall<select value={precisionRectangleWidthWall ?? selectedPrecisionRectangle.widthWallId} onchange={(event) => precisionRectangleWidthWall = (event.currentTarget as HTMLSelectElement).value || null}>{#each selectedPrecisionRoom.boundary as ref}<option value={ref.wallId}>{ref.wallId}</option>{/each}</select></label>
+								<label>Width Wall<select value={precisionRectangleWidthWall ?? selectedPrecisionRectangle.widthWallId} onchange={(event) => precisionRectangleWidthWall = (event.currentTarget as HTMLSelectElement).value || null}>{#each precisionRectangleWidthWallOptions as wallId}<option value={wallId}>{wallId}</option>{/each}</select></label>
 								<label>Width (m)<input type="number" min="0.001" step="0.01" value={selectedPrecisionRectangle.width} onchange={(event) => updatePrecisionRectangle('width', event)} /></label>
 								<label>Depth (m)<input type="number" min="0.001" step="0.01" value={selectedPrecisionRectangle.depth} onchange={(event) => updatePrecisionRectangle('depth', event)} /></label>
 								{#if layoutPreview.lastMutationMessage}<p class="layout-opening-warning" role="status">{layoutPreview.lastMutationMessage}</p>{/if}

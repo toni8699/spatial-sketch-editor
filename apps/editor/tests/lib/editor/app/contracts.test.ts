@@ -1878,7 +1878,7 @@ describe('camera context contracts', () => {
 		const app = readLibSource('editor/app/EditorApp.svelte');
 		const sidebar = readLibSource('editor/app/EditorSidebar.svelte');
 		expect(sidebar).toContain("domain === 'scene'");
-		expect(sidebar).toContain("onAddRoom={domain === 'scene' ? startRoomDraft : undefined}");
+		expect(sidebar).toContain("onAddRoom={domain === 'scene' && !wallFirstLayout ? startRoomDraft : undefined}");
 		expect(sidebar).toContain('{#if showScenePanelTabs}');
 		expect(app).not.toContain('CameraDomainRail');
 	});

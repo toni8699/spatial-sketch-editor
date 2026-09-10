@@ -22,6 +22,7 @@ import type {
 import type { LayoutDocumentWallFirst } from '$lib/layout/layout-wall-first-types';
 import {
 	planExactJunctionMove,
+	planDeleteLayoutObject,
 	planExactLayoutObjectTransform,
 	planExactRectangleDimensions,
 	planExactWallAngle,
@@ -749,10 +750,9 @@ export function deleteLayoutObject(
 	const current = state.project.layout.objects.find((object) => object.id === objectId);
 	if (!current) return failObjectMutation(state, 'Object no longer exists');
 	if (current.kind === 'profile') return failObjectMutation(state, 'Profile objects are read-only');
-	if (isWallFirstLayoutDocument(layoutPreviewDocument(state))) {
-		const layout = cloneJson(layoutPreviewDocument(state));
-		layout.objects = layout.objects.filter((object) => object.id !== objectId);
-		const applied = applyLayoutMutation(state, layout as Project['layout']);
+	const currentLayout = layoutPreviewDocument(state);
+	if (isWallFirstLayoutDocument(currentLayout)) {
+		const applied = applyWallFirstPrecisionPlan(state, planDeleteLayoutObject(currentLayout, objectId));
 		return applied.success ? { success: true, objectId } : applied;
 	}
 	const layout = deleteObjectFromDocument(cloneLayout(state.project.layout), objectId);

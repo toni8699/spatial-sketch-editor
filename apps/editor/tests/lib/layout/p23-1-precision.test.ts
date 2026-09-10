@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	planDeleteLayoutObject,
 	planExactJunctionMove,
 	planExactLayoutObjectTransform,
 	planExactRectangleDimensions,
@@ -7,6 +8,7 @@ import {
 	planExactWallLength,
 	planExactWallThickness,
 	planWallSubdivision,
+	resolveRectangle,
 	type LayoutDocumentWallFirst,
 	type NodingIdAllocator
 } from '@portfolio/layout-core';
@@ -86,6 +88,21 @@ describe('P23.1 wall-first precise semantic operations', () => {
 		expect(result.document.walls.find((wall) => wall.id === 'w1')?.startJunctionId).toBe('A');
 	});
 
+	it('sets canonical Wall angle with End fixed', () => {
+		const angle = Math.atan2(-0.5, 4);
+		const result = planExactWallAngle(squareDocument(), { wallId: 'w1', angle, fixed: 'end' });
+
+		expect(result.kind).toBe('success');
+		if (result.kind !== 'success') return;
+		const start = result.document.junctions.find((junction) => junction.id === 'A')!.point;
+		const length = 4;
+		const directionLength = Math.hypot(4, -0.5);
+		expect(result.document.junctions.find((junction) => junction.id === 'B')?.point).toEqual([4, 0]);
+		expect(start[0]).toBeCloseTo(4 - (length * 4) / directionLength);
+		expect(start[1]).toBeCloseTo(-(length * -0.5) / directionLength);
+		expect(result.document.walls.find((wall) => wall.id === 'w1')).toMatchObject({ startJunctionId: 'A', endJunctionId: 'B' });
+	});
+
 	it('changes Wall thickness while keeping openings and Wall identity', () => {
 		const result = planExactWallThickness(squareDocument(), 'w1', 0.35);
 
@@ -105,6 +122,17 @@ describe('P23.1 wall-first precise semantic operations', () => {
 		expect(points.get('B')).toEqual([6, 0]);
 		expect(points.get('C')).toEqual([6, 2]);
 		expect(points.get('D')).toEqual([0, 2]);
+	});
+
+	it('resolves rectangle references once and exposes only incident width Walls', () => {
+		const resolved = resolveRectangle(squareDocument(), 'room', { anchorJunctionId: 'A' });
+
+		expect(resolved).not.toHaveProperty('rejection');
+		if ('rejection' in resolved) return;
+		expect([resolved.widthWallId, resolved.depthWallId]).toEqual(['w1', 'w4']);
+		expect(resolveRectangle(squareDocument(), 'room', { anchorJunctionId: 'A', widthWallId: 'w2' })).toMatchObject({
+			rejection: { code: 'invalid_reference' }
+		});
 	});
 
 	it('subdivides a Wall with deterministic IDs and keeps the opening on a valid fragment', () => {
@@ -130,6 +158,18 @@ describe('P23.1 wall-first precise semantic operations', () => {
 		expect(baseline.junctions.find((junction) => junction.id === 'B')?.point).toEqual([4, 0]);
 	});
 
+	it('rejects a duplicate Junction point without mutating the input', () => {
+		const baseline = squareDocument();
+		const result = planExactJunctionMove(baseline, 'A', [4, 0]);
+
+		expect(result).toMatchObject({ kind: 'rejected', rejection: { code: 'topology_invalid' } });
+		if (result.kind !== 'rejected') return;
+		expect(result.rejection.issues).toEqual(expect.arrayContaining([
+		expect.objectContaining({ code: 'duplicate_junction_point' })
+		]));
+		expect(baseline.junctions.find((junction) => junction.id === 'A')?.point).toEqual([0, 0]);
+	});
+
 	it('edits document-level LayoutObject transforms as one exact candidate', () => {
 		const result = planExactLayoutObjectTransform(squareDocument(), 'chair', {
 			position: [2, 0.5, 1],
@@ -139,5 +179,24 @@ describe('P23.1 wall-first precise semantic operations', () => {
 		expect(result.kind).toBe('success');
 		if (result.kind !== 'success') return;
 		expect(result.document.objects[0]).toMatchObject({ position: [2, 0.5, 1], dimensions: [1.2, 1, 1] });
+	});
+
+	it('reparents a LayoutObject only to an existing Room and deletes through the planner', () => {
+		const document = squareDocument();
+		document.rooms.push({ ...document.rooms[0]!, id: 'room-2', name: 'Room 2' });
+		const reparented = planExactLayoutObjectTransform(document, 'chair', { roomId: 'room-2' });
+
+		expect(reparented.kind).toBe('success');
+		if (reparented.kind !== 'success') return;
+		expect(reparented.document.objects[0]?.roomId).toBe('room-2');
+		expect(planExactLayoutObjectTransform(document, 'chair', { roomId: 'missing' })).toMatchObject({
+			kind: 'rejected',
+			rejection: { code: 'invalid_reference', message: "Unknown roomId 'missing'" }
+		});
+
+		const deleted = planDeleteLayoutObject(reparented.document, 'chair');
+		expect(deleted.kind).toBe('success');
+		if (deleted.kind !== 'success') return;
+		expect(deleted.document.objects).toEqual([]);
 	});
 });

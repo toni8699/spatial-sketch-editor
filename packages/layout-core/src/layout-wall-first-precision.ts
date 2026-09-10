@@ -51,6 +51,18 @@ export type RectangleResizeOptions = {
 	widthWallId?: string;
 };
 
+export type ResolvedRectangle = {
+	anchorJunctionId: string;
+	widthEndpointId: string;
+	depthEndpointId: string;
+	corners: LayoutJunction[];
+	roomWallIds: string[];
+	widthWallId: string;
+	depthWallId: string;
+};
+
+export type RectangleResolution = ResolvedRectangle | { rejection: PrecisionRejection };
+
 export type LayoutObjectTransformPatch = Partial<
 	Pick<LayoutObject, 'position' | 'rotation' | 'dimensions' | 'roomId'>
 >;
@@ -62,7 +74,8 @@ export type PrecisionOperation =
 	| 'wall-thickness'
 	| 'wall-subdivision'
 	| 'rectangle-dimensions'
-	| 'layout-object-transform';
+	| 'layout-object-transform'
+	| 'layout-object-delete';
 
 export type PrecisionRejection = {
 	code:
@@ -312,6 +325,9 @@ export function planExactLayoutObjectTransform(
 	if (!object) return reject('unknown_object', `Unknown layout object '${objectId}'`, [objectId]);
 	const vectorFields = (['position', 'rotation', 'dimensions'] as const).filter((field) => patch[field] !== undefined);
 	const roomChanged = 'roomId' in patch && patch.roomId !== object.roomId;
+	if (patch.roomId && !document.rooms.some((room) => room.id === patch.roomId)) {
+		return reject('invalid_reference', `Unknown roomId '${patch.roomId}'`, [objectId, patch.roomId]);
+	}
 	if (vectorFields.length === 0 && !roomChanged) return reject('no_op', `Layout object '${objectId}' has no transform changes`, [objectId]);
 	if (patch.position && !finiteVector(patch.position)) return reject('invalid_value', 'Object position must be finite', [objectId]);
 	if (patch.rotation && !finiteVector(patch.rotation)) return reject('invalid_value', 'Object rotation must be finite radians', [objectId]);
@@ -331,6 +347,20 @@ export function planExactLayoutObjectTransform(
 		else delete target.roomId;
 	}
 	return finalizeCandidate(candidate, 'layout-object-transform', [], [], [objectId]);
+}
+
+/** Delete one editable document-level LayoutObject through the same candidate gates. */
+export function planDeleteLayoutObject(
+	document: LayoutDocumentWallFirst,
+	objectId: string
+): PrecisionPlan {
+	const object = document.objects.find((candidate) => candidate.id === objectId);
+	if (!object) return reject('unknown_object', `Unknown layout object '${objectId}'`, [objectId]);
+	if (object.kind === 'profile') return reject('invalid_reference', 'Profile objects are read-only', [objectId]);
+
+	const candidate = cloneDocument(document);
+	candidate.objects = candidate.objects.filter((entry) => entry.id !== objectId);
+	return finalizeCandidate(candidate, 'layout-object-delete', [], [], [objectId]);
 }
 
 function finalizeCandidate(
@@ -465,22 +495,17 @@ function validatePrecisionTopology(document: LayoutDocumentWallFirst): LayoutGeo
 	return undefined;
 }
 
-function resolveRectangle(
+/** Resolve the canonical rectangle anchor, incident width edge, and endpoints. */
+export function resolveRectangle(
 	document: LayoutDocumentWallFirst,
 	roomId: string,
-	options: RectangleResizeOptions
-):
-	| {
-			anchorJunctionId: string;
-			widthEndpointId: string;
-			depthEndpointId: string;
-			corners: LayoutJunction[];
-			roomWallIds: string[];
-			widthWallId: string;
-			depthWallId: string;
-		}
-	| { rejection: PrecisionRejection } {
-	const room = document.rooms.find((candidate) => candidate.id === roomId)!;
+	options: RectangleResizeOptions = {}
+): RectangleResolution {
+	const room = document.rooms.find((candidate) => candidate.id === roomId);
+	if (!room) return { rejection: makeRejection('unknown_room', `Unknown room '${roomId}'`, [roomId]) };
+	if (room.boundary.length !== 4) {
+		return { rejection: makeRejection('unsupported_geometry', 'Rectangle resize requires four straight boundary Walls', [roomId]) };
+	}
 	const wallById = new Map(document.walls.map((wall) => [wall.id, wall]));
 	const directed = room.boundary.map((ref) => {
 		const wall = wallById.get(ref.wallId);
@@ -505,6 +530,10 @@ function resolveRectangle(
 
 	const junctionById = new Map(document.junctions.map((junction) => [junction.id, junction]));
 	const cornerIds = [...new Set(edges.flatMap((edge) => [edge.startId, edge.endId]))].sort((a, b) => a.localeCompare(b));
+	const corners = cornerIds.map((id) => junctionById.get(id));
+	if (corners.some((junction) => !junction)) {
+		return { rejection: makeRejection('invalid_reference', `Room '${roomId}' has an unresolved corner Junction`, [roomId]) };
+	}
 	const anchorJunctionId = options.anchorJunctionId ?? cornerIds[0];
 	if (!anchorJunctionId || !cornerIds.includes(anchorJunctionId)) {
 		return { rejection: makeRejection('invalid_reference', `Anchor Junction '${options.anchorJunctionId ?? ''}' is not a corner of Room '${roomId}'`, [roomId]) };
@@ -518,12 +547,11 @@ function resolveRectangle(
 	const depthEdge = incident.find((edge) => edge.wallId !== widthEdge.wallId)!;
 	const widthEndpointId = widthEdge.startId === anchorJunctionId ? widthEdge.endId : widthEdge.startId;
 	const depthEndpointId = depthEdge.startId === anchorJunctionId ? depthEdge.endId : depthEdge.startId;
-	const corners = cornerIds.map((id) => junctionById.get(id)!).filter(Boolean);
 	return {
 		anchorJunctionId,
 		widthEndpointId,
 		depthEndpointId,
-		corners,
+		corners: corners as LayoutJunction[],
 		roomWallIds: edges.map((edge) => edge.wallId),
 		widthWallId: widthEdge.wallId,
 		depthWallId: depthEdge.wallId
