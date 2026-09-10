@@ -3,10 +3,13 @@ import { createEmptySceneDocument, type SceneDocument } from '$lib/content/scene
 import type { Project } from '$lib/project/project-types';
 import {
 	createEmptyLayoutDocument,
-	parseLayoutDocumentJson,
+	decodeLayoutJsonCompatible,
+	decodeLayoutValueCompatible,
+	serializeWallFirstLayoutDocument,
 	serializeLayoutDocument,
-	validateLayoutDocument	} from '$lib/layout/layout-codec';
-	import { buildLayoutPreviewModel, type LayoutPreviewModel, type LayoutPreviewModelResult } from './layout-mesh-factory';
+	validateLayoutDocument
+} from '$lib/layout/layout-codec';
+import { buildLayoutPreviewModel, type LayoutPreviewModel, type LayoutPreviewModelResult } from './layout-mesh-factory';
 import type { LayoutBounds3 as LayoutPreviewBounds } from '$lib/layout/layout-geometry-types';
 import type {
 	DraftSegment,
@@ -16,6 +19,21 @@ import type {
 	LayoutRoom,
 	LayoutVec2
 } from '$lib/layout/layout-types';
+import type { LayoutDocumentWallFirst } from '$lib/layout/layout-wall-first-types';
+import {
+	planExactJunctionMove,
+	planExactLayoutObjectTransform,
+	planExactRectangleDimensions,
+	planExactWallAngle,
+	planExactWallLength,
+	planExactWallThickness,
+	planWallSubdivision,
+	type FixedWallEndpoint,
+	type LayoutObjectTransformPatch,
+	type PrecisionOperation,
+	type PrecisionPlan
+} from '$lib/layout/layout-wall-first-precision';
+import type { NodingIdAllocator } from '$lib/layout/layout-wall-noding';
 import { deleteInteriorAnchorOnSegment, insertInteriorAnchorOnSegment, pointInRoom, replaceRoomPoints, updateInteriorAnchorOnSegment } from './layout-editing';
 import {
 	appendRoomOpening,
@@ -53,6 +71,7 @@ import type { LayoutGizmoCandidateBundle } from '../gizmo/layout-gizmo-candidate
 export type LayoutPreviewSource = 'chopin-fixture' | 'empty' | 'draft' | 'imported';
 export type LayoutBaselineKind = 'blank' | 'imported';
 export type LayoutSessionStatus = 'blank' | 'dirty' | 'imported';
+export type EditorLayoutDocument = LayoutDocument | LayoutDocumentWallFirst;
 
 export type LayoutPreviewState = {
 	source: LayoutPreviewSource;
@@ -106,6 +125,10 @@ export type LayoutObjectMutationResult =
 	| { success: true; objectId: string }
 	| { success: false; message: string };
 
+export type WallFirstPrecisionMutationResult =
+	| { success: true; operation: PrecisionOperation }
+	| { success: false; message: string };
+
 export type LayoutRoomFieldPatch = Partial<
 	Pick<LayoutRoom, 'name' | 'wallThickness' | 'floorThickness' | 'ceilingThickness'>
 > & { floorHeight?: number };
@@ -143,7 +166,7 @@ export function layoutPreviewSourceLabel(source: LayoutPreviewSource): string {
 
 /** Derived — do not store on `$state` objects (getters break Svelte 5 proxies). */
 export function layoutPreviewIsDirty(state: LayoutPreviewState): boolean {
-	return serializeLayoutDocument(state.project.layout) !== state.baselineLayoutJson;
+	return canonicalLayoutJson(state.project.layout) !== state.baselineLayoutJson;
 }
 
 export function layoutPreviewSessionStatus(state: LayoutPreviewState): LayoutSessionStatus {
@@ -155,8 +178,31 @@ export function layoutPreviewStatusLabel(state: LayoutPreviewState): string {
 	return status === 'dirty' ? 'Unsaved' : status === 'blank' ? 'Blank' : 'Imported';
 }
 
+export function layoutPreviewDocument(state: LayoutPreviewState): EditorLayoutDocument {
+	return state.project.layout as unknown as EditorLayoutDocument;
+}
+
+function isWallFirstLayoutDocument(layout: EditorLayoutDocument): layout is LayoutDocumentWallFirst {
+	return 'formatVersion' in layout;
+}
+
+function wallFirstLegacyEditMessage(state?: LayoutPreviewState): string {
+	const message = 'Legacy room, opening, and primitive tools are unavailable for wall-first layouts; use Architecture · exact.';
+	if (state) {
+		state.lastMutationMessage = message;
+		state.statusMessage = message;
+	}
+	return message;
+}
+
+function canonicalLayoutJson(layout: EditorLayoutDocument): string {
+	return isWallFirstLayoutDocument(layout)
+		? serializeWallFirstLayoutDocument(layout)
+		: serializeLayoutDocument(layout);
+}
+
 export function layoutPreviewCanonicalJson(state: LayoutPreviewState): string {
-	return serializeLayoutDocument(state.project.layout);
+	return canonicalLayoutJson(state.project.layout);
 }
 
 /**
@@ -210,7 +256,7 @@ function applyCompiledLayout(state: LayoutPreviewState, result: LayoutPreviewMod
 export function derivePreviewBundle(
 	projectId: string,
 	projectName: string,
-	layout: Project['layout'],
+	layout: EditorLayoutDocument,
 	scene: Project['scene']
 ): {
 	project: Project;
@@ -263,7 +309,7 @@ export function installLayoutPreviewBundle(
 /** Save baseline only; unlike import/reset this preserves selection and history. */
 export function markLayoutPreviewSaved(
 	state: LayoutPreviewState,
-	canonicalJson = serializeLayoutDocument(state.project.layout)
+	canonicalJson = canonicalLayoutJson(state.project.layout)
 ): void {
 	state.baselineLayoutJson = canonicalJson;
 	state.baselineKind = 'imported';
@@ -331,8 +377,8 @@ export function toggleLayoutCeilings(state: LayoutPreviewState): void {
 }
 
 export function importLayoutPreviewJson(state: LayoutPreviewState, json: string): boolean {
-	const parsed = parseLayoutDocumentJson(json);
-	if (!parsed.success) {
+	const parsed = decodeLayoutJsonCompatible(json);
+	if (parsed.kind === 'unrecognized') {
 		setLayoutPreviewImportError(state, parsed.issues[0]?.message ?? 'Invalid layout document');
 		return false;
 	}
@@ -342,7 +388,7 @@ export function importLayoutPreviewJson(state: LayoutPreviewState, json: string)
 		commitPreviewBundle(state, bundle);
 		state.previewVersion += 1;
 		state.reframeVersion += 1;
-		state.baselineLayoutJson = parsed.canonicalJson;
+		state.baselineLayoutJson = canonicalLayoutJson(parsed.document);
 		state.baselineKind = 'imported';
 		state.lastMutationMessage = null;
 		state.statusMessage = 'Imported layout JSON';
@@ -373,7 +419,7 @@ export function importLayoutPreviewJson(state: LayoutPreviewState, json: string)
 		};
 		floor.rooms = floor.rooms.map((candidate) => (candidate.id === roomId ? nextRoom : candidate));
 		if (patch.floorHeight !== undefined) floor.height = patch.floorHeight;
-		const applied = applyLayoutMutation(state, layout);
+		const applied = applyLayoutMutation(state, layout as Project['layout']);
 		return applied.success ? { success: true } : applied;
 	}
 
@@ -467,6 +513,9 @@ export function deleteLayoutRoom(
 	roomId: string,
 	scene: SceneDocument
 ): LayoutRoomEditResult {
+	if (isWallFirstLayoutDocument(layoutPreviewDocument(state))) {
+		return failRoomEdit(state, wallFirstLegacyEditMessage());
+	}
 	const refs = listLayoutRoomSceneReferences(scene, roomId);
 	if (layoutRoomSceneReferenceTotal(refs) > 0) {
 		return failRoomEdit(
@@ -488,6 +537,9 @@ export function commitLayoutPrimitive(
 	roomId: string | undefined,
 	snapEnabled = false
 ): LayoutObjectMutationResult {
+	if (isWallFirstLayoutDocument(layoutPreviewDocument(state))) {
+		return failObjectMutation(state, wallFirstLegacyEditMessage());
+	}
 	const floor = state.project.layout.floors[0];
 	if (!floor || !roomId) return failObjectMutation(state, 'Choose a first-floor room');
 	const geometry = primitiveObjectGeometry(kind, start, current, floor.elevation, snapEnabled);
@@ -516,6 +568,9 @@ export function commitLayoutObject(
 	position: Vec3,
 	roomId?: string
 ): LayoutObjectMutationResult {
+	if (isWallFirstLayoutDocument(layoutPreviewDocument(state))) {
+		return failObjectMutation(state, wallFirstLegacyEditMessage());
+	}
 	if (!position.every(Number.isFinite)) return failObjectMutation(state, 'Object position must be finite');
 	if (!isKnownLayoutRoomId(state.project.layout, roomId)) {
 		return failObjectMutation(state, `Unknown roomId '${roomId}'`);
@@ -541,6 +596,12 @@ export function updateLayoutObjectFields(
 	const current = state.project.layout.objects.find((object) => object.id === objectId);
 	if (!current) return failObjectMutation(state, 'Object no longer exists');
 	if (current.kind === 'profile') return failObjectMutation(state, 'Profile objects are read-only');
+	const currentLayout = layoutPreviewDocument(state);
+	if (isWallFirstLayoutDocument(currentLayout)) {
+		const result = planExactLayoutObjectTransform(currentLayout, objectId, patch);
+		const applied = applyWallFirstPrecisionPlan(state, result);
+		return applied.success ? { success: true, objectId } : applied;
+	}
 	if ('roomId' in patch && !isKnownLayoutRoomId(state.project.layout, patch.roomId)) {
 		return failObjectMutation(state, `Unknown roomId '${patch.roomId}'`);
 	}
@@ -550,6 +611,137 @@ export function updateLayoutObjectFields(
 	return applied.success ? { success: true, objectId } : applied;
 }
 
+/** Apply a P23.1 wall-first plan through the preview bundle atomically. */
+function applyWallFirstPrecisionPlan(
+	state: LayoutPreviewState,
+	plan: PrecisionPlan
+): WallFirstPrecisionMutationResult {
+	if (plan.kind === 'rejected') {
+		state.lastMutationMessage = plan.rejection.message;
+		return { success: false, message: plan.rejection.message };
+	}
+	try {
+		const bundle = derivePreviewBundle(
+			state.project.id,
+			state.project.name,
+			plan.document,
+			state.project.scene
+		);
+		state.source = 'draft';
+		commitPreviewBundle(state, bundle);
+		state.previewVersion += 1;
+		state.lastMutationMessage = null;
+		state.statusMessage = null;
+		state.importError = null;
+		return { success: true, operation: plan.operation };
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Could not apply precise layout operation';
+		state.lastMutationMessage = message;
+		return { success: false, message };
+	}
+}
+
+export function updateWallFirstJunction(
+	state: LayoutPreviewState,
+	junctionId: string,
+	point: LayoutVec2
+): WallFirstPrecisionMutationResult {
+	const layout = wallFirstLayoutOrError(state);
+	if (!layout) return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
+	return applyWallFirstPrecisionPlan(state, planExactJunctionMove(layout, junctionId, point));
+}
+
+export function updateWallFirstWallLength(
+	state: LayoutPreviewState,
+	wallId: string,
+	length: number,
+	fixed: FixedWallEndpoint
+): WallFirstPrecisionMutationResult {
+	const layout = wallFirstLayoutOrError(state);
+	if (!layout) return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
+	return applyWallFirstPrecisionPlan(state, planExactWallLength(layout, wallId, length, fixed));
+}
+
+export function updateWallFirstWallAngle(
+	state: LayoutPreviewState,
+	wallId: string,
+	angle: number,
+	fixed: FixedWallEndpoint
+): WallFirstPrecisionMutationResult {
+	const layout = wallFirstLayoutOrError(state);
+	if (!layout) return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
+	return applyWallFirstPrecisionPlan(state, planExactWallAngle(layout, wallId, angle, fixed));
+}
+
+export function updateWallFirstWallThickness(
+	state: LayoutPreviewState,
+	wallId: string,
+	thickness: number
+): WallFirstPrecisionMutationResult {
+	const layout = wallFirstLayoutOrError(state);
+	if (!layout) return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
+	return applyWallFirstPrecisionPlan(state, planExactWallThickness(layout, wallId, thickness));
+}
+
+export function subdivideWallFirstWall(
+	state: LayoutPreviewState,
+	wallId: string,
+	splitDistance: number
+): WallFirstPrecisionMutationResult {
+	const layout = wallFirstLayoutOrError(state);
+	if (!layout) return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
+	return applyWallFirstPrecisionPlan(state, planWallSubdivision(layout, wallId, splitDistance, createLayoutNodingAllocator()));
+}
+
+export function updateWallFirstRectangle(
+	state: LayoutPreviewState,
+	roomId: string,
+	width: number,
+	depth: number,
+	options: { anchorJunctionId?: string; widthWallId?: string } = {}
+): WallFirstPrecisionMutationResult {
+	const layout = wallFirstLayoutOrError(state);
+	if (!layout) return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
+	return applyWallFirstPrecisionPlan(state, planExactRectangleDimensions(layout, roomId, width, depth, options));
+}
+
+export function updateWallFirstObjectTransform(
+	state: LayoutPreviewState,
+	objectId: string,
+	patch: LayoutObjectTransformPatch
+): WallFirstPrecisionMutationResult {
+	const layout = wallFirstLayoutOrError(state);
+	if (!layout) return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
+	return applyWallFirstPrecisionPlan(state, planExactLayoutObjectTransform(layout, objectId, patch));
+}
+
+function wallFirstLayoutOrError(state: LayoutPreviewState): LayoutDocumentWallFirst | null {
+	const layout = layoutPreviewDocument(state);
+	if (isWallFirstLayoutDocument(layout)) return layout;
+	state.lastMutationMessage = 'This precise operation requires a wall-first layout';
+	return null;
+}
+
+function createLayoutNodingAllocator(): NodingIdAllocator {
+	return {
+		nextWallId(document, seed) {
+			const taken = new Set(document.walls.map((wall) => wall.id));
+			return nextAvailableId(taken, `${seed}:wall`);
+		},
+		nextJunctionId(document, seed) {
+			const taken = new Set(document.junctions.map((junction) => junction.id));
+			return nextAvailableId(taken, `${seed}:junction`);
+		}
+	};
+}
+
+function nextAvailableId(taken: ReadonlySet<string>, seed: string): string {
+	if (!taken.has(seed)) return seed;
+	let index = 2;
+	while (taken.has(`${seed}.${index}`)) index += 1;
+	return `${seed}.${index}`;
+}
+
 export function deleteLayoutObject(
 	state: LayoutPreviewState,
 	objectId: string
@@ -557,6 +749,12 @@ export function deleteLayoutObject(
 	const current = state.project.layout.objects.find((object) => object.id === objectId);
 	if (!current) return failObjectMutation(state, 'Object no longer exists');
 	if (current.kind === 'profile') return failObjectMutation(state, 'Profile objects are read-only');
+	if (isWallFirstLayoutDocument(layoutPreviewDocument(state))) {
+		const layout = cloneJson(layoutPreviewDocument(state));
+		layout.objects = layout.objects.filter((object) => object.id !== objectId);
+		const applied = applyLayoutMutation(state, layout as Project['layout']);
+		return applied.success ? { success: true, objectId } : applied;
+	}
 	const layout = deleteObjectFromDocument(cloneLayout(state.project.layout), objectId);
 	if (!layout) return failObjectMutation(state, 'Object no longer exists');
 	const applied = applyLayoutMutation(state, layout);
@@ -571,6 +769,9 @@ export function commitLayoutOpening(
 	clickOffset: number,
 	snapEnabled = true
 ): LayoutOpeningMutationResult {
+	if (isWallFirstLayoutDocument(layoutPreviewDocument(state))) {
+		return failOpeningMutation(state, wallFirstLegacyEditMessage());
+	}
 	const layout = cloneLayout(state.project.layout);
 	const floor = layout.floors.find((candidate) => candidate.rooms.some((room) => room.id === roomId));
 	const room = floor?.rooms.find((candidate) => candidate.id === roomId);
@@ -598,6 +799,9 @@ export function updateLayoutOpeningFields(
 	openingId: string,
 	patch: LayoutOpeningPatch
 ): LayoutOpeningMutationResult {
+	if (isWallFirstLayoutDocument(layoutPreviewDocument(state))) {
+		return failOpeningMutation(state, wallFirstLegacyEditMessage());
+	}
 	const layout = cloneLayout(state.project.layout);
 	const floor = layout.floors.find((candidate) => candidate.rooms.some((room) => room.id === roomId));
 	const room = floor?.rooms.find((candidate) => candidate.id === roomId);
@@ -616,6 +820,9 @@ export function deleteLayoutOpening(
 	roomId: string,
 	openingId: string
 ): LayoutOpeningMutationResult {
+	if (isWallFirstLayoutDocument(layoutPreviewDocument(state))) {
+		return failOpeningMutation(state, wallFirstLegacyEditMessage());
+	}
 	const layout = cloneLayout(state.project.layout);
 	const floor = layout.floors.find((candidate) => candidate.rooms.some((room) => room.id === roomId));
 	const room = floor?.rooms.find((candidate) => candidate.id === roomId);
@@ -631,6 +838,9 @@ export function insertLayoutWallInteriorAnchor(
 	segmentId: string,
 	point: LayoutVec2
 ): LayoutInteriorAnchorMutationResult {
+	if (isWallFirstLayoutDocument(layoutPreviewDocument(state))) {
+		return failInteriorAnchorMutation(state, wallFirstLegacyEditMessage());
+	}
 	const layout = cloneLayout(state.project.layout);
 	const floor = layout.floors.find((candidate) => candidate.rooms.some((room) => room.id === roomId));
 	const room = floor?.rooms.find((candidate) => candidate.id === roomId);
@@ -664,6 +874,9 @@ export function updateLayoutWallInteriorAnchor(
 	anchorId: string,
 	point: LayoutVec2
 ): LayoutRoomEditResult {
+	if (isWallFirstLayoutDocument(layoutPreviewDocument(state))) {
+		return failRoomEdit(state, wallFirstLegacyEditMessage());
+	}
 	const layout = cloneLayout(state.project.layout);
 	const floor = layout.floors.find((candidate) => candidate.rooms.some((room) => room.id === roomId));
 	const room = floor?.rooms.find((candidate) => candidate.id === roomId);
@@ -696,6 +909,9 @@ export function deleteLayoutWallInteriorAnchor(
 	segmentId: string,
 	anchorId: string
 ): LayoutRoomEditResult {
+	if (isWallFirstLayoutDocument(layoutPreviewDocument(state))) {
+		return failRoomEdit(state, wallFirstLegacyEditMessage());
+	}
 	const layout = cloneLayout(state.project.layout);
 	const floor = layout.floors.find((candidate) => candidate.rooms.some((room) => room.id === roomId));
 	const room = floor?.rooms.find((candidate) => candidate.id === roomId);
@@ -726,6 +942,9 @@ export function commitLayoutPathRoom(
 	state: LayoutPreviewState,
 	segments: readonly DraftSegment[]
 ): LayoutDraftCommitResult {
+	if (isWallFirstLayoutDocument(layoutPreviewDocument(state))) {
+		return { success: false, message: wallFirstLegacyEditMessage(state) };
+	}
 	if (segments.length < 3) return { success: false, message: 'A room needs at least three segments' };
 	const layout = cloneLayout(state.project.layout);
 	const floor = layout.floors[0] ?? { id: 'floor-ground', name: 'Ground Floor', elevation: 0, height: 3, rooms: [] };
@@ -764,6 +983,9 @@ export function previewLayoutRoomUnit(
 	roomId: string,
 	transform: LayoutRoomUnitTransform
 ): LayoutRoomEditResult {
+	if (isWallFirstLayoutDocument(layoutPreviewDocument(state))) {
+		return failRoomEdit(state, wallFirstLegacyEditMessage());
+	}
 	const result = transformLayoutRoomUnit(state.project.layout, roomId, transform);
 	if (!result.success) return failRoomEdit(state, result.message);
 	const applied = applyLayoutMutation(state, result.document);
@@ -775,6 +997,9 @@ export function commitLayoutRoomEdit(
 	roomId: string,
 	points: readonly LayoutVec2[]
 ): LayoutRoomEditResult {
+	if (isWallFirstLayoutDocument(layoutPreviewDocument(state))) {
+		return failRoomEdit(state, wallFirstLegacyEditMessage());
+	}
 	const layout = cloneLayout(state.project.layout);
 	const floor = layout.floors.find((candidate) => candidate.rooms.some((room) => room.id === roomId));
 	const room = floor?.rooms.find((candidate) => candidate.id === roomId);
@@ -798,6 +1023,9 @@ export function commitLayoutDraftRoom(
 	state: LayoutPreviewState,
 	points: readonly LayoutVec2[]
 ): LayoutDraftCommitResult {
+	if (isWallFirstLayoutDocument(layoutPreviewDocument(state))) {
+		return { success: false, message: wallFirstLegacyEditMessage(state) };
+	}
 	if (points.length < 3) {
 		return { success: false, message: 'A room needs at least three points' };
 	}
@@ -879,22 +1107,22 @@ function createPreviewProject(input: {
 	layout: unknown;
 	scene: Project['scene'];
 }): Project {
-	const validation = validateLayoutDocument(input.layout);
-	if (!validation.success) {
-		const first = validation.issues[0]!;
+	const decoded = decodeLayoutValueCompatible(input.layout);
+	if (decoded.kind === 'unrecognized') {
+		const first = decoded.issues[0]!;
 		throw new Error(`${first.path} (${first.code}): ${first.message}`);
 	}
 	return {
 		id: input.id,
 		name: input.name,
-		layout: validation.document,
+		layout: decoded.document as Project['layout'],
 		scene: input.scene
 	};
 }
 
 function createState(
 	source: LayoutPreviewSource,
-	layout: ReturnType<typeof createEmptyLayoutDocument>,
+	layout: Project['layout'],
 	scene: Project['scene'],
 	previousVersion: number
 ): LayoutPreviewState {
@@ -904,7 +1132,7 @@ function createState(
 		layout,
 		scene
 	);
-	const baselineLayoutJson = serializeLayoutDocument(bundle.project.layout);
+	const baselineLayoutJson = canonicalLayoutJson(bundle.project.layout);
 	const baselineKind: LayoutBaselineKind = source === 'empty' ? 'blank' : 'imported';
 	return {
 		source,
@@ -948,7 +1176,19 @@ function applyLayoutMutation(
 	openingId?: string
 ): LayoutOpeningMutationResult {
 	try {
-		const structural = validateLayoutDocument(layout);
+		const decoded = decodeLayoutValueCompatible(layout);
+		if (decoded.kind === 'unrecognized') return failOpeningMutation(state, decoded.issues[0]?.message ?? 'Invalid layout document');
+		if (decoded.kind === 'wall-first') {
+			const bundle = derivePreviewBundle(state.project.id, 'Draft Layout Preview', decoded.document, state.project.scene);
+			state.source = 'draft';
+			commitPreviewBundle(state, bundle);
+			state.previewVersion += 1;
+			state.lastMutationMessage = null;
+			state.statusMessage = null;
+			state.importError = null;
+			return { success: true, openingId: openingId ?? '' };
+		}
+		const structural = validateLayoutDocument(decoded.document);
 		if (!structural.success) return failOpeningMutation(state, structural.issues[0]!.message);
 		const geometryIssues = validateLayoutDocumentGeometry(structural.document);
 		if (hasBlockingLayoutIssues(geometryIssues)) {

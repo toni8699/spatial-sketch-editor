@@ -38,7 +38,7 @@
 	import { createLayoutRoomRegistry } from '$lib/project/project-layout-semantics';
 	import { serializeSceneDocument } from '$lib/content/scene-codec';
 	import type { SceneTextureAsset } from '$lib/content/scene';
-	import { serializeLayoutDocument } from '$lib/layout/layout-codec';
+	import { serializeLayoutDocument, serializeWallFirstLayoutDocument } from '$lib/layout/layout-codec';
 	import { hasBlockingLayoutIssues } from '$lib/layout/layout-geometry-validation';
 	import {
 		computeCloudSaveBlocker,
@@ -460,6 +460,12 @@
 			layoutPreviewCanonicalJson(layoutPreview),
 			projectName
 		);
+	}
+
+	function serializeActiveLayout(layout: unknown): string {
+		return typeof layout === 'object' && layout !== null && 'formatVersion' in layout
+			? serializeWallFirstLayoutDocument(layout)
+			: serializeLayoutDocument(layout);
 	}
 
 	function setCloudError(message: string): void {
@@ -1192,7 +1198,7 @@
 		return {
 			project: snapshot,
 			sceneCanonicalJson: serializeSceneDocument(snapshot.scene),
-			layoutCanonicalJson: serializeLayoutDocument(snapshot.layout)
+			layoutCanonicalJson: serializeActiveLayout(snapshot.layout)
 		};
 	}
 
@@ -1397,7 +1403,7 @@
 		await submitSaveSnapshot({
 			project: pending.project,
 			sceneCanonicalJson: serializeSceneDocument(pending.project.scene),
-			layoutCanonicalJson: serializeLayoutDocument(pending.project.layout)
+			layoutCanonicalJson: serializeActiveLayout(pending.project.layout)
 		});
 	}
 
@@ -1472,7 +1478,7 @@
 			installLayoutPreviewBundle(layoutPreview, bundle);
 			setLayoutViewMode(layoutInteraction, viewState.activeView === 'plan' ? 'plan' : '3d');
 			store.markSaved(serializeSceneDocument(validation.project.scene));
-			markLayoutPreviewSaved(layoutPreview, serializeLayoutDocument(validation.project.layout));
+			markLayoutPreviewSaved(layoutPreview, serializeActiveLayout(validation.project.layout));
 			activeSelection.reset();
 			projectId = loaded.projectId;
 			projectName = validation.project.name;

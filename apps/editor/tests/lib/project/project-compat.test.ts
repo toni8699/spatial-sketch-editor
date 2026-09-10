@@ -264,16 +264,16 @@ describe('project compatible decode (P23.0a)', () => {
 	});
 });
 
-describe('P23.0a scaffolding guard', () => {
-	it('adds no new-schema write path: legacy codec behavior is unchanged', () => {
+describe('P23.1 wall-first project codec', () => {
+	it('accepts the explicit wall-first project shape through the strict codec', () => {
 		const project = validProject();
-		// The strict project codec still validates the legacy shape only —
-		// wall-first payloads must NOT pass it while writers are disabled.
 		const wallFirstProject = {
 			...project,
+			scene: { ...project.scene, formatVersion: 1 as const },
 			layout: {
 				units: 'meters',
 				formatVersion: 4,
+				floor: { id: 'floor', name: 'Floor', elevation: 0, height: 3 },
 				junctions: [],
 				walls: [],
 				rooms: [],
@@ -281,8 +281,7 @@ describe('P23.0a scaffolding guard', () => {
 				objects: []
 			}
 		};
-		expect(issueCodes(parseProjectJson(JSON.stringify(wallFirstProject)))).toContain(
-			'unknown_key'
-		);
+		const result = parseProjectJson(JSON.stringify(wallFirstProject));
+		expect(result.success).toBe(true);
 	});
 });

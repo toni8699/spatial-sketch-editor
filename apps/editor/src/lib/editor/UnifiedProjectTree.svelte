@@ -13,7 +13,7 @@
 	import { getAsset } from '$lib/content/assets';
 	import { isSceneModelEntity, type SceneEntity } from '$lib/content/scene';
 	import { formatPlacementLabel } from './editor-outliner';
-	import type { LayoutPreviewState } from './layout/layout-preview-state.svelte';
+	import { layoutPreviewDocument, type LayoutPreviewState } from './layout/layout-preview-state.svelte';
 	import { deleteLayoutObject, deleteLayoutOpening, deleteLayoutRoom, updateLayoutRoomFields } from './layout/layout-preview-state.svelte';
 	import type { EditorContextMenuStore } from './context-menu/context-menu-state.svelte';
 	import { isEditableTarget } from './context-menu/editable-target';
@@ -78,6 +78,7 @@
 			guidedTourNodeIds: store.guidedTourNodeIds
 		})
 	);
+	const wallFirstLayout = $derived('formatVersion' in layoutPreviewDocument(layoutPreview));
 	const active = $derived(activeSelection.active);
 	// Camera discovery slots (reducer's discoveryConnectionId/discoveryDirection)
 	// — only consulted by the matcher for direction rows, which the embedded
@@ -490,7 +491,7 @@
 		</div>
 		{#if roomsOpen}
 			{#if model.rooms.length === 0}
-				<p class="empty">Draw a room in Plan to begin</p>
+				<p class="empty">{wallFirstLayout ? 'Use Architecture · exact in the Inspector to edit wall-first Junctions, Walls, and Rooms.' : 'Draw a room in Plan to begin'}</p>
 			{:else if visibleModel.rooms.length === 0}
 				<p class="empty">No rows match “{filterQuery.trim()}”</p>
 			{:else}

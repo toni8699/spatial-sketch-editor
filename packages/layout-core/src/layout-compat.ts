@@ -90,7 +90,7 @@ export function decodeLayoutJsonCompatible(json: string): CompatibleLayoutDecode
 				{
 					path: '$',
 					code: 'invalid_json',
-					message: error instanceof Error ? error.message : 'Invalid JSON'
+					message: invalidJsonMessage(error, json)
 				}
 			]
 		};
@@ -153,4 +153,15 @@ function toLegacyOrUnrecognized(
 		return { kind: 'legacy', document: legacy.document, sceneSpace: 'legacy-room-local' };
 	}
 	return { kind: 'unrecognized', reason: 'legacy-invalid', issues: legacy.issues };
+}
+
+function invalidJsonMessage(error: unknown, json: string): string {
+	const message = error instanceof Error ? error.message : 'Invalid JSON';
+	const match = /position (\d+)/.exec(message);
+	if (!match) return 'Invalid JSON';
+	const offset = Number(match[1]);
+	const before = json.slice(0, offset);
+	const line = before.split('\n').length;
+	const column = offset - before.lastIndexOf('\n');
+	return `Invalid JSON near line ${line}, column ${column}.`;
 }

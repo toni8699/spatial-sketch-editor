@@ -8,11 +8,10 @@
  * Project validation gate, with the portable package manifest versioned so
  * package orchestration can never dispatch on the generator string.
  *
- * **Gate boundary.** These writers are exported for the canonical Save path
- * wired behind the F0 acceptance gate. The editor's layout transaction
- * guard (`LAYOUT_MUTATION_POLICY['wall-first']`) stays `disabled` and
- * `saveProject` keeps validating legacy documents until the full F0
- * checklist passes and writers explicitly enable.
+ * **Gate boundary.** These writers are the canonical Save path after the F0
+ * acceptance gate. The editor's wall-first transaction path and project
+ * codec now select this format explicitly; legacy documents remain readable
+ * through compatibility decoding.
  */
 import {
 	validateWallFirstLayoutDocument,

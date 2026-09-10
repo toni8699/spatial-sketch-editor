@@ -18,10 +18,9 @@
  * caller leaves history untouched. Undo/Redo keeps restoring exact
  * snapshots — allocation never reruns.
  *
- * **Writer-enable boundary.** These planners are called only from the
- * canonical writers wired behind the F0 gate; the editor's layout
- * transaction guard (`LAYOUT_MUTATION_POLICY['wall-first']`) stays
- * `disabled` until the complete F0 acceptance checklist passes.
+ * **Writer-enable boundary.** These planners are called from the canonical
+ * writers and the editor's wall-first transaction path after the F0 gate;
+ * P23.1 precision operations use the same candidate/validation discipline.
  */
 import type {
 	LayoutDocumentWallFirst,

@@ -220,7 +220,7 @@
 			? rectanglePoints(interaction)
 			: interaction.polygonPoints
 	);
-	const rooms = $derived(preview.project.layout.floors.flatMap((floor) => floor.rooms));
+	const rooms = $derived('floors' in preview.project.layout ? preview.project.layout.floors.flatMap((floor) => floor.rooms) : []);
 	const baseInteractionProjection = $derived(buildPlanInteractionProjection(interaction, rooms, model));
 	const cameraProjection = $derived.by(() => {
 		if (interaction.planViewMode !== 'layout' || !interaction.planView.showTourOverlay) return undefined;
@@ -935,6 +935,7 @@
 	}
 
 	function updatePrimitiveAt(point: LayoutVec2): void {
+		if ('formatVersion' in preview.project.layout) return;
 		const floor = preview.project.layout.floors[0];
 		const draft = interaction.primitiveDraft;
 		if (!draft) return;
@@ -1140,6 +1141,7 @@
 		}
 
 		if (interaction.tool === 'rectangle') {
+			if ('formatVersion' in preview.project.layout) return;
 			const snapped = draftPoint(event, null);
 			if (!snapped || !svgElement) return;
 			pointerId = event.pointerId;
@@ -1149,6 +1151,7 @@
 		}
 
 		if (isPrimitiveTool(interaction.tool)) {
+			if ('formatVersion' in preview.project.layout) return;
 			const snapped = draftPoint(event, null);
 			if (!snapped || !svgElement) return;
 			if (!onLayoutTransactionBegin()) return;
@@ -1161,6 +1164,7 @@
 		}
 
 		if (interaction.tool === 'door' || interaction.tool === 'window') {
+			if ('formatVersion' in preview.project.layout) return;
 			const target = resolvePlanHit(model.queries, point, LAYOUT_PLAN_HIT_RADIUS_PX / interaction.planView.pixelsPerMeter);
 			if (target?.kind === 'opening') {
 				selectLayoutOpening(interaction, target.roomId, target.segmentId, target.openingId);
@@ -1368,6 +1372,7 @@
 			return;
 		}
 		if (interaction.tool === 'rectangle') {
+			if ('formatVersion' in preview.project.layout) return;
 			const point = draftPoint(event, interaction.rectangleStart);
 			if (point) updateRectangle(interaction, point);
 			return;
@@ -1492,6 +1497,10 @@
 		dragSnapshot = null;
 		svgElement?.releasePointerCapture(event.pointerId);
 		if (interaction.tool === 'rectangle') {
+			if ('formatVersion' in preview.project.layout) {
+				clearLayoutDraft(interaction);
+				return;
+			}
 			const points = rectanglePoints(interaction);
 			if (points && onCommit(points)) clearLayoutDraft(interaction);
 			else if (!points) clearLayoutDraft(interaction);

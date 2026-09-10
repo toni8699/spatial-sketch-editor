@@ -6,6 +6,7 @@
 	import {
 		layoutPreviewSessionStatus,
 		layoutPreviewSourceLabel,
+		layoutPreviewDocument,
 		resetLayoutPreview,
 		type LayoutPreviewState
 	} from './layout/layout-preview-state.svelte';
@@ -39,6 +40,12 @@
 			onReset?.();
 		}
 	}
+
+	const activeLayout = $derived(layoutPreviewDocument(layoutPreview));
+	const activeFloors = $derived('floors' in activeLayout ? activeLayout.floors : []);
+	const activeOpeningCount = $derived(
+		activeFloors.reduce((sum, floor) => sum + floor.rooms.reduce((roomSum, room) => roomSum + room.openings.length, 0), 0)
+	);
 </script>
 
 <aside
@@ -83,8 +90,8 @@
 			<div class="source-badge">{layoutPreviewSourceLabel(layoutPreview.source)} · {layoutPreviewSessionStatus(layoutPreview)}</div>
 			<dl>
 				<div><dt>Rooms</dt><dd>{layoutPreview.model.rooms.length}</dd></div>
-				<div><dt>Floors</dt><dd>{layoutPreview.project.layout.floors.length}</dd></div>
-				<div><dt>Openings</dt><dd>{layoutPreview.project.layout.floors.reduce((sum, floor) => sum + floor.rooms.reduce((roomSum, room) => roomSum + room.openings.length, 0), 0)}</dd></div>
+				<div><dt>Floors</dt><dd>{'formatVersion' in activeLayout ? 1 : activeFloors.length}</dd></div>
+				<div><dt>Openings</dt><dd>{activeOpeningCount + ('formatVersion' in activeLayout ? activeLayout.openings.length : 0)}</dd></div>
 				<div><dt>Objects</dt><dd>{layoutPreview.model.objects.length}</dd></div>
 			</dl>
 			<div class="layout-actions">

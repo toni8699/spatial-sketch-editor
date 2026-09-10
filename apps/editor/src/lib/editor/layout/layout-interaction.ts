@@ -648,6 +648,14 @@ export function reconcileLayoutSelection(
 	selection: LayoutSelection,
 	layout: LayoutDocument
 ): LayoutSelection {
+	// Wall-first precision targets are inspector-local in P23.1. Keep the
+	// existing legacy selection slot safe when a project swap replaces a
+	// Room-owned document with a wall-first document that has no `.floors`.
+	if ('formatVersion' in layout) {
+		return selection.kind === 'none' || selection.kind === 'object'
+			? selection
+			: { kind: 'none' };
+	}
 	switch (selection.kind) {
 		case 'none':
 			return selection;

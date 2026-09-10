@@ -25,9 +25,16 @@
 		layoutRoomSceneReferenceTotal,
 		listLayoutRoomSceneReferences,
 		updateLayoutObjectFields,
+		layoutPreviewDocument,
 		updateLayoutOpeningFields,
 		updateLayoutRoomFields,
 		previewLayoutRoomUnit,
+		updateWallFirstJunction,
+		updateWallFirstWallAngle,
+		updateWallFirstWallLength,
+		updateWallFirstWallThickness,
+		updateWallFirstRectangle,
+		subdivideWallFirstWall,
 		type LayoutPreviewState,
 		type LayoutRoomFieldPatch
 	} from './layout/layout-preview-state.svelte';
@@ -48,6 +55,7 @@
 	import type { EditorViewMode } from './app/editor-view-mode';
 	import { buildPlanSceneFootprintProjection } from './layout/plan-scene-footprint';
 	import { resolveEditorPlacementScale } from './scale-vector';
+	import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall, LayoutWallFirstRoom } from '$lib/layout/layout-wall-first-types';
 
 	let {
 		store,
@@ -200,7 +208,46 @@
 			: undefined
 	);
 	const canDuplicateSelection = $derived(store.selectedPlacementIds.length > 0);
-	const layoutRooms = $derived(layoutPreview.project.layout.floors.flatMap((floor) => floor.rooms));
+	const layoutDocument = $derived(layoutPreviewDocument(layoutPreview));
+	const wallFirstLayout = $derived('formatVersion' in layoutDocument ? layoutDocument : null);
+	const isWallFirstLayout = $derived(wallFirstLayout !== null);
+	const layoutRooms = $derived('floors' in layoutDocument ? layoutDocument.floors.flatMap((floor) => floor.rooms) : []);
+	type PrecisionTarget =
+		| { kind: 'junction'; id: string }
+		| { kind: 'wall'; id: string }
+		| { kind: 'room'; id: string }
+		| null;
+	let precisionTarget = $state<PrecisionTarget>(null);
+	let precisionFixedEndpoint = $state<'start' | 'end'>('start');
+	let precisionRectangleAnchor = $state<string | null>(null);
+	let precisionRectangleWidthWall = $state<string | null>(null);
+	const precisionTargetKind = $derived(precisionTarget?.kind ?? null);
+	const precisionTargetId = $derived(precisionTarget?.id ?? null);
+	const selectedPrecisionJunction = $derived(
+		wallFirstLayout && precisionTargetKind === 'junction' && precisionTargetId
+			? wallFirstLayout.junctions.find((junction) => junction.id === precisionTargetId)
+			: undefined
+	);
+	const selectedPrecisionWall = $derived(
+		wallFirstLayout && precisionTargetKind === 'wall' && precisionTargetId
+			? wallFirstLayout.walls.find((wall) => wall.id === precisionTargetId)
+			: undefined
+	);
+	const selectedPrecisionRoom = $derived(
+		wallFirstLayout && precisionTargetKind === 'room' && precisionTargetId
+			? wallFirstLayout.rooms.find((room) => room.id === precisionTargetId)
+			: undefined
+	);
+	const selectedPrecisionWallEndpoints = $derived(
+		selectedPrecisionWall && wallFirstLayout
+			? precisionWallEndpoints(wallFirstLayout, selectedPrecisionWall)
+			: null
+	);
+	const selectedPrecisionRectangle = $derived(
+		selectedPrecisionRoom && wallFirstLayout
+			? precisionRectangleMetrics(wallFirstLayout, selectedPrecisionRoom)
+			: null
+	);
 	const selectedLayoutRoom = $derived(
 		selectedLayoutRoomId(layoutInteraction)
 			? layoutRooms.find((room) => room.id === selectedLayoutRoomId(layoutInteraction))
@@ -242,6 +289,28 @@
 			? layoutPreview.project.layout.objects.find((object) => object.id === selectedLayoutObjectId)
 			: undefined
 	);
+
+	$effect(() => {
+		if (!wallFirstLayout) {
+			precisionTarget = null;
+			return;
+		}
+		const target = precisionTarget;
+		if (!target) return;
+		if (target.kind === 'junction' && !wallFirstLayout.junctions.some((junction) => junction.id === target.id)) precisionTarget = null;
+		if (target.kind === 'wall' && !wallFirstLayout.walls.some((wall) => wall.id === target.id)) precisionTarget = null;
+		if (target.kind === 'room') {
+			const room = wallFirstLayout.rooms.find((candidate) => candidate.id === target.id);
+			const rectangle = room ? precisionRectangleMetrics(wallFirstLayout, room) : null;
+			const invalidAnchor = Boolean(precisionRectangleAnchor && (!rectangle || !rectangle.cornerIds.includes(precisionRectangleAnchor)));
+			const invalidWidthWall = Boolean(precisionRectangleWidthWall && (!rectangle || rectangle.widthWallId !== precisionRectangleWidthWall));
+			if (!room || invalidAnchor || invalidWidthWall) {
+				precisionRectangleAnchor = null;
+				precisionRectangleWidthWall = null;
+				precisionTarget = null;
+			}
+		}
+	});
 
 	$effect(() => {
 		clusterNameDraft = store.selectedCluster?.name ?? '';
@@ -294,6 +363,10 @@
 	}
 
 	function armOpeningTool(kind: 'door' | 'window') {
+		if (isWallFirstLayout) {
+			store.setStatusMessage('Opening placement is unavailable for wall-first layouts; use Architecture · exact.');
+			return;
+		}
 		setLayoutDraftTool(layoutInteraction, kind);
 	}
 
@@ -501,6 +574,10 @@
 	}
 
 	function armLayoutPlaceTool(tool: 'door' | 'window' | LayoutPrimitiveTool) {
+		if (isWallFirstLayout) {
+			store.setStatusMessage('Legacy placement is unavailable for wall-first layouts; use Architecture · exact.');
+			return;
+		}
 		if ((tool === 'box' || tool === 'cylinder' || tool === 'sphere') && layoutInteraction.viewMode !== 'plan') {
 			store.setStatusMessage('Primitive placement is Plan-only');
 			return;
@@ -609,6 +686,208 @@
 		store.setStatusMessage('Deleted room');
 	}
 
+	function selectPrecisionTarget(target: Exclude<PrecisionTarget, null>): void {
+		precisionTarget = target;
+		if (target.kind === 'room') {
+			precisionRectangleAnchor = null;
+			precisionRectangleWidthWall = null;
+		}
+	}
+
+	function precisionNumber(event: Event, fallback: number): number | null {
+		const input = event.currentTarget as HTMLInputElement;
+		const value = Number(input.value);
+		if (!Number.isFinite(value)) {
+			input.value = String(fallback);
+			store.setStatusMessage('Exact value must be finite');
+			return null;
+		}
+		return value;
+	}
+
+	function updatePrecisionJunction(index: 0 | 1, event: Event): void {
+		const junction = selectedPrecisionJunction;
+		if (!junction) return;
+		const previous = junction.point[index];
+		const value = precisionNumber(event, previous);
+		if (value === null) return;
+		const point = [...junction.point] as [number, number];
+		point[index] = value;
+		const outcome = runLayoutMutationGuarded(
+			() => updateWallFirstJunction(layoutPreview, junction.id, point),
+			(result) => result.success
+		);
+		if (outcome.kind === 'skipped') {
+			(event.currentTarget as HTMLInputElement).value = String(previous);
+			store.setStatusMessage('Finish the current layout interaction first');
+			return;
+		}
+		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = String(previous);
+		store.setStatusMessage(outcome.result.success ? `Updated Junction ${junction.id}` : `Junction rejected: ${outcome.result.message}`);
+	}
+
+	function updatePrecisionWallLength(event: Event): void {
+		const wall = selectedPrecisionWall;
+		const endpoints = selectedPrecisionWallEndpoints;
+		if (!wall || !endpoints) return;
+		const previous = endpoints.length;
+		const value = precisionNumber(event, previous);
+		if (value === null) return;
+		const outcome = runLayoutMutationGuarded(
+			() => updateWallFirstWallLength(layoutPreview, wall.id, value, precisionFixedEndpoint),
+			(result) => result.success
+		);
+		if (outcome.kind === 'skipped') {
+			(event.currentTarget as HTMLInputElement).value = String(previous);
+			store.setStatusMessage('Finish the current layout interaction first');
+			return;
+		}
+		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = String(previous);
+		store.setStatusMessage(outcome.result.success ? `Updated Wall ${wall.id} length` : `Wall rejected: ${outcome.result.message}`);
+	}
+
+	function updatePrecisionWallAngle(event: Event): void {
+		const wall = selectedPrecisionWall;
+		const endpoints = selectedPrecisionWallEndpoints;
+		if (!wall || !endpoints) return;
+		const previous = endpoints.angleDegrees;
+		const value = precisionNumber(event, previous);
+		if (value === null) return;
+		const outcome = runLayoutMutationGuarded(
+			() => updateWallFirstWallAngle(layoutPreview, wall.id, degreesToRadians(value), precisionFixedEndpoint),
+			(result) => result.success
+		);
+		if (outcome.kind === 'skipped') {
+			(event.currentTarget as HTMLInputElement).value = String(previous);
+			store.setStatusMessage('Finish the current layout interaction first');
+			return;
+		}
+		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = String(previous);
+		store.setStatusMessage(outcome.result.success ? `Updated Wall ${wall.id} angle` : `Wall rejected: ${outcome.result.message}`);
+	}
+
+	function updatePrecisionWallThickness(event: Event): void {
+		const wall = selectedPrecisionWall;
+		if (!wall) return;
+		const previous = wall.thickness;
+		const value = precisionNumber(event, previous);
+		if (value === null) return;
+		const outcome = runLayoutMutationGuarded(
+			() => updateWallFirstWallThickness(layoutPreview, wall.id, value),
+			(result) => result.success
+		);
+		if (outcome.kind === 'skipped') {
+			(event.currentTarget as HTMLInputElement).value = String(previous);
+			store.setStatusMessage('Finish the current layout interaction first');
+			return;
+		}
+		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = String(previous);
+		store.setStatusMessage(outcome.result.success ? `Updated Wall ${wall.id} thickness` : `Wall rejected: ${outcome.result.message}`);
+	}
+
+	function addPrecisionVertex(event: Event): void {
+		const wall = selectedPrecisionWall;
+		const endpoints = selectedPrecisionWallEndpoints;
+		if (!wall || !endpoints) return;
+		const fallback = endpoints.length / 2;
+		const value = precisionNumber(event, fallback);
+		if (value === null) return;
+		const outcome = runLayoutMutationGuarded(
+			() => subdivideWallFirstWall(layoutPreview, wall.id, value),
+			(result) => result.success
+		);
+		if (outcome.kind === 'skipped') {
+			store.setStatusMessage('Finish the current layout interaction first');
+			return;
+		}
+		store.setStatusMessage(outcome.result.success ? `Added Vertex to Wall ${wall.id}` : `Vertex rejected: ${outcome.result.message}`);
+	}
+
+	function updatePrecisionRectangle(metric: 'width' | 'depth', event: Event): void {
+		const room = selectedPrecisionRoom;
+		const rectangle = selectedPrecisionRectangle;
+		if (!room || !rectangle) return;
+		const previous = metric === 'width' ? rectangle.width : rectangle.depth;
+		const value = precisionNumber(event, previous);
+		if (value === null) return;
+		const outcome = runLayoutMutationGuarded(
+			() => updateWallFirstRectangle(layoutPreview, room.id, metric === 'width' ? value : rectangle.width, metric === 'depth' ? value : rectangle.depth, {
+				...(precisionRectangleAnchor ? { anchorJunctionId: precisionRectangleAnchor } : {}),
+				...(precisionRectangleWidthWall ? { widthWallId: precisionRectangleWidthWall } : {})
+			}),
+			(result) => result.success
+		);
+		if (outcome.kind === 'skipped') {
+			(event.currentTarget as HTMLInputElement).value = String(previous);
+			store.setStatusMessage('Finish the current layout interaction first');
+			return;
+		}
+		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = String(previous);
+		store.setStatusMessage(outcome.result.success ? `Updated Room ${room.id} ${metric}` : `Rectangle rejected: ${outcome.result.message}`);
+	}
+
+	function precisionWallEndpoints(layout: LayoutDocumentWallFirst, wall: LayoutWall): { start: LayoutJunction; end: LayoutJunction; length: number; angleDegrees: number } | null {
+		const start = layout.junctions.find((junction) => junction.id === wall.startJunctionId);
+		const end = layout.junctions.find((junction) => junction.id === wall.endJunctionId);
+		if (!start || !end) return null;
+		return {
+			start,
+			end,
+			length: Math.hypot(end.point[0] - start.point[0], end.point[1] - start.point[1]),
+			angleDegrees: radiansToDegrees(Math.atan2(end.point[1] - start.point[1], end.point[0] - start.point[0]))
+		};
+	}
+
+	function precisionRectangleMetrics(layout: LayoutDocumentWallFirst, room: LayoutWallFirstRoom): {
+		anchorId: string;
+		widthWallId: string;
+		depthWallId: string;
+		widthEndpointId: string;
+		depthEndpointId: string;
+		cornerIds: string[];
+		width: number;
+		depth: number;
+	} | null {
+		const wallById = new Map(layout.walls.map((wall) => [wall.id, wall]));
+		const edges = room.boundary.map((ref) => {
+			const wall = wallById.get(ref.wallId);
+			if (!wall) return null;
+			return {
+				wall,
+				wallId: wall.id,
+				startId: ref.direction === 'forward' ? wall.startJunctionId : wall.endJunctionId,
+				endId: ref.direction === 'forward' ? wall.endJunctionId : wall.startJunctionId
+			};
+		}).filter((edge): edge is NonNullable<typeof edge> => edge !== null);
+		if (edges.length !== 4 || edges.some((edge, index) => edge.endId !== edges[(index + 1) % edges.length]?.startId)) return null;
+		const cornerIds = [...new Set(edges.flatMap((edge) => [edge.startId, edge.endId]))].sort((a, b) => a.localeCompare(b));
+		if (cornerIds.length !== 4) return null;
+		const anchorId = precisionRectangleAnchor && cornerIds.includes(precisionRectangleAnchor) ? precisionRectangleAnchor : cornerIds[0]!;
+		const incident = edges.filter((edge) => edge.startId === anchorId || edge.endId === anchorId).sort((a, b) => a.wallId.localeCompare(b.wallId));
+		if (incident.length !== 2) return null;
+		const widthEdge = precisionRectangleWidthWall && incident.some((edge) => edge.wallId === precisionRectangleWidthWall)
+			? incident.find((edge) => edge.wallId === precisionRectangleWidthWall)!
+			: incident[0]!;
+		const depthEdge = incident.find((edge) => edge.wallId !== widthEdge.wallId)!;
+		const widthEndpointId = widthEdge.startId === anchorId ? widthEdge.endId : widthEdge.startId;
+		const depthEndpointId = depthEdge.startId === anchorId ? depthEdge.endId : depthEdge.startId;
+		const points = new Map(layout.junctions.map((junction) => [junction.id, junction.point]));
+		const anchor = points.get(anchorId);
+		const widthEndpoint = points.get(widthEndpointId);
+		const depthEndpoint = points.get(depthEndpointId);
+		if (!anchor || !widthEndpoint || !depthEndpoint) return null;
+		return {
+			anchorId,
+			widthWallId: widthEdge.wallId,
+			depthWallId: depthEdge.wallId,
+			widthEndpointId,
+			depthEndpointId,
+			cornerIds,
+			width: Math.hypot(widthEndpoint[0] - anchor[0], widthEndpoint[1] - anchor[1]),
+			depth: Math.hypot(depthEndpoint[0] - anchor[0], depthEndpoint[1] - anchor[1])
+		};
+	}
+
 </script>
 
 <aside bind:this={inspectorElement} class="panel inspector" class:collapsed aria-label="Inspector" style="grid-area: right;" inert={collapsed}>
@@ -656,7 +935,7 @@
 
 	{#if domain === 'layout'}
 		<section class="layout-inspector" aria-label="Layout preview details">
-			{#if showLayoutPrimer}
+			{#if showLayoutPrimer && !isWallFirstLayout}
 				<div class="layout-primer" aria-label="Layout primer">
 					<strong>Layout primer</strong>
 					<p>Rect Room — drag to draw a rectangular room · Poly Room — click points, close to finish.</p>
@@ -675,17 +954,18 @@
 			</dl>
 			{#if layoutPreview.importError}<p class="layout-opening-warning" role="alert">Import failed: {layoutPreview.importError}</p>{/if}
 			<p class="layout-inspector-note">Openings are geometry-only in this phase. No room adjacency or portal semantics are inferred.</p>
+			{#if isWallFirstLayout}<p class="layout-inspector-note">Wall-first layout: use Architecture · exact for Junctions, Walls, Rooms, and existing object transforms. Legacy room, opening, and primitive placement is unavailable.</p>{/if}
 
 			{#if isScenePlanLayout}
 			<div class="layout-accordion">
 				<button type="button" class="accordion-trigger" aria-expanded={layoutInteraction.accordions.place} onclick={() => toggleLayoutAccordion(layoutInteraction, 'place')}><strong>Place</strong><span>{layoutInteraction.accordions.place ? '−' : '+'}</span></button>
 				{#if layoutInteraction.accordions.place}
 					<div class="place-tools" aria-label="Layout place tools">
-						<button type="button" disabled={layoutInteraction.viewMode !== 'plan'} onclick={() => armLayoutPlaceTool('door')}>Door</button>
-						<button type="button" disabled={layoutInteraction.viewMode !== 'plan'} onclick={() => armLayoutPlaceTool('window')}>Window</button>
-						<button type="button" disabled={layoutInteraction.viewMode !== 'plan'} onclick={() => armLayoutPlaceTool('box')}>Box</button>
-						<button type="button" disabled={layoutInteraction.viewMode !== 'plan'} onclick={() => armLayoutPlaceTool('cylinder')}>Cylinder</button>
-						<button type="button" disabled={layoutInteraction.viewMode !== 'plan'} onclick={() => armLayoutPlaceTool('sphere')}>Sphere</button>
+						<button type="button" disabled={layoutInteraction.viewMode !== 'plan' || isWallFirstLayout} onclick={() => armLayoutPlaceTool('door')}>Door</button>
+						<button type="button" disabled={layoutInteraction.viewMode !== 'plan' || isWallFirstLayout} onclick={() => armLayoutPlaceTool('window')}>Window</button>
+						<button type="button" disabled={layoutInteraction.viewMode !== 'plan' || isWallFirstLayout} onclick={() => armLayoutPlaceTool('box')}>Box</button>
+						<button type="button" disabled={layoutInteraction.viewMode !== 'plan' || isWallFirstLayout} onclick={() => armLayoutPlaceTool('cylinder')}>Cylinder</button>
+						<button type="button" disabled={layoutInteraction.viewMode !== 'plan' || isWallFirstLayout} onclick={() => armLayoutPlaceTool('sphere')}>Sphere</button>
 					</div>
 				{/if}
 			</div>
@@ -704,9 +984,72 @@
 						{/each}
 					</div>
 				{/if}
-			</div>
+				</div>
 
-			<div class="layout-accordion">
+				{#if isWallFirstLayout && wallFirstLayout}
+				<div class="layout-accordion" aria-label="Wall-first exact authoring">
+					<div class="accordion-trigger"><strong>Architecture · exact</strong><span>m / °</span></div>
+					<div class="layout-selection-content">
+						<p class="layout-inspector-note">Exact values are document meters and degrees. Snap is bypassed; Apply/Enter creates one layout history entry.</p>
+						<div class="layout-object-list" aria-label="Wall-first Junctions">
+							<strong>Junctions</strong>
+							{#if wallFirstLayout.junctions.length === 0}<span class="layout-empty">No Junctions.</span>{/if}
+							{#each wallFirstLayout.junctions as junction (junction.id)}
+								<button type="button" class:selected={precisionTarget?.kind === 'junction' && precisionTarget.id === junction.id} class="object-row-select" onclick={() => selectPrecisionTarget({ kind: 'junction', id: junction.id })}><strong>{junction.id}</strong><span>{junction.point[0].toFixed(2)}, {junction.point[1].toFixed(2)}</span></button>
+							{/each}
+						</div>
+						<div class="layout-object-list" aria-label="Wall-first Walls">
+							<strong>Walls</strong>
+							{#if wallFirstLayout.walls.length === 0}<span class="layout-empty">No Walls.</span>{/if}
+							{#each wallFirstLayout.walls as wall (wall.id)}
+								<button type="button" class:selected={precisionTarget?.kind === 'wall' && precisionTarget.id === wall.id} class="object-row-select" onclick={() => selectPrecisionTarget({ kind: 'wall', id: wall.id })}><strong>{wall.id}</strong><span>{wall.startJunctionId} → {wall.endJunctionId}</span></button>
+							{/each}
+						</div>
+						<div class="layout-object-list" aria-label="Wall-first Rooms">
+							<strong>Rooms</strong>
+							{#if wallFirstLayout.rooms.length === 0}<span class="layout-empty">No Rooms.</span>{/if}
+							{#each wallFirstLayout.rooms as room (room.id)}
+								<button type="button" class:selected={precisionTarget?.kind === 'room' && precisionTarget.id === room.id} class="object-row-select" onclick={() => selectPrecisionTarget({ kind: 'room', id: room.id })}><strong>{room.name}</strong><span>{room.id}</span></button>
+							{/each}
+						</div>
+
+						{#if selectedPrecisionJunction}
+							<div class="layout-selected-room" aria-label="Exact Junction editor">
+								<strong>Junction {selectedPrecisionJunction.id}</strong>
+								<span>Connected Wall geometry follows this Junction.</span>
+								<label>X (m)<input type="number" step="0.01" value={selectedPrecisionJunction.point[0]} onchange={(event) => updatePrecisionJunction(0, event)} /></label>
+								<label>Z (m)<input type="number" step="0.01" value={selectedPrecisionJunction.point[1]} onchange={(event) => updatePrecisionJunction(1, event)} /></label>
+								{#if layoutPreview.lastMutationMessage}<p class="layout-opening-warning" role="status">{layoutPreview.lastMutationMessage}</p>{/if}
+							</div>
+						{:else if selectedPrecisionWall && selectedPrecisionWallEndpoints}
+							<div class="layout-selected-room" aria-label="Exact Wall editor">
+								<strong>Wall {selectedPrecisionWall.id}</strong>
+								<span>Canonical: {selectedPrecisionWallEndpoints.start.id} → {selectedPrecisionWallEndpoints.end.id}</span>
+								<span>Start {selectedPrecisionWallEndpoints.start.point[0].toFixed(3)}, {selectedPrecisionWallEndpoints.start.point[1].toFixed(3)} · End {selectedPrecisionWallEndpoints.end.point[0].toFixed(3)}, {selectedPrecisionWallEndpoints.end.point[1].toFixed(3)}</span>
+								<label>Fixed endpoint<select value={precisionFixedEndpoint} onchange={(event) => precisionFixedEndpoint = (event.currentTarget as HTMLSelectElement).value as 'start' | 'end'}><option value="start">Start</option><option value="end">End</option></select></label>
+								<label>Length (m)<input type="number" min="0.001" step="0.01" value={selectedPrecisionWallEndpoints.length} onchange={updatePrecisionWallLength} /></label>
+								<label>Angle (°)<input type="number" step="1" value={selectedPrecisionWallEndpoints.angleDegrees} onchange={updatePrecisionWallAngle} /></label>
+								<label>Thickness (m)<input type="number" min="0.001" step="0.01" value={selectedPrecisionWall.thickness} onchange={updatePrecisionWallThickness} /></label>
+								<label>Add Vertex at (m)<input type="number" min="0.001" step="0.01" value={selectedPrecisionWallEndpoints.length / 2} onchange={addPrecisionVertex} /></label>
+								<span>Openings stay on physical Wall meters and are rejected if the edit would make them invalid.</span>
+								{#if layoutPreview.lastMutationMessage}<p class="layout-opening-warning" role="status">{layoutPreview.lastMutationMessage}</p>{/if}
+							</div>
+						{:else if selectedPrecisionRoom && selectedPrecisionRectangle}
+							<div class="layout-selected-room" aria-label="Exact rectangle editor">
+								<strong>Rectangle {selectedPrecisionRoom.name}</strong>
+								<span>Four boundary Walls · shared-boundary edits reject when ambiguous.</span>
+								<label>Anchor Junction<select value={precisionRectangleAnchor ?? selectedPrecisionRectangle.anchorId} onchange={(event) => precisionRectangleAnchor = (event.currentTarget as HTMLSelectElement).value || null}>{#each selectedPrecisionRectangle.cornerIds as id}<option value={id}>{id}</option>{/each}</select></label>
+								<label>Width Wall<select value={precisionRectangleWidthWall ?? selectedPrecisionRectangle.widthWallId} onchange={(event) => precisionRectangleWidthWall = (event.currentTarget as HTMLSelectElement).value || null}>{#each selectedPrecisionRoom.boundary as ref}<option value={ref.wallId}>{ref.wallId}</option>{/each}</select></label>
+								<label>Width (m)<input type="number" min="0.001" step="0.01" value={selectedPrecisionRectangle.width} onchange={(event) => updatePrecisionRectangle('width', event)} /></label>
+								<label>Depth (m)<input type="number" min="0.001" step="0.01" value={selectedPrecisionRectangle.depth} onchange={(event) => updatePrecisionRectangle('depth', event)} /></label>
+								{#if layoutPreview.lastMutationMessage}<p class="layout-opening-warning" role="status">{layoutPreview.lastMutationMessage}</p>{/if}
+							</div>
+						{/if}
+					</div>
+				</div>
+				{/if}
+
+				<div class="layout-accordion">
 				<button type="button" class="accordion-trigger" aria-expanded={layoutInteraction.accordions.selection} onclick={() => toggleLayoutAccordion(layoutInteraction, 'selection')}><strong>Selection</strong><span>{layoutInteraction.accordions.selection ? '−' : '+'}</span></button>
 				{#if layoutInteraction.accordions.selection}
 				<div class="layout-selection-content">
@@ -794,8 +1137,8 @@
 					<label>Ceiling thickness (m)<input type="number" min="0.001" step="0.01" value={selectedLayoutRoom.ceilingThickness} onchange={(event) => updateRoomNumber('ceilingThickness', event)} /></label>
 					{#if selectedLayoutFloor}<label>Floor height (m)<input type="number" min="0.001" step="0.05" value={selectedLayoutFloor.height} onchange={(event) => updateRoomNumber('floorHeight', event)} /></label>{/if}
 					<div class="layout-opening-actions">
-						<button type="button" onclick={() => armOpeningTool('door')}>Door</button>
-						<button type="button" onclick={() => armOpeningTool('window')}>Window</button>
+						<button type="button" disabled={isWallFirstLayout} onclick={() => armOpeningTool('door')}>Door</button>
+						<button type="button" disabled={isWallFirstLayout} onclick={() => armOpeningTool('window')}>Window</button>
 					</div>
 				</div>
 			{:else if selectedLayoutRoom && selectedLayoutBounds}

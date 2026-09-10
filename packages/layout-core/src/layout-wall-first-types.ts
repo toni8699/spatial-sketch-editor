@@ -1,12 +1,11 @@
 /**
  * `layout-wall-first-types.ts` — P23.0a wall-first Layout schema types.
  *
- * These types are the **target** wall-first `LayoutDocument` shape ratified by
+ * These types are the wall-first `LayoutDocument` shape ratified by
  * the P23 umbrella ([P23 umbrella §F0.1](../../../../docs/plans/2026-09-07-P23-layout-depth-minimum-build.md))
- * and the P23.0 child plan. P23.0a is schema/compatibility **scaffolding
- * only**: decoding/validating these documents must never enable new-schema
- * writes — the editor keeps authoring the legacy Room-owned format until the
- * full P23 Foundation Gate F0 passes.
+ * and the P23.0 child plan. The Foundation Gate is closed; these records are
+ * now consumed by the wall-first Save and P23.1 precise semantic operations.
+ * Legacy Room-owned records remain available through the compatibility path.
  *
  * Identity rules (P23 umbrella F0.1, P23.0 "Identity rules"):
  * - Junction IDs are the only normal-authoring connectivity authority.

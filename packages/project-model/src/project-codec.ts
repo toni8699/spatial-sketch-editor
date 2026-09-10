@@ -3,6 +3,7 @@ import {
 	validateLayoutDocument,
 	type LayoutValidationResult
 } from '@portfolio/layout-core';
+import { validateWallFirstLayoutDocument } from '@portfolio/layout-core';
 import { createEmptySceneDocument } from './scene';
 import {
 	validateSceneDocument,
@@ -79,10 +80,16 @@ export function validateProject(
 	}
 	const id = readId(input.id, '$.id', issues);
 	const name = readName(input.name, '$.name', issues);
-	const layoutResult = validateLayoutDocument(input.layout);
+	const wallFirstLayout = isWallFirstLayoutValue(input.layout);
+	const layoutResult = wallFirstLayout
+		? validateWallFirstLayoutDocument(input.layout)
+		: validateLayoutDocument(input.layout);
 	const sceneResult = validateSceneDocument(input.scene, options.scene);
 	issues.push(...prefixIssues('$.layout', layoutResult));
 	issues.push(...prefixIssues('$.scene', sceneResult));
+	if (wallFirstLayout && !isWorldLocalSceneValue(input.scene)) {
+		issues.push(issue('$.scene.formatVersion', 'scene_not_world_local', 'Wall-first projects require a world-local Scene (formatVersion: 1)'));
+	}
 	if (layoutResult.success && sceneResult.success) {
 		issues.push(...validateProjectSceneRooms(sceneResult.document, createLayoutRoomRegistry(layoutResult.document)));
 	}
@@ -92,7 +99,11 @@ export function validateProject(
 	const project: ProjectDocument = {
 		id,
 		name,
-		layout: layoutResult.document,
+		// The public legacy ProjectDocument type remains source-compatible for
+		// the editor's existing legacy consumers. A wall-first payload is
+		// carried through this compatibility boundary unchanged at runtime and
+		// is typed by the compatible runtime/save seams.
+		layout: layoutResult.document as ProjectDocument['layout'],
 		scene: sceneResult.document
 	};
 	return { success: true, project, canonicalJson: JSON.stringify(project, null, 2) + '\n' };
@@ -120,13 +131,24 @@ export function serializeProject(
 
 function prefixIssues(
 	prefix: '$.layout' | '$.scene',
-	result: LayoutValidationResult | SceneDocumentValidationResult
+	result:
+		| LayoutValidationResult
+		| ReturnType<typeof import('@portfolio/layout-core')['validateWallFirstLayoutDocument']>
+		| SceneDocumentValidationResult
 ): ProjectIssue[] {
 	if (result.success) return [];
 	return result.issues.map((item) => ({
 		...item,
 		path: item.path === '$' ? prefix : `${prefix}${item.path.slice(1)}`
 	}));
+}
+
+function isWallFirstLayoutValue(input: unknown): boolean {
+	return record(input) && 'formatVersion' in input;
+}
+
+function isWorldLocalSceneValue(input: unknown): boolean {
+	return record(input) && input.formatVersion === 1;
 }
 
 function record(value: unknown): value is JsonRecord {

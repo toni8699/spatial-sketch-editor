@@ -18,6 +18,9 @@ import { prepareCompatibleRuntime } from '$lib/project/compat-runtime';
 import type { SceneDocument, RuntimeScene, NavigationGraph } from '$lib/content/scene';
 import type { LayoutRoomRegistry } from '$lib/project/project-layout-semantics';
 import type { LayoutDocument } from '$lib/layout/layout-types';
+import type { LayoutDocumentWallFirst } from '$lib/layout/layout-wall-first-types';
+
+type PreviewLayoutDocument = LayoutDocument | LayoutDocumentWallFirst;
 import type { BinaryTextureEntry } from '$lib/editor/store/binary-texture-store.svelte';
 
 export type PreviewTextureStoreLike = {
@@ -57,7 +60,7 @@ function requiresRetainedBytes(uri: string): boolean {
  */
 export function computeVisitorPreviewBlocker(input: {
 	scene: SceneDocument;
-	layout: LayoutDocument;
+	layout: PreviewLayoutDocument;
 	projectId: string;
 	projectName: string;
 	conditions: PreviewEntryConditions;
@@ -145,7 +148,7 @@ export type DetachedPreviewBundle = {
  */
 export function composeDetachedPreviewBundle(input: {
 	scene: SceneDocument;
-	layout: LayoutDocument;
+	layout: PreviewLayoutDocument;
 	projectId: string;
 	projectName: string;
 	textureStore: PreviewTextureStoreLike;

@@ -118,6 +118,17 @@ export function buildUnifiedProjectTreeModel(input: {
 		guidedTourNodeIds: string[];
 	}): UnifiedProjectTreeModel {
 		const { layout, scene } = input;
+		const guided = new Set(input.guidedTourNodeIds);
+		const cameraTour: UnifiedTreeCameraTour = {
+			guidedNodeIds: [...input.guidedTourNodeIds],
+			freeNodeIds: scene.navigationNodes
+				.map((node) => node.id)
+				.filter((nodeId) => !guided.has(nodeId))
+		};
+		// Wall-first Rooms/Junctions/Walls are surfaced by the exact authoring
+		// inspector. The legacy hierarchy below remains intentionally read-only
+		// for this schema until the canonical tree rows are cut over.
+		if ('formatVersion' in layout) return { rooms: [], cameraTour };
 
 		const rooms: UnifiedTreeRoom[] = layout.floors.flatMap((floor) =>
 		floor.rooms.map((room): UnifiedTreeRoom => ({
@@ -157,14 +168,6 @@ export function buildUnifiedProjectTreeModel(input: {
 				.map((entity) => ({ entityId: entity.id, name: entity.name }))
 		}))
 	);
-
-	const guided = new Set(input.guidedTourNodeIds);
-	const cameraTour: UnifiedTreeCameraTour = {
-		guidedNodeIds: [...input.guidedTourNodeIds],
-		freeNodeIds: scene.navigationNodes
-			.map((node) => node.id)
-			.filter((nodeId) => !guided.has(nodeId))
-	};
 
 	return { rooms, cameraTour };
 }

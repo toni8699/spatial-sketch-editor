@@ -1,17 +1,16 @@
 /**
- * `layout-wall-first-codec.ts` — P23.0a strict codec for the wall-first
- * `LayoutDocument` (`formatVersion: 4`).
+ * `layout-wall-first-codec.ts` — strict codec for the wall-first
+ * `LayoutDocument` (`formatVersion: 4`), shared by P23.1 operations and the
+ * canonical project Save boundary.
  *
- * Scope guard (P23.0 child plan): this codec is **decode/validation
- * scaffolding only**. It intentionally provides:
+ * The codec intentionally provides:
  *
  *   - strict structural validation of the new canonical shape, and
  *   - a `createEmptyWallFirstLayoutDocument()` fixture/boot helper
  *
- * and intentionally provides **no mutation, migration or Save integration**.
- * The editor keeps writing the legacy Room-owned format until the full P23
- * Foundation Gate F0 acceptance passes and wall-first writers are explicitly
- * enabled (P23.0b).
+ * Semantic mutations live in the operation planners
+ * (`layout-wall-first-precision.ts` and the P23.8 noding/topology modules);
+ * this module remains a pure validation/canonicalization boundary.
  *
  * Validation policy mirrors the legacy codec's strictness (reject-on-issue,
  * explicit issue codes, canonical JSON) so downstream F0 gates can rely on
@@ -86,8 +85,9 @@ const AUTO_BEZIER_SEGMENT_KEYS = ['id', 'kind', 'start', 'end', 'interiorAnchors
 const INTERIOR_ANCHOR_KEYS = ['id', 'point'] as const;
 
 /**
- * Authoring-empty wall-first document. Scaffolding helper for P23.8/P23.0b
- * fixtures and tests — not an editor boot state while legacy writes hold.
+ * Authoring-empty wall-first document. Used by wall-first fixtures and
+ * explicit reset/import flows; the editor's default boot document remains
+ * the legacy compatibility fixture.
  */
 export function createEmptyWallFirstLayoutDocument(): LayoutDocumentWallFirst {
 	return {
