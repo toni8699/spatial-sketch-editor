@@ -74,17 +74,16 @@ For every accepted static model addition:
 
 That future project-model path is **DEFERRED from the static-first P24A minimum**. Current P20 is intentionally texture/procedural-only: API/editor asset kinds exclude `model`, MIME accepts images only, upload validation sniffs images, and the public release client verifies only PNG/JPEG/WebP bytes. A later dynamic-model slice must extend those existing seams coherently (`kind: 'model'`, canonical GLB MIME/validation, project/release-scoped model source resolution) instead of inventing a parallel registry. Scene still stores the stable asset identity, not delivery coordinates.
 
-**Decision 4 — model Save/Load semantics are already sufficient; live project persistence integration is not.** The Scene codec already round-trips model `assetId`, fallback, transform and material-instance reference, and F0 provides the canonical wall-first + world-local project writer. No model-specific Scene schema addition is required for the static-first minimum. However, live editor cloud Save/Load still routes through the legacy project validation path identified by R0. P24A cannot claim end-to-end Save/Load acceptance until that shared persistence cutover uses compatible Load + canonical wall-first/world-local Save. This is one project-persistence integration change, not a model-specific codec or second Save path.
+**Decision 4 — model Save/Load semantics and current cloud format acceptance are sufficient; end-to-end proof remains.** The Scene codec already round-trips model `assetId`, fallback, transform and material-instance reference. P23.1 also widened the shared project codec so `validateProject()` accepts explicit wall-first Layout + world-local Scene, and live `captureValidatedSaveSnapshot()` / `loadProject()` already flow through that shared codec. P24A therefore needs no model-specific serializer and no separate project-persistence cutover merely to persist a static-model identity. `createEmptyProject()` still boots the legacy-compatible empty shape and compatibility migration remains a broader editor/P23 lifecycle concern; neither changes the P24A model identity contract. The P24A implementation gate still must prove a real world-local model Save → Load round-trip.
 
 **Decision 5 — cold visitor coordinate preparation is closed; capability delivery remains to prove.** F0's shared `prepareCompatibleRuntime()` already gives Preview and cold visitor the same world-local coordinate meaning. P24A must not reopen coordinate migration. The remaining P24A visitor proof is resource-level: selected static models resolve through the shipped-static authority, required files are retained, selected material/HDRI dependencies resolve, and no editor-warmed/global source state is required.
 
 **R1 remaining blockers before implementation-ready P24A child plans freeze:**
 
 1. shared Stage placement/selectability must stop requiring legacy Room ownership for canonical world-local Scene entities;
-2. live editor Save/Load must complete the compatible-load + canonical-save cutover already identified by R0;
-3. cold static-model rendering must take its production source from the shipped-static compatibility authority rather than the mutable live catalogue;
-4. the selected floor/support placement operation still needs the shared P24 support/surface resolution contract for Y/ambiguity; P24A's floor-normalized pivot does not replace that Layout query;
-5. P24A.3–P24A.6 execution still has to acquire/run the frozen proof corpus and bounded material/HDRI supply through the decided pipeline and acceptance fixtures.
+2. cold static-model rendering must take its production source from the shipped-static compatibility authority rather than the mutable live catalogue;
+3. the selected floor/support placement operation still needs the shared P24 support/surface resolution contract for Y/ambiguity; P24A's floor-normalized pivot does not replace that Layout query;
+4. P24A.3–P24A.6 execution still has to acquire/run the frozen proof corpus and bounded material/HDRI supply through the decided pipeline and acceptance fixtures, including real Save/Load + cold-visitor model delivery proof.
 
 These are implementation/reconciliation blockers, not missing broad research. Dynamic project/upload/provider GLB ingestion is a deferred depth path and does **not** block the static-first P24A minimum.
 
