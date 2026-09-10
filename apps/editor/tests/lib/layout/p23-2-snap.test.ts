@@ -255,6 +255,39 @@ describe('P23.2 resolveLayoutSnap over compiled query geometry', () => {
 		}
 	});
 
+	it('keeps coincident junctions from distinct walls when deduping, so excluding one leaves the other regardless of query order', () => {
+		const ownerOf = (id: string) => snapOwnerKey({ kind: 'wall', id });
+
+		const buildGeometry = (order: 'ab' | 'ba'): CompiledLayoutGeometry => {
+			const geometry = emptyGeometry();
+			const points = [
+				vertexAt(0, 0, 'wall-a'),
+				vertexAt(0, 0, 'wall-b')
+			];
+			geometry.queries.points.push(...(order === 'ab' ? points : [...points].reverse()));
+			return geometry;
+		};
+
+		for (const order of ['ab', 'ba'] as const) {
+			const excluded = resolveLayoutSnap(buildGeometry(order), [0.01, 0.01], { pixelsPerMeter: 50 }, {
+				excludeOwners: new Set([ownerOf('wall-a')])
+			});
+			expect(excluded.kind).toBe('snap');
+			if (excluded.kind !== 'snap') continue;
+			// wall-a's junction must not shadow wall-b's coincident one.
+			expect(excluded.candidate.sourceId).toBe('wall-b');
+			expect(excluded.candidate.ownerId).toBe(ownerOf('wall-b'));
+
+			const unexcluded = resolveLayoutSnap(buildGeometry(order), [0.01, 0.01], { pixelsPerMeter: 50 });
+			expect(unexcluded.kind).toBe('snap');
+			if (unexcluded.kind !== 'snap') continue;
+			// No exclusion: the winner is decided by the stable key (smallest
+			// owner id), never by which coincident record came first.
+			expect(unexcluded.candidate.sourceId).toBe('wall-a');
+			expect(unexcluded.candidate.ownerId).toBe(ownerOf('wall-a'));
+		}
+	});
+
 	it('snapToGridStep respects the centralized step and invalid steps pass through', () => {
 		expect(snapToGridStep([1.13, -0.62])).toEqual([1.25, -0.5]);
 		expect(snapToGridStep([1.13, 1], 0)).toEqual([1.13, 1]);

@@ -196,7 +196,10 @@ function excluded(candidate: SnapCandidate, context: SnapInputContext): boolean 
 }
 
 function stableKey(candidate: SnapCandidate): string {
-	return `${SEMANTIC_RANK[candidate.kind]}|${candidate.kind}|${candidate.sourceId}|${candidate.point[0]}|${candidate.point[1]}`;
+	// `ownerId` participates so identical `sourceId + point` records with
+	// different qualified owners (coincident junctions from distinct walls)
+	// never fall back to iteration order in the tie-break.
+	return `${SEMANTIC_RANK[candidate.kind]}|${candidate.kind}|${candidate.ownerId ?? candidate.sourceId}|${candidate.sourceId}|${candidate.point[0]}|${candidate.point[1]}`;
 }
 
 /**
@@ -484,19 +487,26 @@ export function resolveLayoutSnap(
 	const candidates: SnapCandidate[] = [];
 
 	// Junction candidates from compiled query points, deduplicated by exact
-	// position (shared junctions compile once per incident room boundary).
-	const seenPoints = new Set<string>();
+	// position AND qualified owner: coincident junctions from distinct walls
+	// are distinct candidates (each may survive its own exclusion), while
+	// identical position+owner records (shared junctions compile once per
+	// incident room boundary under one wall identity) collapse to one.
+	// Deduping by position alone would let whichever wall the compiler
+	// happened to emit first shadow the other's exclusion — query-array
+	// order must never decide the winner (P23.2 deterministic contract).
+	const seenPointOwners = new Set<string>();
 	for (const queryPoint of geometry.queries.points) {
-		const key = `${queryPoint.point[0]}|${queryPoint.point[1]}`;
-		if (seenPoints.has(key)) continue;
-		seenPoints.add(key);
+		const ownerId = snapOwnerKey({ kind: 'wall', id: queryPoint.wallKey ?? queryPoint.segmentId });
+		const key = `${queryPoint.point[0]}|${queryPoint.point[1]}|${ownerId}`;
+		if (seenPointOwners.has(key)) continue;
+		seenPointOwners.add(key);
 		const distance = Math.hypot(queryPoint.point[0] - point[0], queryPoint.point[1] - point[1]);
 		if (distance > radius) continue;
 		candidates.push({
 			point: [queryPoint.point[0], queryPoint.point[1]],
 			kind: 'junction',
 			sourceId: queryPoint.sourceId,
-			ownerId: snapOwnerKey({ kind: 'wall', id: queryPoint.wallKey ?? queryPoint.segmentId }),
+			ownerId,
 			distance
 		});
 	}
