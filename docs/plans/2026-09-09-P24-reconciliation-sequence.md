@@ -28,7 +28,7 @@ P24 reconciliation
 
 P24 implementation still depends on the accepted P23 minimum useful Build set. Any P24 decision touching coordinates, placement ownership, selection routing, Plan projection or Scene/Camera migration must consume the coordinate/ownership model accepted through P23, not assume the earlier Room-local baseline remains permanent.
 
-P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code. P23 F0 closed on 2026-09-10. **R0/R1/R2 are complete; R3 and R4 behavioral contracts and R5–R7 maturity reconciliation closed 2026-09-10; R8 post-F0 presentation reconciliation closed 2026-09-10; R9 minimum freeze complete; owner review of child briefs next.** Selected placement/selection/support-query and capability-specific asset/runtime seams still carry explicit later reconciliation before the R9 minimum freeze.
+P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code. P23 F0 closed on 2026-09-10. **R0/R1/R2 are complete; R3 and R4 behavioral contracts and R5–R7 maturity reconciliation closed 2026-09-10; R8 post-F0 presentation reconciliation closed 2026-09-10; R9 minimum freeze complete; owner review of child briefs next.** Selected placement/selection/support-query and capability-specific asset/runtime seams remain open implementation/ship gates allocated by R9.
 
 ## Authority and evidence order
 
