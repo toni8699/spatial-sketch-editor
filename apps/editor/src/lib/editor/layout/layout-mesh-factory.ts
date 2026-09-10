@@ -1,6 +1,10 @@
+import {
+	compileLayoutGeometry,
+	compileWallFirstLayoutGeometry
+} from '$lib/layout/layout-geometry';
 import type { LayoutDocument, LayoutVec2 } from '$lib/layout/layout-types';
+import type { LayoutDocumentWallFirst } from '$lib/layout/layout-wall-first-types';
 import type { LayoutGeometryIssue } from '$lib/layout/layout-geometry-validation';
-import { compileLayoutGeometry } from '$lib/layout/layout-geometry';
 import type {
 	CompiledCurveSample,
 	CompiledLayoutGeometry,
@@ -55,8 +59,12 @@ export type LayoutPreviewModelResult = {
  * `compileLayoutGeometry()` contract; no curve is resampled or reinterpreted
  * here.
  */
-export function buildLayoutPreviewModel(document: LayoutDocument): LayoutPreviewModelResult {
-	const result = compileLayoutGeometry(document);
+export function buildLayoutPreviewModel(
+	document: LayoutDocument | LayoutDocumentWallFirst
+): LayoutPreviewModelResult {
+	const result = isWallFirstLayout(document)
+		? compileWallFirstLayoutGeometry(document)
+		: compileLayoutGeometry(document);
 	const model: LayoutPreviewModel = {
 		rooms: result.geometry.rooms.map((room) => ({
 			roomId: room.roomId,
@@ -84,4 +92,10 @@ export function buildLayoutPreviewModel(document: LayoutDocument): LayoutPreview
 		queries: result.geometry.queries
 	};
 	return { model, geometry: result.geometry, issues: result.issues, bounds: result.geometry.bounds };
+}
+
+function isWallFirstLayout(
+	document: LayoutDocument | LayoutDocumentWallFirst
+): document is LayoutDocumentWallFirst {
+	return 'formatVersion' in document;
 }

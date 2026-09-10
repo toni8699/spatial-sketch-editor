@@ -5,6 +5,7 @@ slice plus one next action only.
 
 ## Working tree
 
+- **P23.1 implementation track is complete in `/Users/tony/Documents/Biskiq/p23` on `codex/p23-implementation`** (no commit): exact Junction X/Z, Wall length/angle/thickness, Add Vertex subdivision, bounded rectangle sizing, document-level object transforms, wall-first preview/save/compiler/Inspector seams, and 8 focused precision tests are in place. Full editor Vitest, editor/museum `svelte-check`, and both production builds are green.
 - **P23 Foundation Gate F0 is CLOSED on `main` as of 2026-09-10**: PR #7 merged as `32b2e8f`. Stage-6 writer flip is `455f587`; cross-format transaction-invariant restoration is `93111a2`; final proof tightening is `79b3551`. `LAYOUT_MUTATION_POLICY['wall-first']` is `adapted`, its refusal reason is retired, and layout commits explicitly require begin format = live format = candidate format with all three adapted.
 - **Stage-6 safety invariant is regression-pinned**: legacy→wall-first and wall-first→legacy mid-transaction swaps refuse and close the bracket; wall-first→wall-first commits normally using a real `project.layout` snapshot; adapted→unrecognized refuses; and a legacy begin/live host with a wall-first candidate snapshot refuses, directly pinning the candidate-format leg. `cancelLayoutTransaction`, `clearSharedHistory`, and `importDocument` clear the captured begin format so stale transaction state does not survive bracket/document boundaries.
 - **F0 acceptance passed 2026-09-10 before the writer flip** (end-to-end: full Vitest gate + `layout-core`/`project-model` tsc + editor/museum `svelte-check` + agent-browser smoke on `/`, `/project/:id/spatial` incl. Plan/3D + Preview takeover/exit, `/museum`, `/museum/editor`; console shows only the known `cameraPlan` `ownership_invalid_mutation` warnings). The stage-6 branch subsequently recorded a green full gate, and the final proof-only commit had a green Vercel deployment before merge.
@@ -17,7 +18,7 @@ slice plus one next action only.
 
 ## Next action
 
-- **P23.1 is next**: run the targeted post-F0 seam recheck against the live wall-first mutation/compiler/query/history/Inspector interfaces, then implement P23.1. No new broad research. In parallel, P24 planning may run its targeted post-F0 recheck toward the R9 minimum freeze; P24 implementation still waits for the accepted P23 minimum, and P25 implementation remains blocked.
+- **Next:** owner review/rejoin of `codex/p23-implementation`, then P23.2 predictable Plan snapping and alignment. P24 planning may continue its targeted post-F0 recheck toward the R9 minimum freeze; P25 implementation remains blocked.
 
 ## Verification
 

@@ -338,6 +338,10 @@ export function resolveLayoutGizmoTarget(
 	geometry: CompiledLayoutGeometry,
 	selection: LayoutSelection
 ): LayoutGizmoTargetDescriptor | null {
+	// P23.1 wall-first edits use the semantic precision inspector. The legacy
+	// gizmo candidate reducer is Room-owned and must not be handed a
+	// wall-first document until its canonical Wall/Junction adapter exists.
+	if ('formatVersion' in layout) return null;
 	switch (selection.kind) {
 		case 'none':
 			return null;

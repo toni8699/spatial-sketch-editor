@@ -36,6 +36,7 @@
 		/** Arrange owner-aware Delete (P21.2); absent keeps the toolbar selection-only. */
 		onDeleteArrange?: () => boolean;
 	} = $props();
+	const wallFirstLayout = $derived('formatVersion' in preview.project.layout);
 
 	function chooseView(mode: LayoutViewMode) {
 		if (interaction.roomUnitDrag) onCancelLayoutTransaction();
@@ -43,6 +44,10 @@
 	}
 
 	function chooseTool(tool: LayoutDraftTool) {
+		if (wallFirstLayout && tool !== 'select') {
+			preview.statusMessage = 'Legacy room, opening, and primitive tools are unavailable for wall-first layouts; use Architecture · exact.';
+			return;
+		}
 		if (interaction.roomUnitDrag) onCancelLayoutTransaction();
 		setLayoutDraftTool(interaction, tool);
 	}
@@ -79,10 +84,10 @@
 	<div class="tool-group" aria-label="Room drafting tool">
 		<button type="button" class:active={interaction.tool === 'select'} aria-pressed={interaction.tool === 'select'} onclick={() => chooseTool('select')}><MousePointer2 size={14} aria-hidden="true" /> Select</button>
 		{#if interaction.planViewMode === 'layout'}
-			<button type="button" class:active={interaction.tool === 'rectangle'} aria-pressed={interaction.tool === 'rectangle'} onclick={() => chooseTool('rectangle')}><Square size={14} aria-hidden="true" /> Rect Room</button>
-			<button type="button" class:active={interaction.tool === 'polygon'} aria-pressed={interaction.tool === 'polygon'} onclick={() => chooseTool('polygon')}><Pentagon size={14} aria-hidden="true" /> Poly Room</button>
-			<button type="button" class:active={interaction.tool === 'door'} aria-pressed={interaction.tool === 'door'} onclick={() => chooseTool('door')}><DoorOpen size={14} aria-hidden="true" /> Door</button>
-			<button type="button" class:active={interaction.tool === 'window'} aria-pressed={interaction.tool === 'window'} onclick={() => chooseTool('window')}><Grid2x2 size={14} aria-hidden="true" /> Window</button>
+			<button type="button" disabled={wallFirstLayout} title={wallFirstLayout ? 'Use Architecture · exact in the Inspector' : undefined} class:active={interaction.tool === 'rectangle'} aria-pressed={interaction.tool === 'rectangle'} onclick={() => chooseTool('rectangle')}><Square size={14} aria-hidden="true" /> Rect Room</button>
+			<button type="button" disabled={wallFirstLayout} title={wallFirstLayout ? 'Use Architecture · exact in the Inspector' : undefined} class:active={interaction.tool === 'polygon'} aria-pressed={interaction.tool === 'polygon'} onclick={() => chooseTool('polygon')}><Pentagon size={14} aria-hidden="true" /> Poly Room</button>
+			<button type="button" disabled={wallFirstLayout} title={wallFirstLayout ? 'Use Architecture · exact in the Inspector' : undefined} class:active={interaction.tool === 'door'} aria-pressed={interaction.tool === 'door'} onclick={() => chooseTool('door')}><DoorOpen size={14} aria-hidden="true" /> Door</button>
+			<button type="button" disabled={wallFirstLayout} title={wallFirstLayout ? 'Use Architecture · exact in the Inspector' : undefined} class:active={interaction.tool === 'window'} aria-pressed={interaction.tool === 'window'} onclick={() => chooseTool('window')}><Grid2x2 size={14} aria-hidden="true" /> Window</button>
 		{:else if onDeleteArrange}
 			<button type="button" aria-label="Delete arrange selection" onclick={() => onDeleteArrange?.()}><Trash2 size={14} aria-hidden="true" /> Delete</button>
 		{/if}

@@ -13,6 +13,7 @@
 	import { BinaryTextureStore } from '$lib/editor/store/binary-texture-store.svelte';
 	import EditorAssetLibrary from '$lib/editor/EditorAssetLibrary.svelte';
 	import {
+		layoutPreviewDocument,
 		layoutPreviewSessionStatus,
 		layoutPreviewSourceLabel,
 		type LayoutPreviewState
@@ -71,6 +72,7 @@
 	} = $props();
 
 	const domain = $derived(viewState.domain);
+	const wallFirstLayout = $derived('formatVersion' in layoutPreviewDocument(layoutPreview));
 	const showScenePanelTabs = $derived(domain === 'scene');
 	// Boot-empty editor surfaces no badge (status 'blank' and no import error).
 	// importError is `string | null` — check `!== null`, not `!== undefined`
@@ -155,7 +157,7 @@
 				{activeSelection}
 				domain={viewState.domain}
 				view={viewState.activeView}
-				onAddRoom={domain === 'scene' ? startRoomDraft : undefined}
+				onAddRoom={domain === 'scene' && !wallFirstLayout ? startRoomDraft : undefined}
 				{contextMenu}
 			/>
 		</div>

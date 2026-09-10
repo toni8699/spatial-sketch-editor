@@ -1,7 +1,7 @@
 import type { SceneDocument, SceneRoomResolver, Vec3 } from './scene';
 import { createCameraPositionPath } from '@portfolio/camera-core';
 import { layoutRoomLocalPoint, layoutRoomPoint } from '@portfolio/layout-core';
-import type { LayoutDocument, LayoutFloor, LayoutRoom } from '@portfolio/layout-core';
+import type { LayoutDocument, LayoutDocumentWallFirst, LayoutFloor, LayoutRoom } from '@portfolio/layout-core';
 import type { ProjectIssue } from './project-types';
 
 const CAMERA_EPSILON = 1e-6;
@@ -31,7 +31,9 @@ export type LayoutRoomRegistry = SceneRoomResolver & {
 	localPointInFrame(roomId: string | undefined, worldPoint: Vec3): Vec3;
 };
 
-export function createLayoutRoomRegistry(layout: LayoutDocument): LayoutRoomRegistry {
+
+export function createLayoutRoomRegistry(layout: LayoutDocument | LayoutDocumentWallFirst): LayoutRoomRegistry {
+	if (isWallFirstLayout(layout)) return createEmptyLayoutRoomRegistry();
 	const entries = layout.floors.flatMap((floor) =>
 		floor.rooms.map((room): LayoutRoomRegistryEntry => ({
 			id: room.id,
@@ -70,6 +72,12 @@ export function createLayoutRoomRegistry(layout: LayoutDocument): LayoutRoomRegi
                 ? ([...worldPoint] as Vec3)
                 : layoutRoomLocalPoint(getRequired(roomId).room, getRequired(roomId).floor, worldPoint)
     };
+}
+
+function isWallFirstLayout(
+	layout: LayoutDocument | LayoutDocumentWallFirst
+): layout is LayoutDocumentWallFirst {
+	return 'formatVersion' in layout;
 }
 
 /**

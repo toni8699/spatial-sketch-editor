@@ -1,0 +1,715 @@
+/**
+ * P23.1 precise semantic operations for the wall-first Layout document.
+ *
+ * These planners are deliberately small and operation-specific. They build a
+ * complete candidate from an immutable document, run the wall-first codec,
+ * topology/opening checks, and the shared geometry compiler, then return one
+ * result for the editor transaction runner to commit. There is no persistent
+ * constraint solver and no snap state involved in an exact operation.
+ *
+ * Angles use the document's X/Z convention: `atan2(z, x)` in radians. A wall
+ * keeps its canonical start → end direction for length and angle edits; the
+ * selected fixed endpoint is never silently swapped.
+ */
+import type { LayoutDocumentIssue } from './layout-codec';
+import { compileWallFirstLayoutGeometry } from './layout-geometry';
+import { LAYOUT_GEOMETRY_EPSILON } from './layout-geometry-openings';
+import type { LayoutGeometryIssue } from './layout-geometry-types';
+import { hasBlockingLayoutIssues } from './layout-geometry-validation';
+import { validateWallFirstLayoutDocument } from './layout-wall-first-codec';
+import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall } from './layout-wall-first-types';
+import {
+	planWallSplit,
+	type NodingIdAllocator,
+	type NodingPlan
+} from './layout-wall-noding';
+import { classifyWallIntersection, type TopologySegment } from './layout-wall-topology';
+import type { LayoutObject, LayoutVec2 } from './layout-types';
+
+const POINT_EPSILON = LAYOUT_GEOMETRY_EPSILON;
+
+export type FixedWallEndpoint = 'start' | 'end';
+
+export type WallLengthIntent = {
+	wallId: string;
+	length: number;
+	fixed?: FixedWallEndpoint;
+	fixedEndpoint?: FixedWallEndpoint;
+};
+
+export type WallAngleIntent = {
+	wallId: string;
+	angle: number;
+	fixed?: FixedWallEndpoint;
+	fixedEndpoint?: FixedWallEndpoint;
+};
+
+export type RectangleResizeOptions = {
+	/** Explicit anchor reference. Omission uses the smallest stable corner ID. */
+	anchorJunctionId?: string;
+	/** Explicit width edge reference. Omission uses the smallest stable edge ID. */
+	widthWallId?: string;
+};
+
+export type ResolvedRectangle = {
+	anchorJunctionId: string;
+	widthEndpointId: string;
+	depthEndpointId: string;
+	corners: LayoutJunction[];
+	roomWallIds: string[];
+	widthWallId: string;
+	depthWallId: string;
+};
+
+export type RectangleResolution = ResolvedRectangle | { rejection: PrecisionRejection };
+
+export type LayoutObjectTransformPatch = Partial<
+	Pick<LayoutObject, 'position' | 'rotation' | 'dimensions' | 'roomId'>
+>;
+
+export type PrecisionOperation =
+	| 'junction-position'
+	| 'wall-length'
+	| 'wall-angle'
+	| 'wall-thickness'
+	| 'wall-subdivision'
+	| 'rectangle-dimensions'
+	| 'layout-object-transform'
+	| 'layout-object-delete';
+
+export type PrecisionRejection = {
+	code:
+		| 'unknown_junction'
+		| 'unknown_wall'
+		| 'unknown_room'
+		| 'unknown_object'
+		| 'invalid_value'
+		| 'invalid_endpoint'
+		| 'invalid_reference'
+		| 'unsupported_geometry'
+		| 'shared_boundary_resize_ambiguous'
+		| 'topology_invalid'
+		| 'geometry_invalid'
+		| 'no_op'
+		| 'split_at_existing_endpoint'
+		| 'split_distance_out_of_range'
+		| 'split_through_opening_interior'
+		| 'junction_point_mismatch';
+	message: string;
+	targetIds?: readonly string[];
+	issues?: readonly (LayoutDocumentIssue | LayoutGeometryIssue)[];
+};
+
+export type PrecisionPlan =
+	| {
+			kind: 'success';
+			document: LayoutDocumentWallFirst;
+			operation: PrecisionOperation;
+			changedJunctionIds: readonly string[];
+			changedWallIds: readonly string[];
+			changedObjectIds?: readonly string[];
+		}
+	| {
+			kind: 'rejected';
+			rejection: PrecisionRejection;
+		};
+
+/** Move one canonical Junction exactly in document X/Z space. */
+export function planExactJunctionMove(
+	document: LayoutDocumentWallFirst,
+	junctionId: string,
+	point: LayoutVec2
+): PrecisionPlan {
+	const junction = document.junctions.find((candidate) => candidate.id === junctionId);
+	if (!junction) return reject('unknown_junction', `Unknown junction '${junctionId}'`, [junctionId]);
+	if (!finitePoint(point)) return reject('invalid_value', 'Junction X/Z must be finite', [junctionId]);
+	if (samePoint(junction.point, point)) return reject('no_op', `Junction '${junctionId}' is already at that point`, [junctionId]);
+
+	const candidate = cloneDocument(document);
+	const moved = candidate.junctions.find((entry) => entry.id === junctionId)!;
+	moved.point = [point[0], point[1]];
+	return finalizeCandidate(candidate, 'junction-position', [junctionId], incidentWallIds(document, junctionId));
+}
+
+/** Set a straight Wall's exact physical length while keeping one endpoint fixed. */
+export function planExactWallLength(
+	document: LayoutDocumentWallFirst,
+	wallOrIntent: string | WallLengthIntent,
+	lengthArgument?: number,
+	fixedArgument: FixedWallEndpoint = 'start'
+): PrecisionPlan {
+	const intent = typeof wallOrIntent === 'string'
+		? { wallId: wallOrIntent, length: lengthArgument, fixed: fixedArgument }
+		: {
+				wallId: wallOrIntent.wallId,
+				length: wallOrIntent.length,
+				fixed: wallOrIntent.fixedEndpoint ?? wallOrIntent.fixed ?? 'start'
+			};
+	const wall = document.walls.find((candidate) => candidate.id === intent.wallId);
+	if (!wall) return reject('unknown_wall', `Unknown wall '${intent.wallId}'`, [intent.wallId]);
+	if (!validFixedEndpoint(intent.fixed)) return reject('invalid_endpoint', "Fixed endpoint must be 'start' or 'end'", [wall.id]);
+	if (!finitePositive(intent.length)) return reject('invalid_value', 'Wall length must be finite and greater than zero', [wall.id]);
+
+	const endpoints = wallEndpoints(document, wall);
+	if (!endpoints) return reject('unsupported_geometry', `Wall '${wall.id}' has unresolved junction geometry`, [wall.id]);
+	if (!(endpoints.length > POINT_EPSILON)) return reject('unsupported_geometry', `Wall '${wall.id}' has zero effective length`, [wall.id]);
+	if (intent.length === endpoints.length) return reject('no_op', `Wall '${wall.id}' already has that length`, [wall.id]);
+
+	const direction: LayoutVec2 = [
+		(endpoints.end[0] - endpoints.start[0]) / endpoints.length,
+		(endpoints.end[1] - endpoints.start[1]) / endpoints.length
+	];
+	const movedJunctionId = intent.fixed === 'start' ? wall.endJunctionId : wall.startJunctionId;
+	const fixedPoint = intent.fixed === 'start' ? endpoints.start : endpoints.end;
+	const movedPoint: LayoutVec2 = intent.fixed === 'start'
+		? [fixedPoint[0] + direction[0] * intent.length, fixedPoint[1] + direction[1] * intent.length]
+		: [fixedPoint[0] - direction[0] * intent.length, fixedPoint[1] - direction[1] * intent.length];
+	if (samePoint(currentJunctionPoint(document, movedJunctionId), movedPoint)) return reject('no_op', `Wall '${wall.id}' already has that length`, [wall.id]);
+
+	const candidate = moveJunction(document, movedJunctionId, movedPoint);
+	return finalizeCandidate(candidate, 'wall-length', [movedJunctionId], incidentWallIds(document, movedJunctionId));
+}
+
+/** Set a supported straight Wall's exact X/Z angle in radians. */
+export function planExactWallAngle(
+	document: LayoutDocumentWallFirst,
+	wallOrIntent: string | WallAngleIntent,
+	angleArgument?: number,
+	fixedArgument: FixedWallEndpoint = 'start'
+): PrecisionPlan {
+	const intent = typeof wallOrIntent === 'string'
+		? { wallId: wallOrIntent, angle: angleArgument, fixed: fixedArgument }
+		: {
+				wallId: wallOrIntent.wallId,
+				angle: wallOrIntent.angle,
+				fixed: wallOrIntent.fixedEndpoint ?? wallOrIntent.fixed ?? 'start'
+			};
+	const wall = document.walls.find((candidate) => candidate.id === intent.wallId);
+	if (!wall) return reject('unknown_wall', `Unknown wall '${intent.wallId}'`, [intent.wallId]);
+	if (!validFixedEndpoint(intent.fixed)) return reject('invalid_endpoint', "Fixed endpoint must be 'start' or 'end'", [wall.id]);
+	const angle = intent.angle;
+	if (typeof angle !== 'number' || !Number.isFinite(angle)) return reject('invalid_value', 'Wall angle must be finite radians', [wall.id]);
+
+	const endpoints = wallEndpoints(document, wall);
+	if (!endpoints) return reject('unsupported_geometry', `Wall '${wall.id}' has unresolved junction geometry`, [wall.id]);
+	if (!(endpoints.length > POINT_EPSILON)) return reject('unsupported_geometry', `Wall '${wall.id}' has zero effective length`, [wall.id]);
+	const direction: LayoutVec2 = [Math.cos(angle), Math.sin(angle)];
+	const fixedPoint = intent.fixed === 'start' ? endpoints.start : endpoints.end;
+	const movedJunctionId = intent.fixed === 'start' ? wall.endJunctionId : wall.startJunctionId;
+	const movedPoint: LayoutVec2 = intent.fixed === 'start'
+		? [fixedPoint[0] + direction[0] * endpoints.length, fixedPoint[1] + direction[1] * endpoints.length]
+		: [fixedPoint[0] - direction[0] * endpoints.length, fixedPoint[1] - direction[1] * endpoints.length];
+	if (samePoint(currentJunctionPoint(document, movedJunctionId), movedPoint)) return reject('no_op', `Wall '${wall.id}' already has that angle`, [wall.id]);
+
+	const candidate = moveJunction(document, movedJunctionId, movedPoint);
+	return finalizeCandidate(candidate, 'wall-angle', [movedJunctionId], incidentWallIds(document, movedJunctionId));
+}
+
+/** Set a Wall-owned physical thickness, preserving Wall and Opening identity. */
+export function planExactWallThickness(
+	document: LayoutDocumentWallFirst,
+	wallId: string,
+	thickness: number
+): PrecisionPlan {
+	const wall = document.walls.find((candidate) => candidate.id === wallId);
+	if (!wall) return reject('unknown_wall', `Unknown wall '${wallId}'`, [wallId]);
+	if (!finitePositive(thickness)) return reject('invalid_value', 'Wall thickness must be finite and greater than zero', [wallId]);
+	if (wall.thickness === thickness) return reject('no_op', `Wall '${wallId}' already has that thickness`, [wallId]);
+
+	const candidate = cloneDocument(document);
+	candidate.walls.find((entry) => entry.id === wallId)!.thickness = thickness;
+	return finalizeCandidate(candidate, 'wall-thickness', [], [wallId]);
+}
+
+/**
+ * Add one explicit Vertex by subdividing a Wall at a physical meter offset.
+ * The existing P23.8 noder owns deterministic IDs, opening rebasing, and
+ * forward/reverse Room-boundary rewrites; this planner adds the P23.1 final
+ * candidate gates around that result.
+ */
+export function planWallSubdivision(
+	document: LayoutDocumentWallFirst,
+	wallId: string,
+	splitDistance: number,
+	allocator: NodingIdAllocator
+): PrecisionPlan {
+	const planned: NodingPlan = planWallSplit(document, wallId, splitDistance, allocator);
+	if (planned.kind === 'rejected') {
+		return reject(planned.rejection.code, planned.rejection.message, [wallId]);
+	}
+	return finalizeCandidate(
+		planned.document,
+		'wall-subdivision',
+		[planned.junctionId],
+		planned.splitWallIds,
+		undefined,
+		planned.createdWallIds
+	);
+}
+
+/** P23.1 naming alias for callers that describe the operation as Add Vertex. */
+export const planAddWallVertex = planWallSubdivision;
+
+/** Resize a four-edge straight Room boundary into an exact rectangle. */
+export function planExactRectangleDimensions(
+	document: LayoutDocumentWallFirst,
+	roomId: string,
+	width: number,
+	depth: number,
+	options: RectangleResizeOptions = {}
+): PrecisionPlan {
+	const room = document.rooms.find((candidate) => candidate.id === roomId);
+	if (!room) return reject('unknown_room', `Unknown room '${roomId}'`, [roomId]);
+	if (!finitePositive(width) || !finitePositive(depth)) return reject('invalid_value', 'Rectangle width and depth must be finite and greater than zero', [roomId]);
+	if (room.boundary.length !== 4) return reject('unsupported_geometry', 'Exact rectangle dimensions require four straight boundary Walls', [roomId]);
+
+	const resolved = resolveRectangle(document, roomId, options);
+	if ('rejection' in resolved) return { kind: 'rejected', rejection: resolved.rejection };
+	const { corners, roomWallIds, widthWallId, depthWallId } = resolved;
+	if (roomWallIds.some((wallId) => document.walls.find((wall) => wall.id === wallId)?.role !== 'boundary')) {
+		return reject('unsupported_geometry', 'Rectangle boundaries must use boundary Walls', [roomId]);
+	}
+	if (hasAmbiguousSharedBoundary(document, roomId, roomWallIds, corners.map((corner) => corner.id))) {
+		return reject('shared_boundary_resize_ambiguous', 'Rectangle resize would ambiguously deform a shared Wall network', [roomId, ...roomWallIds]);
+	}
+
+	const anchor = corners.find((corner) => corner.id === resolved.anchorJunctionId)!;
+	const widthCorner = corners.find((corner) => corner.id === resolved.widthEndpointId)!;
+	const depthCorner = corners.find((corner) => corner.id === resolved.depthEndpointId)!;
+	const opposite = corners.find((corner) =>
+		corner.id !== anchor.id && corner.id !== widthCorner.id && corner.id !== depthCorner.id
+	)!;
+	const widthLength = distance(anchor.point, widthCorner.point);
+	const depthLength = distance(anchor.point, depthCorner.point);
+	if (!(widthLength > POINT_EPSILON) || !(depthLength > POINT_EPSILON)) return reject('unsupported_geometry', 'Rectangle edges must have non-zero length', [roomId]);
+	const widthAxis = normalize(subtract(widthCorner.point, anchor.point));
+	const depthAxis = normalize(subtract(depthCorner.point, anchor.point));
+	if (!widthAxis || !depthAxis || Math.abs(dot(widthAxis, depthAxis)) > 1e-5) {
+		return reject('unsupported_geometry', 'Rectangle edges must meet at a right angle', [roomId]);
+	}
+	const expectedOpposite = add(widthCorner.point, scale(depthAxis, depthLength));
+	if (distance(expectedOpposite, opposite.point) > 1e-5) {
+		return reject('unsupported_geometry', 'Room boundary is not a rectangle; exact rectangle resize is unsupported', [roomId]);
+	}
+
+	const targetPoints = new Map<string, LayoutVec2>([
+		[anchor.id, [anchor.point[0], anchor.point[1]]],
+		[widthCorner.id, add(anchor.point, scale(widthAxis, width))],
+		[depthCorner.id, add(anchor.point, scale(depthAxis, depth))],
+		[opposite.id, add(add(anchor.point, scale(widthAxis, width)), scale(depthAxis, depth))]
+	]);
+	if ([...targetPoints].every(([id, point]) => samePoint(currentJunctionPoint(document, id), point))) {
+		return reject('no_op', `Room '${roomId}' already has those rectangle dimensions`, [roomId]);
+	}
+
+	const candidate = cloneDocument(document);
+	for (const junction of candidate.junctions) {
+		const point = targetPoints.get(junction.id);
+		if (point) junction.point = point;
+	}
+	return finalizeCandidate(
+		candidate,
+		'rectangle-dimensions',
+		[...targetPoints.keys()],
+		[...new Set([...roomWallIds, widthWallId, depthWallId])]
+	);
+}
+
+/** Set exact document-level LayoutObject transform fields in a wall-first document. */
+export function planExactLayoutObjectTransform(
+	document: LayoutDocumentWallFirst,
+	objectId: string,
+	patch: LayoutObjectTransformPatch
+): PrecisionPlan {
+	const object = document.objects.find((candidate) => candidate.id === objectId);
+	if (!object) return reject('unknown_object', `Unknown layout object '${objectId}'`, [objectId]);
+	const vectorFields = (['position', 'rotation', 'dimensions'] as const).filter((field) => patch[field] !== undefined);
+	const roomChanged = 'roomId' in patch && patch.roomId !== object.roomId;
+	if (patch.roomId && !document.rooms.some((room) => room.id === patch.roomId)) {
+		return reject('invalid_reference', `Unknown roomId '${patch.roomId}'`, [objectId, patch.roomId]);
+	}
+	if (vectorFields.length === 0 && !roomChanged) return reject('no_op', `Layout object '${objectId}' has no transform changes`, [objectId]);
+	if (patch.position && !finiteVector(patch.position)) return reject('invalid_value', 'Object position must be finite', [objectId]);
+	if (patch.rotation && !finiteVector(patch.rotation)) return reject('invalid_value', 'Object rotation must be finite radians', [objectId]);
+	if (patch.dimensions && (!finiteVector(patch.dimensions) || patch.dimensions.some((value) => value <= 0))) {
+		return reject('invalid_value', 'Object dimensions must be finite and greater than zero', [objectId]);
+	}
+	const unchanged = vectorFields.every((field) => vectorEqual(object[field] as readonly number[], patch[field] as readonly number[]));
+	if (unchanged && !roomChanged) return reject('no_op', `Layout object '${objectId}' already has those values`, [objectId]);
+
+	const candidate = cloneDocument(document);
+	const target = candidate.objects.find((entry) => entry.id === objectId)!;
+	if (patch.position) target.position = [...patch.position] as typeof target.position;
+	if (patch.rotation) target.rotation = [...patch.rotation] as typeof target.rotation;
+	if (patch.dimensions) target.dimensions = [...patch.dimensions] as typeof target.dimensions;
+	if ('roomId' in patch) {
+		if (patch.roomId) target.roomId = patch.roomId;
+		else delete target.roomId;
+	}
+	return finalizeCandidate(candidate, 'layout-object-transform', [], [], [objectId]);
+}
+
+/** Delete one editable document-level LayoutObject through the same candidate gates. */
+export function planDeleteLayoutObject(
+	document: LayoutDocumentWallFirst,
+	objectId: string
+): PrecisionPlan {
+	const object = document.objects.find((candidate) => candidate.id === objectId);
+	if (!object) return reject('unknown_object', `Unknown layout object '${objectId}'`, [objectId]);
+	if (object.kind === 'profile') return reject('invalid_reference', 'Profile objects are read-only', [objectId]);
+
+	const candidate = cloneDocument(document);
+	candidate.objects = candidate.objects.filter((entry) => entry.id !== objectId);
+	return finalizeCandidate(candidate, 'layout-object-delete', [], [], [objectId]);
+}
+
+function finalizeCandidate(
+	candidate: LayoutDocumentWallFirst,
+	operation: PrecisionOperation,
+	changedJunctionIds: readonly string[],
+	changedWallIds: readonly string[],
+	changedObjectIds?: readonly string[],
+	createdWallIds?: readonly string[]
+): PrecisionPlan {
+	const structural = validateWallFirstLayoutDocument(candidate);
+	if (!structural.success) {
+		return reject('geometry_invalid', `Candidate failed wall-first validation: ${structural.issues[0]?.message ?? 'unknown issue'}`, undefined, structural.issues);
+	}
+	const topologyIssue = validatePrecisionTopology(structural.document);
+	if (topologyIssue) return reject('topology_invalid', topologyIssue.message, topologyIssue.targetId ? [topologyIssue.targetId] : undefined, [topologyIssue]);
+	const compiled = compileWallFirstLayoutGeometry(structural.document);
+	if (hasBlockingLayoutIssues(compiled.issues)) {
+		return reject('geometry_invalid', compiled.issues[0]?.message ?? 'Candidate geometry does not compile', undefined, compiled.issues);
+	}
+	return {
+		kind: 'success',
+		document: structural.document,
+		operation,
+		changedJunctionIds: [...changedJunctionIds],
+		changedWallIds: [...new Set([...changedWallIds, ...(createdWallIds ?? [])])],
+		...(changedObjectIds ? { changedObjectIds: [...changedObjectIds] } : {})
+	};
+}
+
+function validatePrecisionTopology(document: LayoutDocumentWallFirst): LayoutGeometryIssue | undefined {
+	for (let first = 0; first < document.junctions.length; first += 1) {
+		for (let second = first + 1; second < document.junctions.length; second += 1) {
+			if (samePoint(document.junctions[first]!.point, document.junctions[second]!.point)) {
+				return {
+					path: `junctions[${second}].point`,
+					code: 'duplicate_junction_point',
+					message: `Junction '${document.junctions[second]!.id}' duplicates the point of '${document.junctions[first]!.id}'`,
+					targetId: document.junctions[second]!.id
+				};
+			}
+		}
+	}
+
+	const wallSegments = new Map<string, TopologySegment>();
+	for (const wall of document.walls) {
+		const endpoints = wallEndpoints(document, wall);
+		if (!endpoints || !(endpoints.length > POINT_EPSILON)) {
+			return {
+				path: `walls.${wall.id}`,
+				code: 'zero_length_wall',
+				message: `Wall '${wall.id}' must have a non-zero effective length`,
+				targetId: wall.id
+			};
+		}
+		wallSegments.set(wall.id, { id: wall.id, start: endpoints.start, end: endpoints.end });
+	}
+
+	const walls = document.walls;
+	for (let first = 0; first < walls.length; first += 1) {
+		for (let second = first + 1; second < walls.length; second += 1) {
+			const a = walls[first]!;
+			const b = walls[second]!;
+			const segmentA = wallSegments.get(a.id)!;
+			const segmentB = wallSegments.get(b.id)!;
+			const shared = sharedJunctionIds(a, b);
+			const intersection = classifyWallIntersection(segmentA, segmentB, shared);
+			if (intersection.kind === 'shared-explicit-junction') {
+				// The classifier intentionally gives explicit connectivity priority;
+				// still reject two collinear spans that overlap beyond the shared
+				// endpoint, which is not a valid graph edge.
+				const geometric = classifyWallIntersection(segmentA, segmentB, []);
+				if (geometric.kind === 'collinear-overlap') {
+					return topologyFailure(a.id, b.id, 'Walls overlap beyond their explicit shared Junction');
+				}
+				continue;
+			}
+			if (intersection.kind !== 'none') {
+				return topologyFailure(a.id, b.id, `Walls '${a.id}' and '${b.id}' have unsupported ${intersection.kind}`);
+			}
+		}
+	}
+
+	const wallById = new Map(document.walls.map((wall) => [wall.id, wall]));
+	for (const room of document.rooms) {
+		if (room.boundary.length < 3) {
+			return topologyFailure(room.id, undefined, `Room '${room.id}' needs at least three boundary Walls`);
+		}
+		let previousEnd: string | undefined;
+		let firstStart: string | undefined;
+		for (const [index, ref] of room.boundary.entries()) {
+			const wall = wallById.get(ref.wallId)!;
+			if (wall.role !== 'boundary') {
+				return topologyFailure(room.id, ref.wallId, `Room '${room.id}' references non-boundary Wall '${ref.wallId}'`);
+			}
+			const start = ref.direction === 'forward' ? wall.startJunctionId : wall.endJunctionId;
+			const end = ref.direction === 'forward' ? wall.endJunctionId : wall.startJunctionId;
+			if (index === 0) firstStart = start;
+			if (previousEnd !== undefined && previousEnd !== start) {
+				return topologyFailure(room.id, ref.wallId, `Room '${room.id}' boundary is disconnected at Wall '${ref.wallId}'`);
+			}
+			previousEnd = end;
+		}
+		if (previousEnd !== firstStart) return topologyFailure(room.id, undefined, `Room '${room.id}' boundary is not closed`);
+	}
+
+	const openingsByWall = new Map<string, typeof document.openings>();
+	for (const opening of document.openings) {
+		const wall = wallById.get(opening.wallId);
+		if (!wall) continue;
+		const endpoints = wallEndpoints(document, wall)!;
+		if (opening.offset + opening.width > endpoints.length + POINT_EPSILON) {
+			return topologyFailure(opening.id, opening.wallId, `Opening '${opening.id}' does not fit on Wall '${opening.wallId}'`);
+		}
+		if (opening.sillHeight + opening.height > document.floor.height + POINT_EPSILON) {
+			return topologyFailure(opening.id, opening.wallId, `Opening '${opening.id}' exceeds the floor height`);
+		}
+		const list = openingsByWall.get(opening.wallId) ?? [];
+		list.push(opening);
+		openingsByWall.set(opening.wallId, list);
+	}
+	for (const [wallId, openings] of openingsByWall) {
+		const sorted = [...openings].sort((a, b) => a.offset - b.offset || a.id.localeCompare(b.id));
+		for (let index = 1; index < sorted.length; index += 1) {
+			const previous = sorted[index - 1]!;
+			const current = sorted[index]!;
+			if (current.offset < previous.offset + previous.width - POINT_EPSILON) {
+				return topologyFailure(previous.id, wallId, `Openings '${previous.id}' and '${current.id}' overlap on Wall '${wallId}'`);
+			}
+		}
+	}
+	return undefined;
+}
+
+/** Resolve the canonical rectangle anchor, incident width edge, and endpoints. */
+export function resolveRectangle(
+	document: LayoutDocumentWallFirst,
+	roomId: string,
+	options: RectangleResizeOptions = {}
+): RectangleResolution {
+	const room = document.rooms.find((candidate) => candidate.id === roomId);
+	if (!room) return { rejection: makeRejection('unknown_room', `Unknown room '${roomId}'`, [roomId]) };
+	if (room.boundary.length !== 4) {
+		return { rejection: makeRejection('unsupported_geometry', 'Rectangle resize requires four straight boundary Walls', [roomId]) };
+	}
+	const wallById = new Map(document.walls.map((wall) => [wall.id, wall]));
+	const directed = room.boundary.map((ref) => {
+		const wall = wallById.get(ref.wallId);
+		if (!wall) return undefined;
+		return {
+			wall,
+			wallId: wall.id,
+			startId: ref.direction === 'forward' ? wall.startJunctionId : wall.endJunctionId,
+			endId: ref.direction === 'forward' ? wall.endJunctionId : wall.startJunctionId
+		};
+	});
+	if (directed.some((entry) => !entry)) return { rejection: makeRejection('invalid_reference', `Room '${roomId}' has an unresolved boundary Wall`, [roomId]) };
+	const edges = directed as Array<NonNullable<(typeof directed)[number]>>;
+	if (new Set(edges.flatMap((edge) => [edge.startId, edge.endId])).size !== 4) {
+		return { rejection: makeRejection('unsupported_geometry', 'Rectangle resize requires four distinct corner Junctions', [roomId]) };
+	}
+	for (let index = 0; index < edges.length; index += 1) {
+		if (edges[index]!.endId !== edges[(index + 1) % edges.length]!.startId) {
+			return { rejection: makeRejection('unsupported_geometry', `Room '${roomId}' boundary is not a connected four-edge cycle`, [roomId]) };
+		}
+	}
+
+	const junctionById = new Map(document.junctions.map((junction) => [junction.id, junction]));
+	const cornerIds = [...new Set(edges.flatMap((edge) => [edge.startId, edge.endId]))].sort((a, b) => a.localeCompare(b));
+	const corners = cornerIds.map((id) => junctionById.get(id));
+	if (corners.some((junction) => !junction)) {
+		return { rejection: makeRejection('invalid_reference', `Room '${roomId}' has an unresolved corner Junction`, [roomId]) };
+	}
+	const anchorJunctionId = options.anchorJunctionId ?? cornerIds[0];
+	if (!anchorJunctionId || !cornerIds.includes(anchorJunctionId)) {
+		return { rejection: makeRejection('invalid_reference', `Anchor Junction '${options.anchorJunctionId ?? ''}' is not a corner of Room '${roomId}'`, [roomId]) };
+	}
+	const incident = edges.filter((edge) => edge.startId === anchorJunctionId || edge.endId === anchorJunctionId).sort((a, b) => a.wallId.localeCompare(b.wallId));
+	if (incident.length !== 2) return { rejection: makeRejection('unsupported_geometry', `Room '${roomId}' anchor must have exactly two incident boundary Walls`, [roomId]) };
+	const widthEdge = options.widthWallId
+		? incident.find((edge) => edge.wallId === options.widthWallId)
+		: incident[0];
+	if (!widthEdge) return { rejection: makeRejection('invalid_reference', `Width Wall '${options.widthWallId ?? ''}' is not incident to the anchor`, [roomId]) };
+	const depthEdge = incident.find((edge) => edge.wallId !== widthEdge.wallId)!;
+	const widthEndpointId = widthEdge.startId === anchorJunctionId ? widthEdge.endId : widthEdge.startId;
+	const depthEndpointId = depthEdge.startId === anchorJunctionId ? depthEdge.endId : depthEdge.startId;
+	return {
+		anchorJunctionId,
+		widthEndpointId,
+		depthEndpointId,
+		corners: corners as LayoutJunction[],
+		roomWallIds: edges.map((edge) => edge.wallId),
+		widthWallId: widthEdge.wallId,
+		depthWallId: depthEdge.wallId
+	};
+}
+
+function hasAmbiguousSharedBoundary(
+	document: LayoutDocumentWallFirst,
+	roomId: string,
+	roomWallIds: readonly string[],
+	cornerIds: readonly string[]
+): boolean {
+	const roomWalls = new Set(roomWallIds);
+	if (document.rooms.some((room) => room.id !== roomId && room.boundary.some((ref) => roomWalls.has(ref.wallId)))) return true;
+	return cornerIds.some((junctionId) =>
+		document.walls.some((wall) =>
+			(wall.startJunctionId === junctionId || wall.endJunctionId === junctionId) && !roomWalls.has(wall.id)
+		)
+	);
+}
+
+function topologyFailure(firstId: string, secondId: string | undefined, message: string): LayoutGeometryIssue {
+	return {
+		path: `topology.${firstId}`,
+		code: 'unsupported_wall_topology',
+		message,
+		targetId: secondId ?? firstId
+	};
+}
+
+function wallEndpoints(
+	document: LayoutDocumentWallFirst,
+	wall: LayoutWall
+): { start: LayoutVec2; end: LayoutVec2; length: number } | undefined {
+	const start = document.junctions.find((junction) => junction.id === wall.startJunctionId)?.point;
+	const end = document.junctions.find((junction) => junction.id === wall.endJunctionId)?.point;
+	if (!start || !end) return undefined;
+	return { start, end, length: distance(start, end) };
+}
+
+function currentJunctionPoint(document: LayoutDocumentWallFirst, junctionId: string): LayoutVec2 {
+	return document.junctions.find((junction) => junction.id === junctionId)!.point;
+}
+
+function moveJunction(document: LayoutDocumentWallFirst, junctionId: string, point: LayoutVec2): LayoutDocumentWallFirst {
+	const candidate = cloneDocument(document);
+	candidate.junctions.find((junction) => junction.id === junctionId)!.point = [point[0], point[1]];
+	return candidate;
+}
+
+function incidentWallIds(document: LayoutDocumentWallFirst, junctionId: string): string[] {
+	return document.walls
+		.filter((wall) => wall.startJunctionId === junctionId || wall.endJunctionId === junctionId)
+		.map((wall) => wall.id);
+}
+
+function sharedJunctionIds(a: LayoutWall, b: LayoutWall): string[] {
+	return [a.startJunctionId, a.endJunctionId].filter((id) => id === b.startJunctionId || id === b.endJunctionId);
+}
+
+function cloneDocument(document: LayoutDocumentWallFirst): LayoutDocumentWallFirst {
+	return {
+		...document,
+		floor: { ...document.floor },
+		junctions: document.junctions.map((junction) => ({ ...junction, point: [junction.point[0], junction.point[1]] })),
+		walls: document.walls.map((wall) => ({ ...wall })),
+		rooms: document.rooms.map((room) => ({ ...room, boundary: room.boundary.map((ref) => ({ ...ref })) })),
+		openings: document.openings.map((opening) => ({
+			...opening,
+			...(opening.connectsRoomIds ? { connectsRoomIds: [...opening.connectsRoomIds] as [string, string] } : {})
+		})),
+		objects: document.objects.map((object) => ({
+			...object,
+			position: [...object.position] as typeof object.position,
+			rotation: [...object.rotation] as typeof object.rotation,
+			dimensions: [...object.dimensions] as typeof object.dimensions,
+			...(object.profile
+				? {
+						profile: {
+							...object.profile,
+							segments: object.profile.segments.map((segment) => ({
+								...segment,
+								start: [...segment.start] as LayoutVec2,
+								end: [...segment.end] as LayoutVec2,
+								...(segment.kind === 'auto-bezier'
+									? { interiorAnchors: segment.interiorAnchors.map((anchor) => ({ ...anchor, point: [...anchor.point] as LayoutVec2 })) }
+									: {})
+							}))
+						}
+					}
+				: {})
+		}))
+	};
+}
+
+function reject(
+	code: PrecisionRejection['code'],
+	message: string,
+	targetIds?: readonly string[],
+	issues?: readonly (LayoutDocumentIssue | LayoutGeometryIssue)[]
+): PrecisionPlan {
+	return { kind: 'rejected', rejection: makeRejection(code, message, targetIds, issues) };
+}
+
+function makeRejection(
+	code: PrecisionRejection['code'],
+	message: string,
+	targetIds?: readonly string[],
+	issues?: readonly (LayoutDocumentIssue | LayoutGeometryIssue)[]
+): PrecisionRejection {
+	return { code, message, ...(targetIds ? { targetIds } : {}), ...(issues ? { issues } : {}) };
+}
+
+function finitePositive(value: number | undefined): value is number {
+	return typeof value === 'number' && Number.isFinite(value) && value > POINT_EPSILON;
+}
+
+function finitePoint(point: readonly number[]): point is LayoutVec2 {
+	return point.length === 2 && point.every((value) => Number.isFinite(value));
+}
+
+function finiteVector(vector: readonly number[]): boolean {
+	return vector.length === 3 && vector.every((value) => Number.isFinite(value));
+}
+
+function validFixedEndpoint(value: unknown): value is FixedWallEndpoint {
+	return value === 'start' || value === 'end';
+}
+
+function distance(a: LayoutVec2, b: LayoutVec2): number {
+	return Math.hypot(b[0] - a[0], b[1] - a[1]);
+}
+
+function subtract(a: LayoutVec2, b: LayoutVec2): LayoutVec2 {
+	return [a[0] - b[0], a[1] - b[1]];
+}
+
+function add(a: LayoutVec2, b: LayoutVec2): LayoutVec2 {
+	return [a[0] + b[0], a[1] + b[1]];
+}
+
+function scale(a: LayoutVec2, factor: number): LayoutVec2 {
+	return [a[0] * factor, a[1] * factor];
+}
+
+function normalize(a: LayoutVec2): LayoutVec2 | undefined {
+	const length = Math.hypot(a[0], a[1]);
+	return length > POINT_EPSILON ? [a[0] / length, a[1] / length] : undefined;
+}
+
+function dot(a: LayoutVec2, b: LayoutVec2): number {
+	return a[0] * b[0] + a[1] * b[1];
+}
+
+function samePoint(a: LayoutVec2, b: LayoutVec2): boolean {
+	return a[0] === b[0] && a[1] === b[1];
+}
+
+function vectorEqual(a: readonly number[], b: readonly number[]): boolean {
+	return a.length === b.length && a.every((value, index) => value === b[index]);
+}
