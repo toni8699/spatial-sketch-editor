@@ -25,7 +25,7 @@ P24 reconciliation
 
 P24 implementation still depends on the accepted P23 minimum useful Build set. Any P24 decision touching coordinates, placement ownership, selection routing, Plan projection or Scene/Camera migration must consume the coordinate/ownership model accepted through P23, not assume the earlier Room-local baseline remains permanent.
 
-P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code. P23 F0 closed on 2026-09-10. The R0/R1/R2 post-F0 refreshes below are complete; selected placement/selection/support-query and capability-specific asset/runtime seams still carry explicit later reconciliation before the R9 minimum freeze.
+P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code. P23 F0 closed on 2026-09-10. **R0/R1/R2 are complete; R3 behavioral contract closed 2026-09-10; R4 next.** Selected placement/selection/support-query and capability-specific asset/runtime seams still carry explicit later reconciliation before the R9 minimum freeze.
 
 ## Authority and evidence order
 
@@ -270,35 +270,11 @@ The genuine cross-cutting integration blockers remain narrow: reachable canonica
 
 R2 does **not** promote box selection, visibility/lock, generic model upload, wall/ceiling support, align/distribute, environment authoring, material graphs, a new command layer, a new selection store, a new gizmo or a new asset registry into the minimum. Existing R5–R8 hypotheses remain candidate input only; where their dated baseline wording conflicts with this refresh, this R2 result wins until the relevant reconciliation step explicitly updates it.
 
-## R3 — B2 shared Plan / 3D placement contract
+## R3 — B2 shared Plan / 3D placement contract — COMPLETE 2026-09-10
 
-Front-load B2 because the cross-view direction is already ratified and the Pascal harvest now closes the main external evidence question.
+Closed behavioral contract: [2026-09-10-P24-R3-shared-plan-3d-placement-contract.md](2026-09-10-P24-R3-shared-plan-3d-placement-contract.md).
 
-Freeze the semantic contract for:
-
-```text
-Asset Library
-├─ Scene → Plan placement
-└─ Scene → 3D placement
-        ↓
-same canonical target Scene entity
-```
-
-Required decisions:
-
-- one placement operation/result identity across views;
-- Plan authors supported X/Z/yaw only;
-- new Plan placement: X/Z/yaw are direct Plan-authored components; Y is semantically resolved from the chosen floor/support elevation + asset grounding/contact offset;
-- existing placement edited in Plan: preserve Y/elevation, pitch, roll and scale unless the explicit operation owns one of those components;
-- ambiguous stacked/support surfaces require a choice;
-- Plan-ineligible assets remain selectable but do not expose misleading manipulation;
-- replacement preserves intended placement through normalized asset metadata;
-- one completed placement gesture produces one history result; cancel/no-op produces none;
-- no persistent Layout/Scene support dependency is introduced without a separately specified ownership/delete/history contract (umbrella invariant: `LayoutDocument`/`SceneDocument` stay separate, P24 placement consults Layout geometry as transient calculation by default; addendum target: `LayoutObjects` vs `SceneEntity`).
-
-Pascal evidence to reuse here is fixture-level only: same-ID Plan/3D mutation, derived renderer, transient preview patterns, and negative counterexamples around fresh IDs, pitch/roll reset and clamping.
-
-**Ratified constraint (2026-09-09 reconciliation):** the decisions above constrain any P24 capability that participates in shared Plan/3D authoring. They do not by themselves require that capability to enter the P24 minimum. R9/B6 decides minimum inclusion. Placement consults Layout geometry as transient calculation by default.
+The standalone R3 record is authoritative for the frozen placement semantics. R9/B6 still owns minimum inclusion; R3 completion does not itself authorize implementation or promote optional placement depth.
 
 ## R4 — B5 cross-view interaction contract, then defer polish freeze
 
@@ -495,7 +471,7 @@ instruction to run them all or automatically adopt its numerical budgets.
 4. Operation/history ownership per capability — open.
 5. Plan/3D acceptance — themes + R3/R4/R8 rules done; fixtures at freeze.
 6. Save/Load + P22 acceptance — open as capability acceptance; basic wall-first/world-local format persistence is closed by P23.1, while static-model source authority and selected material/light/environment parity still need proof.
-7. Post-F0 seam recheck — **R0 delta refresh, R1 and R2 complete 2026-09-10**; selected P24 placement/selection/support-query integration checks remain named blockers before R9 freeze.
+7. Post-F0 seam recheck — **R0 delta refresh, R1, R2 and the R3 behavioral contract are complete 2026-09-10**; selected P24 placement/selection/support-query implementation checks remain named blockers before R9 freeze.
 8. Renderer/dependency baseline + acceptance definition — open; conditional upgrade comparison, no r186 pin.
 9. Child plans + owner review — last.
 
@@ -577,7 +553,7 @@ Only after R0–R8 have enough evidence:
 4. define deterministic operation/history ownership for every included capability;
 5. define Plan/3D acceptance where both views participate;
 6. define Save/Load + P22 visitor acceptance;
-7. consume the completed R0/R1/R2 post-F0 refresh and close the named capability-specific placement/selection/support-query rechecks before freezing any affected child plan;
+7. consume the completed R0/R1/R2 refresh plus the closed R3 behavioral contract, and close the named capability-specific placement/selection/support-query implementation rechecks before freezing any affected child plan;
 8. select the conditional Three/types/Threlte renderer/dependency baseline and define its acceptance gate (F13); an upgrade is separately scoped, not implied by the harvest or required for already-available capabilities. Record required compatibility/visual/lifetime/performance proof as an implementation ship gate; no changed baseline enters production until it passes;
 9. then update/write implementation-ready P24 child plans and request owner review.
 
