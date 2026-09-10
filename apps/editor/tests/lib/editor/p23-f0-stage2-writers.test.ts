@@ -36,7 +36,7 @@ import {
 	validateWallFirstProject,
 	WallFirstProjectValidationError
 } from '@portfolio/project-model';
-import { LAYOUT_MUTATION_POLICY } from '$lib/editor/store/document-format-policy.svelte';
+import { LAYOUT_MUTATION_POLICY, LAYOUT_MUTATION_REASONS } from '$lib/editor/store/document-format-policy.svelte';
 import { chopinProject } from '$lib/content/chopin-project';
 import type { SceneDocument } from '$lib/content/scene';
 
@@ -527,11 +527,12 @@ describe('P23.0 stage 2 — legacy compatibility round-trips', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 6. F0 gate boundary — writers exist, writes stay disabled
+// 6. F0 stage-6 flip — writes enabled (owner go-ahead 2026-09-10)
 // ---------------------------------------------------------------------------
 
-describe('P23.0 stage 2 — writer-enable gate boundary', () => {
-	it('wall-first layout mutation stays disabled until F0 acceptance passes', () => {
-		expect(LAYOUT_MUTATION_POLICY['wall-first']).toBe('disabled');
+describe('P23.0 stage 6 — writer-enable flip', () => {
+	it('wall-first layout mutation is adapted after the stage-6 flip', () => {
+		expect(LAYOUT_MUTATION_POLICY['wall-first']).toBe('adapted');
+		expect(LAYOUT_MUTATION_REASONS['wall-first']).toBeNull();
 	});
 });

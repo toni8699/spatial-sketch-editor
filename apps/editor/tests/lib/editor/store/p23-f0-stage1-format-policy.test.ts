@@ -172,13 +172,13 @@ describe('P23.0 F0 stage 1 — central format-dispatch policy tables', () => {
 		}
 	});
 
-	it('wall-first layout mutation is explicitly disabled with a named reason', () => {
-		expect(LAYOUT_MUTATION_POLICY['wall-first']).toBe('disabled');
-		const reason = LAYOUT_MUTATION_REASONS['wall-first'];
-		expect(reason).toBeTruthy();
+	it('wall-first layout mutation is adapted after the stage-6 flip (2026-09-10 owner go-ahead)', () => {
+		expect(LAYOUT_MUTATION_POLICY['wall-first']).toBe('adapted');
+		// The refusal reason is retired: the flip enabled wall-first writes.
+		expect(LAYOUT_MUTATION_REASONS['wall-first']).toBeNull();
 		// The shipped Chopin layout is legacy and adapted; a minimal
 		// wall-first-shaped value (real fixtures live in the codec suite)
-		// classifies as wall-first and refuses.
+		// classifies as wall-first and is now adapted.
 		expect(classifyLayoutFormat(chopinProject.layout)).toBe('legacy');
 		const wallFirstShape = {
 			units: 'meters',
@@ -191,10 +191,10 @@ describe('P23.0 F0 stage 1 — central format-dispatch policy tables', () => {
 			objects: []
 		};
 		expect(classifyLayoutFormat(wallFirstShape)).toBe('wall-first');
-		const disabledClass = layoutMutationClassFor(wallFirstShape);
-		expect(disabledClass.policy).toBe('disabled');
-		expect(disabledClass.reason).toBe(reason);
-		expect(isMutationAllowed(disabledClass)).toBe(false);
+		const adaptedClass = layoutMutationClassFor(wallFirstShape);
+		expect(adaptedClass.policy).toBe('adapted');
+		expect(adaptedClass.reason).toBeNull();
+		expect(isMutationAllowed(adaptedClass)).toBe(true);
 	});
 
 	it('unrecognized layouts are disabled; legacy layout is adapted', () => {
@@ -269,14 +269,18 @@ describe('P23.0 F0 stage 1 — exhaustive mutation-entry-point inventory', () =>
 		expect(beginLayout).toContain('LAYOUT_MUTATION_POLICY');
 
 		// F0 review: the commit re-check is the highest-risk line — pin that
-		// it consults the policy (and the named reasons table) too.
+		// it consults the policy. Post stage-6 the re-check enforces the
+		// cross-format invariant (begin format = current format = candidate
+		// format, all adapted) and refuses with its own named message; the
+		// per-format REASONS table is only consulted when a format is not
+		// adapted at all.
 		const commitLayout = storeSource.slice(
 			storeSource.indexOf('commitLayoutTransaction(snapshot'),
 			storeSource.indexOf('cancelLayoutTransaction(): boolean')
 		);
 		expect(commitLayout).toContain('classifyLayoutFormat');
 		expect(commitLayout).toContain('LAYOUT_MUTATION_POLICY');
-		expect(commitLayout).toContain('LAYOUT_MUTATION_REASONS');
+		expect(commitLayout).toContain('Layout format changed mid-transaction');
 
 		const beginDocument = storeSource.slice(
 			storeSource.indexOf('beginDocumentTransaction()'),
@@ -341,7 +345,7 @@ describe('P23.0 F0 stage 1 — behavioral guard contract', () => {
 		expect(store.cancelLayoutTransaction()).toBe(true);
 	});
 
-	it('wall-first layout documents refuse layout authoring with the named reason', () => {
+	it('wall-first layout documents accept layout authoring after the stage-6 flip', () => {
 		const store = createFixtureEditorStore();
 		expect(classifyLayoutFormat(wallFirstLayout)).toBe('wall-first');
 		const holder = attachLayoutHost(store, chopinProject.layout);
@@ -350,39 +354,107 @@ describe('P23.0 F0 stage 1 — behavioral guard contract', () => {
 		expect(store.beginLayoutTransaction()).toBe(true);
 		store.cancelLayoutTransaction();
 
-		// Swap the live layout to wall-first: the central guard refuses with
-		// the stage-2 reason.
+		// Swap the live layout to wall-first: the central guard is adapted —
+		// the flip means the switch is the document, not a per-controller
+		// flag, and no refusal message is set.
 		holder.project.layout = wallFirstLayout;
-		expect(store.beginLayoutTransaction()).toBe(false);
-		expect(store.statusMessage).toBe(
-			'Wall-first layout mutation enables with the canonical writers (P23.0 stage 2)'
-		);
+		expect(store.beginLayoutTransaction()).toBe(true);
+		expect(store.statusMessage).toBeNull();
+		store.cancelLayoutTransaction();
 
-		// Swap back: the switch is the document, not a per-controller flag.
+		// Swap back: legacy authoring still opens.
 		holder.project.layout = chopinProject.layout;
 		expect(store.beginLayoutTransaction()).toBe(true);
 		store.cancelLayoutTransaction();
 	});
 
-	it('a layout swap landing mid-transaction refuses commit and closes the bracket (F0 review)', () => {
-		const store = createFixtureEditorStore();
-		const holder = attachLayoutHost(store, chopinProject.layout);
-		expect(store.beginLayoutTransaction()).toBe(true);
-
-		// The swap lands while the transaction is open: begin saw legacy,
-		// the live layout is now wall-first.
-		holder.project.layout = wallFirstLayout;
-		expect(store.commitLayoutTransaction(null)).toBe(false);
-		expect(store.statusMessage).toBe(
-			'Wall-first layout mutation enables with the canonical writers (P23.0 stage 2)'
-		);
-
+	/**
+	 * P23.0 stage-6 safety invariant — the cross-format transaction matrix.
+	 * The commit re-check must refuse ANY format change across one undo
+	 * boundary (begin format ≠ live format, or the committed snapshot
+	 * carries a different format than the transaction began on), because
+	 * `HistoryController.commitLayout` blindly pushes `before` and lets
+	 * `undo()` replace host state — a mixed-schema history entry would
+	 * corrupt deterministic replay once both schemas are writable.
+	 */
+	function expectMidTransactionSwapRefused(
+		store: ReturnType<typeof createFixtureEditorStore>,
+		holder: { project: { layout: unknown } },
+		commitSnapshot: unknown
+	): void {
+		expect(store.commitLayoutTransaction(commitSnapshot)).toBe(false);
+		expect(store.statusMessage).toBe('Layout format changed mid-transaction — edit refused');
 		// The refused commit rolled back via cancel(): no open transaction
-		// leaks — swapping back to legacy re-opens cleanly. (begin() leaves
-		// the earlier refusal message in place; it only sets on refusal.)
+		// leaks — re-opening on the ORIGINAL format works cleanly.
 		holder.project.layout = chopinProject.layout;
 		expect(store.beginLayoutTransaction()).toBe(true);
 		store.cancelLayoutTransaction();
+	}
+
+	it('a legacy → wall-first swap landing mid-transaction refuses commit and closes the bracket (stage-6 invariant)', () => {
+		const store = createFixtureEditorStore();
+		const holder = attachLayoutHost(store, chopinProject.layout);
+		expect(store.beginLayoutTransaction()).toBe(true); // begin saw legacy
+
+		// The swap lands while the transaction is open: begin saw legacy,
+		// the live layout is now wall-first. The pre-flip policy refused this
+		// implicitly (wall-first was disabled); the commit re-check must keep
+		// refusing it explicitly.
+		holder.project.layout = wallFirstLayout;
+		expectMidTransactionSwapRefused(store, holder, null);
+	});
+
+	it('a wall-first → legacy swap landing mid-transaction refuses commit and closes the bracket (stage-6 invariant)', () => {
+		const store = createFixtureEditorStore();
+		const holder = attachLayoutHost(store, wallFirstLayout);
+		expect(store.beginLayoutTransaction()).toBe(true); // begin saw wall-first
+
+		holder.project.layout = chopinProject.layout;
+		expectMidTransactionSwapRefused(store, holder, null);
+	});
+
+	it('a wall-first → wall-first transaction commits normally (no false refusal)', () => {
+		const store = createFixtureEditorStore();
+		// Same harness as `attachLayoutHost` but with a distinguishing
+		// `matches` (the shared host answers `true`, which makes every commit
+		// a history no-op — here the commit must actually go through).
+		const holder = { project: { layout: wallFirstLayout as unknown } };
+		store.registerLayoutHistory({
+			capture: () => holder,
+			replace: () => {},
+			matches: () => false
+		});
+		store.setLayoutFormatPolicySource(() => holder);
+		expect(store.beginLayoutTransaction()).toBe(true);
+
+		// Same format at begin, live host and candidate — the invariant holds
+		// and the bracket closes through the normal commit path.
+		expect(store.commitLayoutTransaction({ project: { layout: wallFirstLayout } })).toBe(true);
+		expect(store.statusMessage).toBeNull();
+		// No leaked bracket: the next transaction opens.
+		expect(store.beginLayoutTransaction()).toBe(true);
+		store.cancelLayoutTransaction();
+	});
+
+	it('a candidate snapshot format change is refused even when the live host format did not change', () => {
+		const store = createFixtureEditorStore();
+		const holder = attachLayoutHost(store, chopinProject.layout);
+		expect(store.beginLayoutTransaction()).toBe(true); // begin/live both legacy
+
+		// The host stays legacy, but the candidate carries wall-first shape.
+		// This directly pins the third leg of begin = live = candidate.
+		expectMidTransactionSwapRefused(store, holder, { project: { layout: wallFirstLayout } });
+	});
+
+	it('an adapted → unrecognized swap landing mid-transaction refuses commit and closes the bracket (F0 review, post-flip)', () => {
+		const store = createFixtureEditorStore();
+		const holder = attachLayoutHost(store, chopinProject.layout);
+		expect(store.beginLayoutTransaction()).toBe(true); // begin saw legacy
+
+		// The live layout is now unrecognized — refused both by the begin
+		// format mismatch and by the never-adapted policy entry.
+		holder.project.layout = { units: 'nonsense' };
+		expectMidTransactionSwapRefused(store, holder, null);
 	});
 
 	it('a scene swap landing mid-transaction refuses document commit and closes the bracket (F0 review)', () => {

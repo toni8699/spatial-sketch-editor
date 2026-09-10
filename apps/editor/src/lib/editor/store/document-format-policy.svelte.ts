@@ -87,23 +87,24 @@ export const SCENE_MUTATION_REASONS: Record<SceneFormatKey, string | null> = {
 };
 
 /**
- * Layout-domain policy. Legacy layout mutation is the current authoring
- * behavior (adapted). Wall-first layout mutation is **explicitly
- * disabled** until the stage-2 canonical writers land: no editor mutator
- * may write wall-first shape before the writers, the reconciliation
- * planner wiring and the replay fixtures exist. Unrecognized layouts are
- * never mutable by construction.
+ * Layout-domain policy. Legacy layout mutation stays the current authoring
+ * behavior (adapted). P23.0 F0 stage-6 flip (owner go-ahead, 2026-09-10):
+ * wall-first layout mutation is now **adapted** — the canonical writers,
+ * the reconciliation planner wiring, the replay fixtures and the visitor
+ * parity proofs all shipped and F0 acceptance passed before this flip, so
+ * the guard is behavioral only for documents the editor cannot reach.
+ * Unrecognized layouts are never mutable by construction.
  */
 export const LAYOUT_MUTATION_POLICY: Record<LayoutFormatKey, DocumentFormatMutationPolicy> = {
 	legacy: 'adapted',
-	'wall-first': 'disabled',
+	'wall-first': 'adapted',
 	unrecognized: 'disabled'
 };
 
 /** Refusal reasons for the layout domain. */
 export const LAYOUT_MUTATION_REASONS: Record<LayoutFormatKey, string | null> = {
 	legacy: null,
-	'wall-first': 'Wall-first layout mutation enables with the canonical writers (P23.0 stage 2)',
+	'wall-first': null,
 	unrecognized: 'Unrecognized layout format cannot be authored'
 };
 
