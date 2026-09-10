@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	alignReferenceKey,
 	planLayoutObjectAlign,
 	type CompiledLayoutGeometry,
 	type CompiledLayoutObject,
@@ -312,7 +313,74 @@ describe('P23.2 alignment rejections', () => {
 			code: 'unknown_reference'
 		});
 	});
+});
 
+describe('P23.2 align reference identity', () => {
+	it('keys references by kind:id so colliding ids never collapse', () => {
+		expect(alignReferenceKey({ kind: 'object', id: 'foo' })).toBe('object:foo');
+		expect(alignReferenceKey({ kind: 'wall', id: 'foo' })).toBe('wall:foo');
+		expect(alignReferenceKey({ kind: 'room', id: 'foo' })).toBe('room:foo');
+		expect(alignReferenceKey({ kind: 'object', id: 'foo' })).not.toBe(alignReferenceKey({ kind: 'wall', id: 'foo' }));
+	});
+
+	it('resolves a wall reference independently of a same-id object reference', () => {
+		// Object `foo` (x 5..9, center 7) and wall `foo` (x 0..4, center 2)
+		// both legally exist: lookups keyed on id alone would collapse them.
+		const geometry = emptyGeometry();
+		geometry.objects.push(
+			originBox(),
+			boxObject('foo', [5, 0.5, 3], [[5, 3], [9, 3], [9, 6], [5, 6]])
+		);
+		geometry.queries.polygons.push(
+			footprintPolygon('box', [[0, 0], [2, 0], [2, 1], [0, 1]]),
+			footprintPolygon('foo', [[5, 3], [9, 3], [9, 6], [5, 6]])
+		);
+		geometry.queries.spans.push(wallSpan('foo', [0, 0], [4, 0]));
+		// Wall `foo` bounds x 0..4 (center 2): box footprint x 0..2 (center 1) → x = 1.
+		expect(alignedPositionOf(geometry, 'box', { kind: 'wall', id: 'foo' }, 'center')).toEqual([1, 0.5, 0]);
+		// Object `foo` bounds x 5..9 (center 7) → x = 6.
+		expect(alignedPositionOf(geometry, 'box', { kind: 'object', id: 'foo' }, 'center')).toEqual([6, 0.5, 0]);
+	});
+});
+
+describe('P23.2 center-on-wall with negative slope', () => {
+	it('projects onto the true negative-slope diagonal, not the bounding-box anti-diagonal', () => {
+		const geometry = emptyGeometry();
+		geometry.objects.push(
+			boxObject('box', [1, 0.5, 1], [[0.5, 0.5], [1.5, 0.5], [1.5, 1.5], [0.5, 1.5]])
+		);
+		for (let start = 0; start < 4; start += 1) {
+			geometry.queries.spans.push(wallSpan('diag', [start, 4 - start], [start + 1, 3 - start], 'r', start));
+		}
+		const plan = planLayoutObjectAlign(geometry, 'box', { kind: 'wall', id: 'diag' }, 'center-on-wall');
+		expect(plan.kind).toBe('success');
+		if (plan.kind !== 'success') return;
+		// Footprint center [1,1] projects onto the true diagonal at [2,2]:
+		// a min/max merge would project onto the anti-diagonal and report a
+		// no-op instead.
+		expect(plan.position[0]).toBeCloseTo(2, 6);
+		expect(plan.position[2]).toBeCloseTo(2, 6);
+		expect(plan.position[1]).toBe(0.5);
+	});
+
+	it('merges reversed shared negative-slope spans for center-on-wall', () => {
+		const geometry = emptyGeometry();
+		geometry.objects.push(
+			boxObject('box', [1, 0.5, 1], [[0.5, 0.5], [1.5, 0.5], [1.5, 1.5], [0.5, 1.5]])
+		);
+		for (let start = 0; start < 4; start += 1) {
+			geometry.queries.spans.push(wallSpan('diag', [start, 4 - start], [start + 1, 3 - start], 'a', start));
+			geometry.queries.spans.push(wallSpan('diag', [4 - start, start], [3 - start, start + 1], 'b', start));
+		}
+		const plan = planLayoutObjectAlign(geometry, 'box', { kind: 'wall', id: 'diag' }, 'center-on-wall');
+		expect(plan.kind).toBe('success');
+		if (plan.kind !== 'success') return;
+		expect(plan.position[0]).toBeCloseTo(2, 6);
+		expect(plan.position[2]).toBeCloseTo(2, 6);
+	});
+});
+
+describe('P23.2 alignment rejections', () => {
 	it('rejects profile objects and invalid action/reference combinations', () => {
 		const geometry = referenceGeometry();
 		geometry.objects.push(boxObject('stencil', [0, 0.5, 0], [[0, 0], [1, 1]], 'profile'));

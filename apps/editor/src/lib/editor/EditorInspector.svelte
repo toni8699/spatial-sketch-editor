@@ -58,6 +58,7 @@ import { resolveEditorPlacementScale } from './scale-vector';
 import {
 	resolveRectangle,
 	LAYOUT_PLAN_GRID_STEP,
+	alignReferenceKey,
 	planLayoutObjectAlign,
 	type AlignAction,
 	type AlignAxis,
@@ -590,8 +591,11 @@ import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall, LayoutWallFir
 
 	const activeAlignReference = $derived.by<AlignReferenceOption | null>(() => {
 		if (alignReferenceOptions.length === 0) return null;
+		// Match on the collision-safe `kind:id` key — IDs are only unique
+		// inside each collection, so an object `foo` and a wall `foo` must
+		// not collapse to the first option.
 		return (
-			alignReferenceOptions.find((option) => option.id === alignReferenceId) ??
+			alignReferenceOptions.find((option) => alignReferenceKey(option) === alignReferenceId) ??
 			alignReferenceOptions[0]!
 		);
 	});
@@ -1163,8 +1167,8 @@ import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall, LayoutWallFir
 						<fieldset class="staging-transform-fields layout-align-fields">
 							<legend>Align</legend>
 							<label>Reference<select bind:value={alignReferenceId}>
-								{#each alignReferenceOptions as option (option.kind + option.id)}
-									<option value={option.id}>{option.label}</option>
+								{#each alignReferenceOptions as option (alignReferenceKey(option))}
+									<option value={alignReferenceKey(option)}>{option.label}</option>
 								{/each}
 							</select></label>
 							<div class="layout-align-actions">

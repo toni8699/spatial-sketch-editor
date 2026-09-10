@@ -104,6 +104,7 @@
 	import {
 		LAYOUT_PLAN_GRID_STEP,
 		resolveLayoutSnap,
+		resolveOpeningDragSnap,
 		type SnapFeatureKind,
 		type SnapInputContext,
 		type SnapResolution
@@ -1472,10 +1473,34 @@
 				: null;
 			if (!room || !segment || !projection) return;
 			const length = compiledWallLength(model.queries, room.id, segment.id);
-			const centered = projection.offset - openingDrag.width / 2;
-			const offset = interaction.planView.snapEnabled
-				? snapSegmentOffset(centered, Math.max(0, length - openingDrag.width))
-				: Math.min(Math.max(0, centered), Math.max(0, length - openingDrag.width));
+			const width = openingDrag.width;
+			const maxOffset = Math.max(0, length - width);
+			const centered = projection.offset - width / 2;
+			let offset: number;
+			if (!interaction.planView.snapEnabled) {
+				offset = Math.min(Math.max(0, centered), maxOffset);
+			} else if (segment.kind === 'line') {
+				// P23.2 — straight-wall opening drag resolves through the
+				// offset-space semantic resolver (host-wall junctions,
+				// midpoint, other openings' edges, grid fallback). The dragged
+				// opening's own spans are skipped so its own edges can never
+				// act as external snap targets; grid candidates snap the
+				// opening center like opening creation. Curved (auto-bezier)
+				// segments keep the legacy linear grid snap.
+				const resolution = resolveOpeningDragSnap(
+					preview.geometry,
+					{ segmentId: segment.id, start: segment.start, end: segment.end },
+					openingDrag.openingId,
+					projection.offset,
+					width,
+					{ pixelsPerMeter: interaction.planView.pixelsPerMeter, gridStep: LAYOUT_PLAN_GRID_STEP }
+				);
+				offset = resolution?.kind === 'snap'
+					? resolution.candidate.offset
+					: Math.min(Math.max(0, centered), maxOffset);
+			} else {
+				offset = snapSegmentOffset(centered, maxOffset);
+			}
 			updateLayoutOpeningFields(preview, openingDrag.roomId, openingDrag.openingId, { offset });
 			return;
 		}

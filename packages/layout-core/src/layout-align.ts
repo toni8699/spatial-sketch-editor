@@ -29,6 +29,15 @@ export type AlignReference = {
 	id: string;
 };
 
+/**
+ * Collision-safe identity for one align reference. IDs are only unique
+ * inside each collection (an object `foo` and a wall `foo` can both exist),
+ * so UI options and lookups must key on `kind + ':' + id`, never `id` alone.
+ */
+export function alignReferenceKey(reference: AlignReference): string {
+	return `${reference.kind}:${reference.id}`;
+}
+
 export type AlignPlan =
 	| {
 			kind: 'success';

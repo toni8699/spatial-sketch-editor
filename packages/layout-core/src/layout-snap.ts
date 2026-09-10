@@ -68,6 +68,13 @@ export type SnapCandidate = {
 	kind: SnapFeatureKind;
 	/** Canonical source identity for the winning candidate. */
 	sourceId: string;
+	/**
+	 * Canonical owner identity for moving-target exclusion — the object,
+	 * wall segment, or opening that owns this candidate. `sourceId` is a
+	 * composite key (`${ownerId}#start`, `${ownerId}#0:mid`, ...) so it must
+	 * never be used for exclusion; exclusion matches this field exactly.
+	 */
+	ownerId?: string;
 	/** Distance from the raw pointer, in world units. */
 	distance: number;
 };
@@ -126,7 +133,9 @@ export function snapToGridStep(point: LayoutVec2, step = LAYOUT_PLAN_GRID_STEP):
 }
 
 function excluded(candidate: SnapCandidate, context: SnapInputContext): boolean {
-	if (context.excludeSourceIds?.has(candidate.sourceId)) return true;
+	// Exclusion is by canonical owner (`ownerId`), falling back to the raw
+	// sourceId only for hand-built candidates that predate the field.
+	if (context.excludeSourceIds?.has(candidate.ownerId ?? candidate.sourceId)) return true;
 	if (context.excludePoints) {
 		for (const point of context.excludePoints) {
 			if (point[0] === candidate.point[0] && point[1] === candidate.point[1]) return true;
@@ -190,6 +199,7 @@ export function spanSnapCandidates(
 				point: [candidatePoint[0], candidatePoint[1]],
 				kind: 'junction',
 				sourceId: `${span.id}#${key}`,
+				ownerId: span.id,
 				distance
 			});
 		}
@@ -205,6 +215,7 @@ export function spanSnapCandidates(
 				point: [midpoint[0], midpoint[1]],
 				kind: 'wall-midpoint',
 				sourceId: span.id,
+				ownerId: span.id,
 				distance
 			});
 		}
@@ -221,6 +232,7 @@ export function spanSnapCandidates(
 			point: [projected[0], projected[1]],
 			kind: 'wall-span',
 			sourceId: span.id,
+			ownerId: span.id,
 			distance: projectedDistance
 		});
 	}
@@ -245,6 +257,7 @@ export function openingEdgeSnapCandidates(
 				point: [candidatePoint[0], candidatePoint[1]],
 				kind: 'opening-edge',
 				sourceId: `${span.openingId}#${key}`,
+				ownerId: span.openingId,
 				distance
 			});
 		}
@@ -281,6 +294,7 @@ export function objectBoundsSnapCandidates(
 				point: [candidatePoint[0], candidatePoint[1]],
 				kind: 'object-bounds-edge',
 				sourceId: `${objectId}#${key}`,
+				ownerId: objectId,
 				distance
 			});
 		}
@@ -298,6 +312,7 @@ export function objectBoundsSnapCandidates(
 			point: [center[0], center[1]],
 			kind: 'object-bounds-center',
 			sourceId: objectId,
+			ownerId: objectId,
 			distance: centerDistance
 		});
 	}
@@ -314,21 +329,21 @@ export function orthogonalGuideCandidates(
 	const distanceX = Math.hypot(orthoX[0] - point[0], orthoX[1] - point[1]);
 	const distanceZ = Math.hypot(orthoZ[0] - point[0], orthoZ[1] - point[1]);
 	const candidates: SnapCandidate[] = [];
-	if (Number.isFinite(distanceX) && distanceX > 0) {
-		candidates.push({
-			point: orthoX,
-			kind: 'orthogonal-guide',
-			sourceId: 'orthogonal-x',
-			distance: distanceX
-		});
+	if (Number.isFinite(distanceX) && distanceX > 0) {			candidates.push({
+				point: orthoX,
+				kind: 'orthogonal-guide',
+				sourceId: 'orthogonal-x',
+				ownerId: 'orthogonal-x',
+				distance: distanceX
+			});
 	}
-	if (Number.isFinite(distanceZ) && distanceZ > 0) {
-		candidates.push({
-			point: orthoZ,
-			kind: 'orthogonal-guide',
-			sourceId: 'orthogonal-z',
-			distance: distanceZ
-		});
+	if (Number.isFinite(distanceZ) && distanceZ > 0) {			candidates.push({
+				point: orthoZ,
+				kind: 'orthogonal-guide',
+				sourceId: 'orthogonal-z',
+				ownerId: 'orthogonal-z',
+				distance: distanceZ
+			});
 	}
 	return candidates;
 }
@@ -360,6 +375,7 @@ export function wallIntersectionSnapCandidates(
 				point: [intersectionPoint[0], intersectionPoint[1]],
 				kind: 'wall-intersection',
 				sourceId: `${a.id}~${b.id}`,
+				ownerId: `${a.id}~${b.id}`,
 				distance
 			});
 		}
@@ -395,6 +411,7 @@ export function resolveLayoutSnap(
 			point: [queryPoint.point[0], queryPoint.point[1]],
 			kind: 'junction',
 			sourceId: queryPoint.sourceId,
+			ownerId: queryPoint.segmentId,
 			distance
 		});
 	}
@@ -442,6 +459,7 @@ export function resolveLayoutSnap(
 			point: gridPoint,
 			kind: 'grid',
 			sourceId: 'grid',
+			ownerId: 'grid',
 			distance: gridDistance
 		});
 	}
@@ -462,6 +480,153 @@ function guidesForCandidate(candidate: SnapCandidate): SnapGuide[] {
 	return [];
 }
 
+/** Semantic rank per candidate family in the opening-drag context — lower wins. */
+const OPENING_DRAG_SEMANTIC_RANK: Record<OpeningDragSnapCandidate['kind'], number> = {
+	junction: 0,
+	'opening-edge': 1,
+	'wall-midpoint': 2,
+	grid: 9
+};
+
+export type OpeningDragSnapCandidate = {
+	/**
+	 * Resulting opening start-edge offset along the host wall, already
+	 * clamped to `[0, length - width]` and expressed in the caller's
+	 * authored-segment frame (same frame as `pointerOffset`).
+	 */
+	offset: number;
+	/** Semantic family in the opening-drag context. */
+	kind: 'junction' | 'opening-edge' | 'wall-midpoint' | 'grid';
+	/** Canonical source identity (`${openingId}#start` / `#end` for opening edges). */
+	sourceId: string;
+	/** Distance from the pointer offset to the implied opening center, in meters. */
+	distance: number;
+};
+
+export type OpeningDragSnapResolution =
+	| { kind: 'snap'; candidate: OpeningDragSnapCandidate }
+	| { kind: 'none' };
+
+/**
+ * P23.2 — resolve the drag position of one opening along its host wall in
+ * offset space (meters from the authored segment start).
+ *
+ * The opening is confined to its host wall, so candidates are the host
+ * wall's features projected onto the authored span direction: the wall's
+ * junction endpoints, its midpoint, other openings' edges on the same wall,
+ * and the grid fallback. The dragged opening's own spans are skipped
+ * entirely, so its own edges can never act as external reference candidates
+ * (the moving self-snap loop — P23.2 §Moving-target exclusion). Grid
+ * candidates snap the opening **center** to the step exactly like opening
+ * creation (`createDefaultOpening`), so drag and create share one grid
+ * semantic.
+ *
+ * `hostSpan` must be the host wall span in the caller's frame (the room
+ * boundary segment the opening lives on): offsets are measured from its
+ * start, so shared walls traversed in reverse resolve correctly without
+ * mirroring. Deterministic winner order is the same pipeline as
+ * `resolveLayoutSnap`: context rank → offset distance → stable key. Pure —
+ * no mutation, no history.
+ */
+export function resolveOpeningDragSnap(
+	geometry: CompiledLayoutGeometry,
+	hostSpan: { segmentId: string; start: LayoutVec2; end: LayoutVec2 },
+	draggedOpeningId: string,
+	pointerOffset: number,
+	openingWidth: number,
+	context: SnapQueryContext
+): OpeningDragSnapResolution {
+	const radius = snapAcquisitionRadiusWorld(context);
+	if (radius <= 0) return { kind: 'none' };
+	if (!Number.isFinite(pointerOffset) || !Number.isFinite(openingWidth) || openingWidth <= 0) {
+		return { kind: 'none' };
+	}
+	const dx = hostSpan.end[0] - hostSpan.start[0];
+	const dz = hostSpan.end[1] - hostSpan.start[1];
+	const length = Math.hypot(dx, dz);
+	if (length <= 0) return { kind: 'none' };
+	const dirX = dx / length;
+	const dirZ = dz / length;
+	const maxOffset = Math.max(0, length - openingWidth);
+
+	const candidates: OpeningDragSnapCandidate[] = [];
+	const addCenterCandidate = (
+		center: number,
+		kind: OpeningDragSnapCandidate['kind'],
+		sourceId: string
+	): void => {
+		const distance = Math.abs(pointerOffset - center);
+		if (distance > radius) return;
+		candidates.push({
+			offset: Math.min(maxOffset, Math.max(0, center - openingWidth / 2)),
+			kind,
+			sourceId,
+			distance
+		});
+	};
+
+	// Junction candidates: the host wall's two endpoints. Clamping centers
+	// the opening on the junction, which makes it flush with the wall end.
+	addCenterCandidate(0, 'junction', `${hostSpan.segmentId}#start`);
+	addCenterCandidate(length, 'junction', `${hostSpan.segmentId}#end`);
+
+	// Host wall midpoint (center-aligned).
+	addCenterCandidate(length / 2, 'wall-midpoint', hostSpan.segmentId);
+
+	// Other openings' edges on the same wall — nearest-edge alignment: the
+	// dragged opening's approaching edge lands on the reference edge.
+	for (const other of geometry.queries.spans) {
+		if (other.kind !== 'opening' || !other.openingId) continue;
+		if (other.segmentId !== hostSpan.segmentId || other.openingId === draggedOpeningId) continue;
+		const edges: Array<[LayoutVec2, 'start' | 'end']> = [
+			[other.start, 'start'],
+			[other.end, 'end']
+		];
+		for (const [edgePoint, key] of edges) {
+			const edgeOffset = (edgePoint[0] - hostSpan.start[0]) * dirX + (edgePoint[1] - hostSpan.start[1]) * dirZ;
+			if (edgeOffset < -1e-9 || edgeOffset > length + 1e-9) continue;
+			const center =
+				pointerOffset < edgeOffset ? edgeOffset - openingWidth / 2 : edgeOffset + openingWidth / 2;
+			addCenterCandidate(center, 'opening-edge', `${other.openingId}#${key}`);
+		}
+	}
+
+	// Grid fallback — always in range within max(radius, step / 2) exactly
+	// like `resolveLayoutSnap`, and lower-ranked than every semantic family.
+	const step = context.gridStep ?? LAYOUT_PLAN_GRID_STEP;
+	const gridCenter = snapToGridStep([pointerOffset, 0], step)[0]!;
+	const gridDistance = Math.abs(pointerOffset - gridCenter);
+	if (gridDistance <= Math.max(radius, step / 2)) {
+		candidates.push({
+			offset: Math.min(maxOffset, Math.max(0, gridCenter - openingWidth / 2)),
+			kind: 'grid',
+			sourceId: 'grid',
+			distance: gridDistance
+		});
+	}
+
+	let best: OpeningDragSnapCandidate | null = null;
+	let bestKey = '';
+	for (const candidate of candidates) {
+		const key = `${OPENING_DRAG_SEMANTIC_RANK[candidate.kind]}|${candidate.kind}|${candidate.sourceId}|${candidate.offset}`;
+		if (!best) {
+			best = candidate;
+			bestKey = key;
+			continue;
+		}
+		const rankDiff = OPENING_DRAG_SEMANTIC_RANK[candidate.kind] - OPENING_DRAG_SEMANTIC_RANK[best.kind];
+		const distanceDiff = candidate.distance - best.distance;
+		if (
+			rankDiff < 0 ||
+			(rankDiff === 0 && (distanceDiff < 0 || (distanceDiff === 0 && key < bestKey)))
+		) {
+			best = candidate;
+			bestKey = key;
+		}
+	}
+	return best ? { kind: 'snap', candidate: best } : { kind: 'none' };
+}
+
 /**
  * Merge per-sample wall spans of one segment into the full-length span so
  * candidate generation works on authored walls, not sample boundaries.
@@ -470,9 +635,11 @@ function guidesForCandidate(candidate: SnapCandidate): SnapGuide[] {
  * straight lines), and a shared wall compiles spans per incident room —
  * reversed room refs traverse the wall the other way, so `startDistance` is
  * measured from each room's own segment start and cannot be compared across
- * rooms. The merged extent is therefore the bounding box of every span
- * endpoint: for straight walls (the snap scope) that recovers the authored
- * wall start/end exactly, independent of room count or traversal direction.
+ * rooms. The merged span is therefore the **farthest true endpoint pair**
+ * among every span endpoint: for straight walls (the snap scope) that is
+ * exactly the authored wall start/end for any slope or traversal direction.
+ * A bounding-box merge would be wrong here — a negative-slope wall
+ * `(0,4) → (4,0)` would collapse to the anti-diagonal `(0,0) → (4,4)`.
  */
 export function dedupeWallSpans(
 	spans: readonly CompiledQuerySpan[]
@@ -485,23 +652,42 @@ export function dedupeWallSpans(
 	}
 	const merged: Array<{ id: string; start: LayoutVec2; end: LayoutVec2 }> = [];
 	for (const [segmentId, list] of bySegment) {
-		let minX = Infinity;
-		let minZ = Infinity;
-		let maxX = -Infinity;
-		let maxZ = -Infinity;
+		const points: LayoutVec2[] = [];
 		for (const span of list) {
-			minX = Math.min(minX, span.start[0], span.end[0]);
-			minZ = Math.min(minZ, span.start[1], span.end[1]);
-			maxX = Math.max(maxX, span.start[0], span.end[0]);
-			maxZ = Math.max(maxZ, span.start[1], span.end[1]);
+			points.push(span.start, span.end);
 		}
-		merged.push({
-			id: segmentId,
-			start: [minX, minZ],
-			end: [maxX, maxZ]
-		});
+		// Farthest pair over all span endpoints: for a straight wall this is
+		// the true endpoint pair regardless of slope/direction. Ties break by
+		// lexicographic point order so the result is a pure function of the
+		// geometry (never array order).
+		let best: [LayoutVec2, LayoutVec2] = [points[0]!, points[1] ?? points[0]!];
+		let bestSquared = -1;
+		for (let first = 0; first < points.length; first += 1) {
+			for (let second = first + 1; second < points.length; second += 1) {
+				const a = points[first]!;
+				const b = points[second]!;
+				const dx = a[0] - b[0];
+				const dz = a[1] - b[1];
+				const squared = dx * dx + dz * dz;
+				if (squared > bestSquared || (squared === bestSquared && lexicographicallySmaller(a, b, best[0], best[1]))) {
+					bestSquared = squared;
+					best = [a, b];
+				}
+			}
+		}
+		const ordered = lexicographicallySmaller(best[0], best[1], best[1], best[0])
+			? [best[0], best[1]]
+			: [best[1], best[0]];
+		merged.push({ id: segmentId, start: [...ordered[0]], end: [...ordered[1]] });
 	}
 	return merged;
+}
+
+function lexicographicallySmaller(a: LayoutVec2, b: LayoutVec2, c: LayoutVec2, d: LayoutVec2): boolean {
+	if (a[0] !== c[0]) return a[0] < c[0];
+	if (a[1] !== c[1]) return a[1] < c[1];
+	if (b[0] !== d[0]) return b[0] < d[0];
+	return b[1] < d[1];
 }
 
 /**

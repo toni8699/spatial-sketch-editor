@@ -2,16 +2,19 @@ import { describe, expect, it } from 'vitest';
 import {
 	LAYOUT_PLAN_GRID_STEP,
 	LAYOUT_PLAN_SNAP_RADIUS_CSS_PX,
+	dedupeWallSpans,
 	objectBoundsSnapCandidates,
 	openingEdgeSnapCandidates,
 	orthogonalGuideCandidates,
 	pickSnapWinner,
 	resolveLayoutSnap,
+	resolveOpeningDragSnap,
 	snapAcquisitionRadiusWorld,
 	snapToGridStep,
 	spanSnapCandidates,
 	wallIntersectionSnapCandidates,
 	type CompiledLayoutGeometry,
+	type CompiledQuerySpan,
 	type SnapCandidate
 } from '@portfolio/layout-core';
 
@@ -23,6 +26,69 @@ function emptyGeometry(): CompiledLayoutGeometry {
 		queries: { points: [], spans: [], polygons: [], aabbs: [] },
 		bounds: null
 	};
+}
+
+function wallSpan(
+	segmentId: string,
+	start: [number, number],
+	end: [number, number],
+	roomId = 'r',
+	startDistance = 0
+): CompiledQuerySpan {
+	const length = Math.hypot(end[0] - start[0], end[1] - start[1]);
+	return {
+		id: `s:${segmentId}:${startDistance}`,
+		cacheKey: `k:${segmentId}:${startDistance}`,
+		kind: 'wall',
+		start,
+		end,
+		startDistance,
+		endDistance: startDistance + length,
+		aabb: {
+			min: [Math.min(start[0], end[0]), Math.min(start[1], end[1])],
+			max: [Math.max(start[0], end[0]), Math.max(start[1], end[1])]
+		},
+		sourceId: segmentId,
+		floorId: 'f',
+		roomId,
+		segmentId
+	};
+}
+
+function openingSpan(
+	openingId: string,
+	segmentId: string,
+	start: [number, number],
+	end: [number, number]
+): CompiledQuerySpan {
+	const length = Math.hypot(end[0] - start[0], end[1] - start[1]);
+	return {
+		id: `o:${openingId}`,
+		cacheKey: `k:${openingId}`,
+		kind: 'opening',
+		start,
+		end,
+		startDistance: 0,
+		endDistance: length,
+		aabb: {
+			min: [Math.min(start[0], end[0]), Math.min(start[1], end[1])],
+			max: [Math.max(start[0], end[0]), Math.max(start[1], end[1])]
+		},
+		sourceId: openingId,
+		floorId: 'f',
+		roomId: 'r',
+		segmentId,
+		openingId
+	};
+}
+
+/** Per-sample spans of the authored wall (0,4) → (4,0), one 1 m chunk. */
+function negativeSlopeSpans(segmentId = 'diag', roomId = 'r'): CompiledQuerySpan[] {
+	const spans: CompiledQuerySpan[] = [];
+	for (let start = 0; start < 4; start += 1) {
+		spans.push(wallSpan(segmentId, [start, 4 - start], [start + 1, 3 - start], roomId, start));
+	}
+	return spans;
 }
 
 function vertexAt(x: number, z: number, sourceId: string): CompiledLayoutGeometry['queries']['points'][number] {
@@ -187,5 +253,192 @@ describe('P23.2 resolveLayoutSnap over compiled query geometry', () => {
 	it('snapToGridStep respects the centralized step and invalid steps pass through', () => {
 		expect(snapToGridStep([1.13, -0.62])).toEqual([1.25, -0.5]);
 		expect(snapToGridStep([1.13, 1], 0)).toEqual([1.13, 1]);
+	});
+});
+
+describe('P23.2 negative-slope wall geometry', () => {
+	it('merges a negative-slope wall to its true endpoint pair, not the bounding-box anti-diagonal', () => {
+		// Authored (0,4) → (4,0): a min/max merge would produce the fake
+		// anti-diagonal (0,0) → (4,4).
+		expect(dedupeWallSpans(negativeSlopeSpans())).toEqual([
+			{ id: 'diag', start: [0, 4], end: [4, 0] }
+		]);
+	});
+
+	it('merges reversed shared negative-slope spans across rooms into the true endpoint pair', () => {
+		// Room 'a' traverses (0,4) → (4,0); room 'b' traverses the same wall
+		// reversed, (4,0) → (0,4), so startDistance is per-room and cannot be
+		// compared across rooms.
+		const spans: CompiledQuerySpan[] = [...negativeSlopeSpans('diag', 'a')];
+		for (let start = 0; start < 4; start += 1) {
+			spans.push(wallSpan('diag', [4 - start, start], [3 - start, start + 1], 'b', start));
+		}
+		expect(dedupeWallSpans(spans)).toEqual([
+			{ id: 'diag', start: [0, 4], end: [4, 0] }
+		]);
+	});
+
+	it('resolves the midpoint of a negative-slope wall on the true geometry', () => {
+		const geometry = emptyGeometry();
+		geometry.queries.spans.push(...negativeSlopeSpans());
+		const resolution = resolveLayoutSnap(geometry, [2.02, 1.98], { pixelsPerMeter: 50 });
+		expect(resolution.kind).toBe('snap');
+		if (resolution.kind !== 'snap') return;
+		expect(resolution.candidate).toMatchObject({ kind: 'wall-midpoint', point: [2, 2] });
+	});
+
+	it('resolves the endpoint of a negative-slope wall on the true geometry', () => {
+		const geometry = emptyGeometry();
+		geometry.queries.spans.push(...negativeSlopeSpans());
+		const resolution = resolveLayoutSnap(geometry, [0.04, 3.96], { pixelsPerMeter: 50 });
+		expect(resolution.kind).toBe('snap');
+		if (resolution.kind !== 'snap') return;
+		expect(resolution.candidate).toMatchObject({
+			kind: 'junction',
+			point: [0, 4],
+			sourceId: 'diag#start'
+		});
+	});
+
+	it('computes a proper crossing on a negative-slope wall at the true intersection', () => {
+		const geometry = emptyGeometry();
+		geometry.queries.spans.push(
+			...negativeSlopeSpans(),
+			wallSpan('vertical', [2, 0], [2, 3])
+		);
+		const resolution = resolveLayoutSnap(geometry, [2.04, 2.03], { pixelsPerMeter: 50 });
+		expect(resolution.kind).toBe('snap');
+		if (resolution.kind !== 'snap') return;
+		expect(resolution.candidate).toMatchObject({ kind: 'wall-intersection', point: [2, 2] });
+	});
+});
+
+describe('P23.2 moving-target exclusion by typed owner', () => {
+	it('excludes a moving object own bounds-edge candidates even though sourceId is composite', () => {
+		const geometry = emptyGeometry();
+		geometry.queries.polygons.push({
+			id: 'p:obj',
+			cacheKey: 'c:obj',
+			kind: 'object-footprint',
+			polygon: [[0, 0], [1, 0], [1, 1], [0, 1]],
+			aabb: { min: [0, 0], max: [1, 1] },
+			sourceId: 'obj',
+			objectId: 'obj'
+		});
+		// Pointer at the own edge midpoint: the candidate is 'obj#0:mid'
+		// (sourceId ≠ 'obj'), sharing its world point with the grid fallback.
+		const unexcluded = resolveLayoutSnap(geometry, [0.5, 0.03], { pixelsPerMeter: 50 });
+		expect(unexcluded.kind).toBe('snap');
+		if (unexcluded.kind !== 'snap') return;
+		expect(unexcluded.candidate).toMatchObject({
+			kind: 'object-bounds-edge',
+			sourceId: 'obj#0:mid',
+			ownerId: 'obj'
+		});
+		const excluded = resolveLayoutSnap(geometry, [0.5, 0.03], { pixelsPerMeter: 50 }, {
+			excludeSourceIds: new Set(['obj'])
+		});
+		expect(excluded.kind).toBe('snap');
+		if (excluded.kind !== 'snap') return;
+		expect(excluded.candidate.kind).toBe('grid');
+	});
+
+	it('excludes a moving wall segment endpoint candidates like `w#start` by owner', () => {
+		const geometry = emptyGeometry();
+		geometry.queries.spans.push(wallSpan('w', [0, 0], [4, 0]));
+		const unexcluded = resolveLayoutSnap(geometry, [0.02, 0.01], { pixelsPerMeter: 50 });
+		expect(unexcluded.kind).toBe('snap');
+		if (unexcluded.kind !== 'snap') return;
+		expect(unexcluded.candidate).toMatchObject({ kind: 'junction', sourceId: 'w#start' });
+		const excluded = resolveLayoutSnap(geometry, [0.02, 0.01], { pixelsPerMeter: 50 }, {
+			excludeSourceIds: new Set(['w'])
+		});
+		expect(excluded.kind).toBe('snap');
+		if (excluded.kind !== 'snap') return;
+		expect(excluded.candidate.kind).toBe('grid');
+	});
+});
+
+describe('P23.2 opening drag resolution (offset space)', () => {
+	// 6 m host wall authored (0,0) → (6,0); door width 0.9. Default radius
+	// 8 CSS px at 50 px/m = 0.16 m unless overridden.
+	const host = { segmentId: 'w', start: [0, 0] as [number, number], end: [6, 0] as [number, number] };
+
+	it('falls back to the grid, center-snapped like opening creation', () => {
+		const resolution = resolveOpeningDragSnap(emptyGeometry(), host, 'door', 0.53, 0.9, { pixelsPerMeter: 50 });
+		expect(resolution.kind).toBe('snap');
+		if (resolution.kind !== 'snap') return;
+		expect(resolution.candidate).toMatchObject({ kind: 'grid', sourceId: 'grid' });
+		expect(resolution.candidate.offset).toBeCloseTo(0.05, 6);
+	});
+
+	it('flushes the opening to the wall start and end junctions', () => {
+		const start = resolveOpeningDragSnap(emptyGeometry(), host, 'door', 0.1, 0.9, { pixelsPerMeter: 50 });
+		expect(start.kind).toBe('snap');
+		if (start.kind !== 'snap') return;
+		expect(start.candidate).toMatchObject({ kind: 'junction', sourceId: 'w#start', offset: 0 });
+
+		const end = resolveOpeningDragSnap(emptyGeometry(), host, 'door', 5.9, 0.9, { pixelsPerMeter: 50 });
+		expect(end.kind).toBe('snap');
+		if (end.kind !== 'snap') return;
+		expect(end.candidate).toMatchObject({ kind: 'junction', sourceId: 'w#end' });
+		expect(end.candidate.offset).toBeCloseTo(5.1, 6);
+	});
+
+	it('centers the opening on the host wall midpoint', () => {
+		const resolution = resolveOpeningDragSnap(emptyGeometry(), host, 'door', 3.02, 0.9, { pixelsPerMeter: 50 });
+		expect(resolution.kind).toBe('snap');
+		if (resolution.kind !== 'snap') return;
+		expect(resolution.candidate).toMatchObject({ kind: 'wall-midpoint', sourceId: 'w' });
+		expect(resolution.candidate.offset).toBeCloseTo(2.55, 6);
+	});
+
+	it('never snaps the dragged opening to its own edges (self-snap loop)', () => {
+		const geometry = emptyGeometry();
+		// Dragged door currently at offset 0.5..1.4 (center 0.95).
+		geometry.queries.spans.push(openingSpan('door', 'w', [0.5, 0], [1.4, 0]));
+		// Pointer 0.96 is 0.01 m from the opening own center — without the
+		// exclusion its own start edge would win by rank and the opening
+		// would stick at 0.5 forever.
+		const resolution = resolveOpeningDragSnap(geometry, host, 'door', 0.96, 0.9, { pixelsPerMeter: 50 });
+		expect(resolution.kind).toBe('snap');
+		if (resolution.kind !== 'snap') return;
+		expect(resolution.candidate).toMatchObject({ kind: 'grid', sourceId: 'grid' });
+		expect(resolution.candidate.offset).toBeCloseTo(0.55, 6);
+	});
+
+	it('aligns the approaching edge to another opening edge on the same wall', () => {
+		const geometry = emptyGeometry();
+		geometry.queries.spans.push(openingSpan('other', 'w', [3, 0], [3.9, 0]));
+		const resolution = resolveOpeningDragSnap(geometry, host, 'door', 2.9, 0.9, {
+			pixelsPerMeter: 50,
+			snapRadiusCssPx: 100
+		});
+		expect(resolution.kind).toBe('snap');
+		if (resolution.kind !== 'snap') return;
+		// Dragged door end edge lands on the other door start edge: 2.1 + 0.9 = 3.0.
+		expect(resolution.candidate).toMatchObject({ kind: 'opening-edge', sourceId: 'other#start' });
+		expect(resolution.candidate.offset).toBeCloseTo(2.1, 6);
+	});
+
+	it('resolves in the authored segment frame for a reversed shared wall', () => {
+		const geometry = emptyGeometry();
+		// Host wall authored (6,0) → (0,0) (room traverses right-to-left);
+		// the other opening sits at authored offset 3.0..3.9 (world x 3.0..2.1).
+		const reversedHost = { segmentId: 'w', start: [6, 0] as [number, number], end: [0, 0] as [number, number] };
+		geometry.queries.spans.push(openingSpan('other', 'w', [3, 0], [2.1, 0]));
+		const resolution = resolveOpeningDragSnap(geometry, reversedHost, 'door', 2.9, 0.9, {
+			pixelsPerMeter: 50,
+			snapRadiusCssPx: 100
+		});
+		expect(resolution.kind).toBe('snap');
+		if (resolution.kind !== 'snap') return;
+		expect(resolution.candidate).toMatchObject({ kind: 'opening-edge', sourceId: 'other#start' });
+		expect(resolution.candidate.offset).toBeCloseTo(2.1, 6);
+	});
+
+	it('returns none when the acquisition radius is invalid', () => {
+		const resolution = resolveOpeningDragSnap(emptyGeometry(), host, 'door', 0.53, 0.9, { pixelsPerMeter: 0 });
+		expect(resolution.kind).toBe('none');
 	});
 });
