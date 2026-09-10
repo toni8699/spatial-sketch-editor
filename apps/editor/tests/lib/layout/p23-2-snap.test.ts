@@ -260,9 +260,16 @@ describe('P23.2 negative-slope wall geometry', () => {
 	it('merges a negative-slope wall to its true endpoint pair, not the bounding-box anti-diagonal', () => {
 		// Authored (0,4) → (4,0): a min/max merge would produce the fake
 		// anti-diagonal (0,0) → (4,4).
-		expect(dedupeWallSpans(negativeSlopeSpans())).toEqual([
-			{ id: 'diag', start: [0, 4], end: [4, 0] }
-		]);
+		const merged = dedupeWallSpans(negativeSlopeSpans());
+		expect(merged).toHaveLength(1);
+		expect(merged[0]).toMatchObject({
+			key: 'diag',
+			segmentId: 'diag',
+			start: [0, 4],
+			end: [4, 0],
+			straight: true
+		});
+		expect(merged[0].samples).toHaveLength(4);
 	});
 
 	it('merges reversed shared negative-slope spans across rooms into the true endpoint pair', () => {
@@ -273,9 +280,47 @@ describe('P23.2 negative-slope wall geometry', () => {
 		for (let start = 0; start < 4; start += 1) {
 			spans.push(wallSpan('diag', [4 - start, start], [3 - start, start + 1], 'b', start));
 		}
-		expect(dedupeWallSpans(spans)).toEqual([
-			{ id: 'diag', start: [0, 4], end: [4, 0] }
+		const merged = dedupeWallSpans(spans);
+		expect(merged).toHaveLength(1);
+		expect(merged[0]).toMatchObject({ key: 'diag', start: [0, 4], end: [4, 0], straight: true });
+	});
+
+	it('never merges same-named segments of different legacy rooms into one fake wall', () => {
+		// Legacy segment ids are only unique inside each room: room 'a' and
+		// room 'b' both own a wall-1, at different locations. A bare
+		// segmentId group would collapse them into one fake wall spanning
+		// (0,4) → (14,0).
+		const spans: CompiledQuerySpan[] = negativeSlopeSpans('wall-1', 'room-a').map((span) => ({
+			...span,
+			wallKey: 'f:room-a:wall-1'
+		}));
+		for (let start = 0; start < 4; start += 1) {
+			spans.push({
+				...wallSpan('wall-1', [10 + start, 0], [11 + start, 0], 'room-b', start),
+				wallKey: 'f:room-b:wall-1'
+			});
+		}
+		const merged = dedupeWallSpans(spans);
+		expect(merged.map((merge) => merge.key).sort()).toEqual(['f:room-a:wall-1', 'f:room-b:wall-1']);
+		expect(merged.find((merge) => merge.key === 'f:room-b:wall-1')).toMatchObject({
+			segmentId: 'wall-1',
+			start: [10, 0],
+			end: [14, 0],
+			straight: true
+		});
+	});
+
+	it('keeps curved wall samples and never invents straight chord semantics', () => {
+		// A two-chord arc through (1,1): the sample path (2√2) is longer than
+		// the (0,0)→(2,0) chord (2), so the wall is curved and must keep its
+		// per-sample spans instead of a straight merge.
+		const merged = dedupeWallSpans([
+			wallSpan('arc', [0, 0], [1, 1]),
+			wallSpan('arc', [1, 1], [2, 0])
 		]);
+		expect(merged).toHaveLength(1);
+		expect(merged[0]).toMatchObject({ key: 'arc', segmentId: 'arc', straight: false });
+		expect(merged[0].samples).toHaveLength(2);
 	});
 
 	it('resolves the midpoint of a negative-slope wall on the true geometry', () => {
@@ -310,6 +355,59 @@ describe('P23.2 negative-slope wall geometry', () => {
 		expect(resolution.kind).toBe('snap');
 		if (resolution.kind !== 'snap') return;
 		expect(resolution.candidate).toMatchObject({ kind: 'wall-intersection', point: [2, 2] });
+	});
+});
+
+describe('P23.2 legacy room-qualified wall identity', () => {
+	it('resolves a legacy room wall-1 without contamination from another room wall-1', () => {
+		const geometry = emptyGeometry();
+		geometry.queries.spans.push(
+			...negativeSlopeSpans('wall-1', 'room-a').map((span) => ({
+				...span,
+				wallKey: 'f:room-a:wall-1'
+			}))
+		);
+		for (let start = 0; start < 4; start += 1) {
+			geometry.queries.spans.push({
+				...wallSpan('wall-1', [10 + start, 0], [11 + start, 0], 'room-b', start),
+				wallKey: 'f:room-b:wall-1'
+			});
+		}
+		// Pointer near room B wall-1 start: the true junction lives there.
+		// Without room-qualified identity the two walls merge into one fake
+		// wall and no junction exists at (10,0).
+		const resolution = resolveLayoutSnap(geometry, [10.03, 0.02], { pixelsPerMeter: 50 });
+		expect(resolution.kind).toBe('snap');
+		if (resolution.kind !== 'snap') return;
+		expect(resolution.candidate).toMatchObject({
+			kind: 'junction',
+			point: [10, 0],
+			sourceId: 'f:room-b:wall-1#start'
+		});
+	});
+});
+
+describe('P23.2 curved wall snapping', () => {
+	it('snaps to the curve itself, not a straight chord through its interior', () => {
+		const geometry = emptyGeometry();
+		geometry.queries.spans.push(wallSpan('arc', [0, 0], [1, 1]), wallSpan('arc', [1, 1], [2, 0]));
+		// Pointer at the curve apex (1,1) — on the curve, far from the chord.
+		const atApex = resolveLayoutSnap(geometry, [1.0, 1.0], { pixelsPerMeter: 50 });
+		expect(atApex.kind).toBe('snap');
+		if (atApex.kind !== 'snap') return;
+		expect(atApex.candidate).toMatchObject({ kind: 'wall-span', point: [1, 1] });
+	});
+
+	it('never invents a straight midpoint on a curved wall', () => {
+		const geometry = emptyGeometry();
+		geometry.queries.spans.push(wallSpan('arc', [0, 0], [1, 1]), wallSpan('arc', [1, 1], [2, 0]));
+		// Pointer near the chord interior (1,0) is NOT on the curve: only the
+		// grid fallback may win. A straight-wall merge would invent a
+		// wall-midpoint here.
+		const atChord = resolveLayoutSnap(geometry, [1.0, 0.05], { pixelsPerMeter: 50 });
+		expect(atChord.kind).toBe('snap');
+		if (atChord.kind !== 'snap') return;
+		expect(atChord.candidate.kind).toBe('grid');
 	});
 });
 
@@ -356,6 +454,26 @@ describe('P23.2 moving-target exclusion by typed owner', () => {
 		expect(excluded.kind).toBe('snap');
 		if (excluded.kind !== 'snap') return;
 		expect(excluded.candidate.kind).toBe('grid');
+	});
+
+	it('excludes intersections involving the moving wall even though their owner is composite', () => {
+		const geometry = emptyGeometry();
+		geometry.queries.spans.push(wallSpan('h', [0, 0], [4, 0]), wallSpan('v', [2, -1], [2, 3]));
+		// Without exclusion the proper crossing at (2,0) wins by rank.
+		const unexcluded = resolveLayoutSnap(geometry, [2.03, 0.02], { pixelsPerMeter: 50 });
+		expect(unexcluded.kind).toBe('snap');
+		if (unexcluded.kind !== 'snap') return;
+		expect(unexcluded.candidate).toMatchObject({ kind: 'wall-intersection', point: [2, 0] });
+		// Dragging wall 'h' excludes its own intersections ('h~v' can never
+		// exact-match the bare exclusion id), so the crossing is removed
+		// before classification: the static wall's nearest point wins.
+		const excluded = resolveLayoutSnap(geometry, [2.03, 0.02], { pixelsPerMeter: 50 }, {
+			excludeSourceIds: new Set(['h'])
+		});
+		expect(excluded.kind).toBe('snap');
+		if (excluded.kind !== 'snap') return;
+		expect(excluded.candidate.kind).not.toBe('wall-intersection');
+		expect(excluded.candidate.kind).toBe('wall-span');
 	});
 });
 
@@ -440,5 +558,28 @@ describe('P23.2 opening drag resolution (offset space)', () => {
 	it('returns none when the acquisition radius is invalid', () => {
 		const resolution = resolveOpeningDragSnap(emptyGeometry(), host, 'door', 0.53, 0.9, { pixelsPerMeter: 0 });
 		expect(resolution.kind).toBe('none');
+	});
+
+	it('ignores openings on same-named segments of other legacy rooms', () => {
+		const geometry = emptyGeometry();
+		// Host door on room 'r' wall 'w' at offset 0.5..1.4.
+		geometry.queries.spans.push(openingSpan('door', 'w', [0.5, 0], [1.4, 0]));
+		// Another room owns a different wall 'w' with its own opening at
+		// authored offset 3.0..3.9 (room-scoped identity).
+		geometry.queries.spans.push({
+			...openingSpan('other', 'w', [3, 0], [3.9, 0]),
+			roomId: 'other-room',
+			wallKey: 'f:other-room:w'
+		});
+		const resolution = resolveOpeningDragSnap(geometry, host, 'door', 2.9, 0.9, {
+			pixelsPerMeter: 50,
+			snapRadiusCssPx: 100
+		});
+		expect(resolution.kind).toBe('snap');
+		if (resolution.kind !== 'snap') return;
+		// The other room's opening must NOT be a candidate: the host wall
+		// midpoint resolves instead (opening-edge would win otherwise).
+		expect(resolution.candidate.kind).toBe('wall-midpoint');
+		expect(resolution.candidate.offset).toBeCloseTo(2.55, 6);
 	});
 });

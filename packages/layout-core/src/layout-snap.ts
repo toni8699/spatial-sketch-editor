@@ -180,11 +180,16 @@ export function pickSnapWinner(
 	return best;
 }
 
-/** Build endpoint, midpoint, and nearest-span candidates for one straight span. */
+/**
+ * Build endpoint, midpoint, and nearest-span candidates for one straight span.
+ * `ownerId` is the moving-target exclusion identity — for merged wall spans
+ * this is the bare `segmentId`, never the composite source identity.
+ */
 export function spanSnapCandidates(
 	span: { id: string; start: LayoutVec2; end: LayoutVec2 },
 	point: LayoutVec2,
-	radius: number
+	radius: number,
+	ownerId = span.id
 ): SnapCandidate[] {
 	const candidates: SnapCandidate[] = [];
 	const length = Math.hypot(span.end[0] - span.start[0], span.end[1] - span.start[1]);
@@ -199,7 +204,7 @@ export function spanSnapCandidates(
 				point: [candidatePoint[0], candidatePoint[1]],
 				kind: 'junction',
 				sourceId: `${span.id}#${key}`,
-				ownerId: span.id,
+				ownerId,
 				distance
 			});
 		}
@@ -215,7 +220,7 @@ export function spanSnapCandidates(
 				point: [midpoint[0], midpoint[1]],
 				kind: 'wall-midpoint',
 				sourceId: span.id,
-				ownerId: span.id,
+				ownerId,
 				distance
 			});
 		}
@@ -232,7 +237,7 @@ export function spanSnapCandidates(
 			point: [projected[0], projected[1]],
 			kind: 'wall-span',
 			sourceId: span.id,
-			ownerId: span.id,
+			ownerId,
 			distance: projectedDistance
 		});
 	}
@@ -348,6 +353,35 @@ export function orthogonalGuideCandidates(
 	return candidates;
 }
 
+/** Nearest-point (wall-span) candidates for one sample chunk of a curved wall. */
+function curvedSpanNearestCandidates(
+	sample: CompiledQuerySpan,
+	wallKey: string,
+	index: number,
+	point: LayoutVec2,
+	radius: number,
+	ownerId: string
+): SnapCandidate[] {
+	const dx = sample.end[0] - sample.start[0];
+	const dz = sample.end[1] - sample.start[1];
+	const squared = dx * dx + dz * dz;
+	if (squared <= 0) return [];
+	const rawT = ((point[0] - sample.start[0]) * dx + (point[1] - sample.start[1]) * dz) / squared;
+	const amount = Math.min(1, Math.max(0, rawT));
+	const projected: LayoutVec2 = [sample.start[0] + dx * amount, sample.start[1] + dz * amount];
+	const distance = Math.hypot(projected[0] - point[0], projected[1] - point[1]);
+	if (distance > radius) return [];
+	return [
+		{
+			point: projected,
+			kind: 'wall-span',
+			sourceId: `${wallKey}#sample:${index}`,
+			ownerId,
+			distance
+		}
+	];
+}
+
 /**
  * Valid wall-wall intersection candidates across the compiled wall spans
  * (endpoint-on-interior and proper-crossing classes only). Collinear
@@ -417,13 +451,38 @@ export function resolveLayoutSnap(
 	}
 
 	// Wall endpoint/midpoint/nearest-span candidates. Per-sample spans of one
-	// segment merge to the full-length span so candidates reflect authored
-	// walls, not sample boundaries.
-	const wallSpans = dedupeWallSpans(geometry.queries.spans.filter((span) => span.kind === 'wall'));
-	for (const span of wallSpans) {
-		candidates.push(...spanSnapCandidates(span, point, radius));
+	// wall merge to the full-length span so candidates reflect authored
+	// walls, not sample boundaries. Straight walls get the full family
+	// (endpoints/midpoint/nearest-point); curved walls keep their per-sample
+	// spans and only provide nearest-point candidates — a chord through a
+	// curve must never masquerade as the wall, and P23.2 midpoint semantics
+	// are straight-wall-scoped.
+	const wallMerges = dedupeWallSpans(geometry.queries.spans.filter((span) => span.kind === 'wall'));
+	for (const merge of wallMerges) {
+		if (merge.straight) {
+			candidates.push(
+				...spanSnapCandidates(
+					{ id: merge.key, start: merge.start, end: merge.end },
+					point,
+					radius,
+					merge.segmentId
+				)
+			);
+			continue;
+		}
+		for (const [index, sample] of merge.samples.entries()) {
+			candidates.push(...curvedSpanNearestCandidates(sample, merge.key, index, point, radius, merge.segmentId));
+		}
 	}
-	candidates.push(...wallIntersectionSnapCandidates(wallSpans, point, radius));
+	// Wall-wall intersections involve straight walls only. Intersection
+	// owners are composite (`a~b`), so an exact owner match can never
+	// exclude them: walls owned by the moving target are removed before
+	// classifying instead.
+	const excludedSegmentIds = input.excludeSourceIds;
+	const intersectionSpans = wallMerges
+		.filter((merge) => merge.straight && !excludedSegmentIds?.has(merge.segmentId))
+		.map((merge) => ({ id: merge.key, start: merge.start, end: merge.end }));
+	candidates.push(...wallIntersectionSnapCandidates(intersectionSpans, point, radius));
 
 	for (const span of geometry.queries.spans) {
 		if (span.kind !== 'opening' || !span.openingId) continue;
@@ -521,6 +580,11 @@ export type OpeningDragSnapResolution =
  * creation (`createDefaultOpening`), so drag and create share one grid
  * semantic.
  *
+ * `hostSpan.roomId` disambiguates same-named legacy segments: an opening on
+ * another room's same-named segment is a different wall and never becomes a
+ * candidate (wall-first wall ids are document-global, so room scoping does
+ * not apply there).
+ *
  * `hostSpan` must be the host wall span in the caller's frame (the room
  * boundary segment the opening lives on): offsets are measured from its
  * start, so shared walls traversed in reverse resolve correctly without
@@ -530,7 +594,7 @@ export type OpeningDragSnapResolution =
  */
 export function resolveOpeningDragSnap(
 	geometry: CompiledLayoutGeometry,
-	hostSpan: { segmentId: string; start: LayoutVec2; end: LayoutVec2 },
+	hostSpan: { segmentId: string; roomId?: string; start: LayoutVec2; end: LayoutVec2 },
 	draggedOpeningId: string,
 	pointerOffset: number,
 	openingWidth: number,
@@ -575,9 +639,13 @@ export function resolveOpeningDragSnap(
 
 	// Other openings' edges on the same wall — nearest-edge alignment: the
 	// dragged opening's approaching edge lands on the reference edge.
+	// Legacy segment ids are only unique inside their room, so an opening on
+	// a same-named segment of another room belongs to a different wall.
 	for (const other of geometry.queries.spans) {
 		if (other.kind !== 'opening' || !other.openingId) continue;
 		if (other.segmentId !== hostSpan.segmentId || other.openingId === draggedOpeningId) continue;
+		const roomScoped = other.wallKey !== undefined && other.wallKey !== other.segmentId;
+		if (roomScoped && other.roomId !== hostSpan.roomId) continue;
 		const edges: Array<[LayoutVec2, 'start' | 'end']> = [
 			[other.start, 'start'],
 			[other.end, 'end']
@@ -628,30 +696,67 @@ export function resolveOpeningDragSnap(
 }
 
 /**
- * Merge per-sample wall spans of one segment into the full-length span so
+ * One wall's span set after per-wall deduplication. `straight` gates which
+ * semantics consumers may use: midpoint/endpoint families are straight-wall
+ * only, curved walls snap via per-sample nearest-point candidates.
+ */
+export type MergedWallSpan = {
+	/**
+	 * Collision-safe wall identity: the document-global wall id (wall-first)
+	 * or a room-qualified key for legacy segments (unique only per room).
+	 */
+	key: string;
+	/** Bare segment id — the owner identity for moving-target exclusion. */
+	segmentId: string;
+	/** Farthest endpoint pair over every span endpoint (true extent for straight walls). */
+	start: LayoutVec2;
+	end: LayoutVec2;
+	/**
+	 * False for curved walls: consumers must not invent straight midpoint or
+	 * endpoint semantics from the chord, and must use `samples` for
+	 * nearest-point candidates.
+	 */
+	straight: boolean;
+	/** Per-sample compiled spans (the nearest-point candidate source for curved walls). */
+	samples: readonly CompiledQuerySpan[];
+};
+
+/**
+ * Merge per-sample wall spans of one wall into the full-length span so
  * candidate generation works on authored walls, not sample boundaries.
  *
  * The compiler emits one `wall` query span per sample interval (0.25 m for
  * straight lines), and a shared wall compiles spans per incident room —
  * reversed room refs traverse the wall the other way, so `startDistance` is
  * measured from each room's own segment start and cannot be compared across
- * rooms. The merged span is therefore the **farthest true endpoint pair**
- * among every span endpoint: for straight walls (the snap scope) that is
- * exactly the authored wall start/end for any slope or traversal direction.
- * A bounding-box merge would be wrong here — a negative-slope wall
- * `(0,4) → (4,0)` would collapse to the anti-diagonal `(0,0) → (4,4)`.
+ * rooms. Spans are grouped by the compiled `wallKey` (wall-first: the
+ * document-global segment id; legacy: floor+room+segment), so same-named
+ * segments of different legacy rooms can never collapse into one fake wall.
+ *
+ * For straight walls the merged extent is the **farthest true endpoint pair**
+ * among every span endpoint — exactly the authored wall start/end for any
+ * slope or traversal direction. A bounding-box merge would be wrong here — a
+ * negative-slope wall `(0,4) → (4,0)` would collapse to the anti-diagonal
+ * `(0,0) → (4,4)`.
+ *
+ * Curved walls (auto-bezier) are detected geometrically — the sample path
+ * is longer than the endpoint chord — and keep their per-sample spans:
+ * snapping to a curved wall means nearest-point on the actual curve, never
+ * a straight chord through its interior.
  */
 export function dedupeWallSpans(
 	spans: readonly CompiledQuerySpan[]
-): Array<{ id: string; start: LayoutVec2; end: LayoutVec2 }> {
-	const bySegment = new Map<string, CompiledQuerySpan[]>();
+): MergedWallSpan[] {
+	const byWall = new Map<string, CompiledQuerySpan[]>();
 	for (const span of spans) {
-		const list = bySegment.get(span.segmentId) ?? [];
+		const key = span.wallKey ?? span.segmentId;
+		const list = byWall.get(key) ?? [];
 		list.push(span);
-		bySegment.set(span.segmentId, list);
+		byWall.set(key, list);
 	}
-	const merged: Array<{ id: string; start: LayoutVec2; end: LayoutVec2 }> = [];
-	for (const [segmentId, list] of bySegment) {
+	const merged: MergedWallSpan[] = [];
+	for (const [key, list] of byWall) {
+		const segmentId = list[0]!.segmentId;
 		const points: LayoutVec2[] = [];
 		for (const span of list) {
 			points.push(span.start, span.end);
@@ -675,10 +780,28 @@ export function dedupeWallSpans(
 				}
 			}
 		}
+		// Collinearity against the endpoint chord. Path-length comparison
+		// would be wrong for shared walls (every room re-samples the full
+		// wall, so the summed path exceeds the chord even for straight
+		// walls); every sample endpoint must instead lie on the chord line.
+		const chordX = best[1][0] - best[0][0];
+		const chordZ = best[1][1] - best[0][1];
+		const chordLength = Math.hypot(chordX, chordZ);
+		const tolerance = Math.max(1e-9, chordLength * 1e-6);
+		const straight = points.every(
+			([x, z]) => Math.abs(chordX * (z - best[0][1]) - chordZ * (x - best[0][0])) <= tolerance
+		);
 		const ordered = lexicographicallySmaller(best[0], best[1], best[1], best[0])
 			? [best[0], best[1]]
 			: [best[1], best[0]];
-		merged.push({ id: segmentId, start: [...ordered[0]], end: [...ordered[1]] });
+		merged.push({
+			key,
+			segmentId,
+			start: [...ordered[0]],
+			end: [...ordered[1]],
+			straight,
+			samples: list
+		});
 	}
 	return merged;
 }

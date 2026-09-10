@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { chopinProject } from '$lib/content/chopin-project';
-import { compileLayoutGeometry } from '$lib/layout/layout-geometry';
+import { compileLayoutGeometry, compileWallFirstLayoutGeometry } from '$lib/layout/layout-geometry';
+import { LAYOUT_WALL_FIRST_FORMAT_VERSION } from '$lib/layout/layout-compat';
+import type { LayoutDocumentWallFirst } from '$lib/layout/layout-wall-first-codec';
 import type { LayoutDocument } from '$lib/layout/layout-types';
 import {
 	g1AutoBezierDocument,
@@ -247,6 +249,76 @@ describe('compileLayoutGeometry', () => {
 			new Set(['room-rectangle', 'room-second'])
 		);
 		expect(new Set(spans.map((span) => span.id)).size).toBe(spans.length);
+		// P23.2 review round 2 / B1: legacy wall identity is room-qualified —
+		// same-named segments of different rooms carry distinct wallKeys so
+		// snap/align consumers never merge them into one fake wall.
+		const floorId = document.floors[0]!.id;
+		expect(new Set(spans.map((span) => span.wallKey))).toEqual(
+			new Set([
+				`${floorId}:room-rectangle:${sharedId}`,
+				`${floorId}:room-second:${sharedId}`
+			])
+		);
+	});
+
+	// P23.2 review round 2 / B1: wall-first wall ids are document-global, so
+	// shared walls keep one wallKey across every room that references them.
+	it('keeps wall-first wall identity document-global across shared rooms', () => {
+		const document: LayoutDocumentWallFirst = {
+			units: 'meters',
+			formatVersion: LAYOUT_WALL_FIRST_FORMAT_VERSION,
+			floor: { id: 'floor-1', name: 'Floor 1', elevation: 0, height: 3 },
+			junctions: [
+				{ id: 'j-a', point: [0, 0] },
+				{ id: 'j-b', point: [6, 0] },
+				{ id: 'j-c', point: [6, 4] },
+				{ id: 'j-d', point: [0, 4] }
+			],
+			walls: [
+				{ id: 'wall-a', startJunctionId: 'j-a', endJunctionId: 'j-b', role: 'boundary', thickness: 0.2, height: 3 },
+				{ id: 'wall-b', startJunctionId: 'j-b', endJunctionId: 'j-c', role: 'boundary', thickness: 0.2, height: 3 },
+				{ id: 'wall-c', startJunctionId: 'j-c', endJunctionId: 'j-d', role: 'boundary', thickness: 0.2, height: 3 },
+				{ id: 'wall-d', startJunctionId: 'j-d', endJunctionId: 'j-a', role: 'boundary', thickness: 0.2, height: 3 }
+			],
+			rooms: [
+				{
+					id: 'room-main',
+					name: 'Main Room',
+					boundary: [
+						{ wallId: 'wall-a', direction: 'forward' },
+						{ wallId: 'wall-b', direction: 'forward' },
+						{ wallId: 'wall-c', direction: 'forward' },
+						{ wallId: 'wall-d', direction: 'forward' }
+					],
+					floorThickness: 0.1,
+					ceilingThickness: 0.1
+				},
+				{
+					id: 'room-second',
+					name: 'Second Room',
+					// Shares wall-a reversed — the same physical wall.
+					boundary: [
+						{ wallId: 'wall-a', direction: 'reverse' },
+						{ wallId: 'wall-d', direction: 'reverse' },
+						{ wallId: 'wall-c', direction: 'reverse' },
+						{ wallId: 'wall-b', direction: 'reverse' }
+					],
+					floorThickness: 0.1,
+					ceilingThickness: 0.1
+				}
+			],
+			openings: [],
+			objects: []
+		};
+		const { geometry } = compileWallFirstLayoutGeometry(document);
+		const wallASpans = geometry.queries.spans.filter(
+			(span) => span.kind === 'wall' && span.segmentId === 'wall-a'
+		);
+		expect(wallASpans.length).toBeGreaterThan(0);
+		expect(new Set(wallASpans.map((span) => span.roomId))).toEqual(
+			new Set(['room-main', 'room-second'])
+		);
+		expect(new Set(wallASpans.map((span) => span.wallKey))).toEqual(new Set(['wall-a']));
 	});
 
 	// P23 review round 1 / B1: the compiler cutover briefly compiled only

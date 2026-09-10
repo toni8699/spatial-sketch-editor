@@ -16,7 +16,7 @@
  */
 import type { LayoutVec2 } from './layout-types';
 import type { CompiledLayoutGeometry, CompiledQuerySpan } from './layout-geometry-types';
-import { dedupeWallSpans, objectFootprintCenter } from './layout-snap';
+import { dedupeWallSpans, objectFootprintCenter, type MergedWallSpan } from './layout-snap';
 
 export type AlignAxis = 'x' | 'z';
 export type AlignAxisAction = 'min' | 'center' | 'max';
@@ -89,8 +89,9 @@ function spansAabb(spans: readonly CompiledQuerySpan[]): Bounds2 | null {
 
 function referenceBounds(
 	geometry: CompiledLayoutGeometry,
-	reference: AlignReference
-): { bounds: Bounds2; wallSpan?: { start: LayoutVec2; end: LayoutVec2 } } | null {
+	reference: AlignReference,
+	ownerRoomId?: string
+): { bounds: Bounds2; wallSpan?: MergedWallSpan } | null {
 	if (reference.kind === 'object') {
 		for (const polygon of geometry.queries.polygons) {
 			if (polygon.kind !== 'object-footprint' || polygon.objectId !== reference.id) continue;
@@ -104,14 +105,27 @@ function referenceBounds(
 		const bounds = spansAabb(roomSpans);
 		return bounds ? { bounds } : null;
 	}
-	// Wall reference: the compiled wall spans for this segment (wall) ID. The
-	// compiler emits one span per sample interval (0.25 m for straight
-	// lines), so the bounded Center-on-Wall span must be the merged
-	// full-length extent, never a single sample chunk.
-	const wallSpans = geometry.queries.spans.filter((span) => span.kind === 'wall' && span.segmentId === reference.id);
+	// Wall reference: the compiled wall spans for this segment (wall) ID.
+	// Wall-first wall ids are document-global; legacy segment ids are only
+	// unique inside their room, so the reference resolves against the
+	// selected object's room. The compiler emits one span per sample
+	// interval (0.25 m for straight lines), so the bounded Center-on-Wall
+	// span must be the merged full-length extent, never a single sample
+	// chunk.
+	const wallSpans = geometry.queries.spans.filter(
+		(span) =>
+			span.kind === 'wall' &&
+			span.segmentId === reference.id &&
+			(span.wallKey === undefined || span.wallKey === span.segmentId || span.roomId === ownerRoomId)
+	);
 	if (wallSpans.length === 0) return null;
 	const merged = dedupeWallSpans(wallSpans);
-	return { bounds: spansAabb(wallSpans)!, wallSpan: merged[0] };
+	const bounds = spansAabb(wallSpans);
+	if (!bounds) return null;
+	// Center-on-Wall is a straight-wall action (P23.2 scope): a curved wall
+	// resolves to bounds only and is rejected by the planner below.
+	const wallSpan = merged[0]!.straight ? merged[0] : undefined;
+	return { bounds, wallSpan };
 }
 
 function axisIndex(axis: AlignAxis): 0 | 1 {
@@ -143,7 +157,7 @@ export function planLayoutObjectAlign(
 		return { kind: 'rejected', code: 'unsupported_reference', message: 'Center on Wall requires a Wall reference' };
 	}
 
-	const resolved = referenceBounds(geometry, reference);
+	const resolved = referenceBounds(geometry, reference, object.roomId);
 	if (!resolved) {
 		return {
 			kind: 'rejected',
@@ -163,7 +177,14 @@ export function planLayoutObjectAlign(
 
 	const position: [number, number, number] = [...object.position] as [number, number, number];
 	if (action === 'center-on-wall') {
-		const span = resolved.wallSpan!;
+		const span = resolved.wallSpan;
+		if (!span) {
+			return {
+				kind: 'rejected',
+				code: 'unsupported_reference',
+				message: 'Center on Wall requires a straight Wall reference'
+			};
+		}
 		// Canonical compiled wall geometry: project the object footprint
 		// center onto the wall span and move the footprint center there.
 		const center = objectFootprintCenter(object.planFootprint)!;

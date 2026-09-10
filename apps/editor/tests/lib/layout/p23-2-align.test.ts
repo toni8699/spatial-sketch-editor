@@ -363,6 +363,50 @@ describe('P23.2 center-on-wall with negative slope', () => {
 		expect(plan.position[1]).toBe(0.5);
 	});
 
+	it('rejects center-on-wall for a curved wall but keeps bounds actions', () => {
+		const geometry = emptyGeometry();
+		geometry.objects.push(
+			boxObject('box', [1, 0.5, 0], [[1, 0], [3, 0], [3, 1], [1, 1]])
+		);
+		// Two-chord arc through (1,1): sample path longer than the chord.
+		geometry.queries.spans.push(wallSpan('arc', [0, 0], [1, 1]), wallSpan('arc', [1, 1], [2, 0]));
+		expect(planLayoutObjectAlign(geometry, 'box', { kind: 'wall', id: 'arc' }, 'center-on-wall')).toMatchObject({
+			kind: 'rejected',
+			code: 'unsupported_reference'
+		});
+		// Bounds actions still resolve from the compiled sample AABB: box
+		// max x 3 aligns to the arc AABB max x 2 → x=0.
+		expect(planLayoutObjectAlign(geometry, 'box', { kind: 'wall', id: 'arc' }, 'max', 'x')).toMatchObject({
+			kind: 'success',
+			position: [0, 0.5, 0]
+		});
+	});
+
+	it('resolves a legacy wall reference inside the selected object room only', () => {
+		const geometry = emptyGeometry();
+		const box = originBox();
+		box.roomId = 'room-a';
+		geometry.objects.push(box);
+		// Room 'a' wall-1 is the diagonal (0,4) → (4,0) (x bounds 0..4); room
+		// 'b' wall-1 is the horizontal (10,0) → (14,0) (x bounds 10..14).
+		for (let start = 0; start < 4; start += 1) {
+			geometry.queries.spans.push({
+				...wallSpan('wall-1', [start, 4 - start], [start + 1, 3 - start], 'room-a', start),
+				wallKey: 'f:room-a:wall-1'
+			});
+			geometry.queries.spans.push({
+				...wallSpan('wall-1', [10 + start, 0], [11 + start, 0], 'room-b', start),
+				wallKey: 'f:room-b:wall-1'
+			});
+		}
+		// Box footprint x 0..2 (max 2) aligns to room-a wall-1 max x=4 → x=2.
+		// Resolving against room-b wall-1 would give x=12.
+		expect(planLayoutObjectAlign(geometry, 'box', { kind: 'wall', id: 'wall-1' }, 'max', 'x')).toMatchObject({
+			kind: 'success',
+			position: [2, 0.5, 0]
+		});
+	});
+
 	it('merges reversed shared negative-slope spans for center-on-wall', () => {
 		const geometry = emptyGeometry();
 		geometry.objects.push(

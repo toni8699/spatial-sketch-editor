@@ -170,6 +170,15 @@ export type CompiledQuerySpan = CompiledIdentity & {
 	roomId: string;
 	segmentId: string;
 	openingId?: string;
+	/**
+	 * Collision-safe wall identity for wall-bound spans. Wall-first segment
+	 * ids are document-global, so `wallKey` is the bare `segmentId`; legacy
+	 * segment ids are only unique inside their room, so `wallKey` is
+	 * `${floorId}:${roomId}:${segmentId}`. Snap/align consumers must group
+	 * and match walls by `wallKey` (falling back to `segmentId` for
+	 * hand-built records), never by `segmentId` alone.
+	 */
+	wallKey?: string;
 };
 export type CompiledQueryPolygon = CompiledIdentity & {
 	kind: 'room-floor' | 'object-footprint';

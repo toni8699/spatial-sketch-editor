@@ -83,6 +83,14 @@ export type CompilerSource = {
 	/** One entry per floor, in document order (P23 review round 1 / B1). */
 	floors: readonly CompilerFloorEntry[];
 	objects: readonly LayoutObject[];
+	/**
+	 * Whether wall segment ids are document-global (wall-first: `'document'`)
+	 * or only unique inside their room (legacy: `'room'`). Snap/align wall
+	 * identity derives from this via the per-span `wallKey`; legacy segments
+	 * are qualified by floor+room so same-named segments of different rooms
+	 * never collapse into one wall.
+	 */
+	wallIdScope?: 'document' | 'room';
 };
 
 /** One floor's worth of compiler input: the floor frame plus its rooms. */
@@ -104,7 +112,7 @@ export function legacyCompilerSource(document: LayoutDocument): CompilerSource {
 			openings: room.openings
 		}))
 	}));
-	return { floors, objects: document.objects };
+	return { floors, objects: document.objects, wallIdScope: 'room' };
 }
 
 /**
@@ -189,7 +197,8 @@ export function compileWallFirstLayoutGeometry(
 
 	return compileLayoutGeometrySource({
 		floors: [{ floor: document.floor, rooms }],
-		objects: document.objects
+		objects: document.objects,
+		wallIdScope: 'document'
 	});
 }
 
@@ -204,6 +213,7 @@ export function compileLayoutGeometrySource(source: CompilerSource): CompiledLay
 	const floors: CompiledFloor[] = [];
 	const rooms: CompiledRoom[] = [];
 	const queryBuilder = createQueryGeometryBuilder();
+	const wallIdScope = source.wallIdScope ?? 'document';
 
 	const objects = compileObjects(source.objects, issues, queryBuilder);
 
@@ -239,7 +249,13 @@ export function compileLayoutGeometrySource(source: CompilerSource): CompiledLay
 			issues.push(...roomIssues);
 			if (hasBlockingLayoutIssues(roomIssues)) continue;
 
-			const compiledRoom = compileRoom(roomSource, floor, prepared.segments as SampledSegment[], queryBuilder);
+			const compiledRoom = compileRoom(
+				roomSource,
+				floor,
+				prepared.segments as SampledSegment[],
+				queryBuilder,
+				wallIdScope
+			);
 			rooms.push(compiledRoom);
 			floorRoomIds.push(roomSource.room.id);
 			includeBounds3(floorMin, floorMax, compiledRoom.bounds3.min, compiledRoom.bounds3.max);
@@ -299,7 +315,8 @@ function compileRoom(
 	roomSource: CompilerRoomSource,
 	floor: CompilerFloorSource,
 	sampledSegments: SampledSegment[],
-	queryBuilder: QueryGeometryBuilder
+	queryBuilder: QueryGeometryBuilder,
+	wallIdScope: 'document' | 'room'
 ): CompiledRoom {
 	const room = roomSource.room;
 	const floorElevation = floor.elevation;
@@ -368,7 +385,15 @@ function compileRoom(
 	const roomBounds2 = roomBounds2FromWalls(walls, floorPolygon);
 	const roomBounds3 = roomBounds3FromParts(floorPolygon, walls, floorElevation, ceilingElevation, room.floorThickness, room.ceilingThickness);
 
-	emitRoomQueryRecords(queryBuilder, floor, { id: room.id, boundary: roomSource.boundary }, walls, floorPolygon, roomBounds3);
+	emitRoomQueryRecords(
+		queryBuilder,
+		floor,
+		{ id: room.id, boundary: roomSource.boundary },
+		walls,
+		floorPolygon,
+		roomBounds3,
+		wallIdScope
+	);
 
 	return {
 		id: geometryId(['room', floor.id, room.id]),
@@ -529,7 +554,8 @@ function emitRoomQueryRecords(
 	room: Pick<LayoutRoom, 'id' | 'boundary'>,
 	walls: readonly CompiledWall[],
 	floorPolygon: readonly LayoutVec2[],
-	roomBounds3: LayoutBounds3
+	roomBounds3: LayoutBounds3,
+	wallIdScope: 'document' | 'room'
 ): void {
 	const roomIdParts = ['room', floor.id, room.id];
 
@@ -563,6 +589,8 @@ function emitRoomQueryRecords(
 	}
 
 	for (const wall of walls) {
+		const wallKey =
+			wallIdScope === 'room' ? `${floor.id}:${room.id}:${wall.segmentId}` : wall.segmentId;
 		for (let index = 1; index < wall.samples.length; index += 1) {
 			const start = wall.samples[index - 1]!;
 			const end = wall.samples[index]!;
@@ -580,7 +608,8 @@ function emitRoomQueryRecords(
 					wall.segmentId,
 					undefined,
 					start.t,
-					end.t
+					end.t,
+					wallKey
 				)
 			);
 		}
@@ -599,7 +628,10 @@ function emitRoomQueryRecords(
 					floor.id,
 					room.id,
 					wall.segmentId,
-					opening.openingId
+					opening.openingId,
+					undefined,
+					undefined,
+					wallKey
 				)
 			);
 		}
@@ -758,9 +790,13 @@ function spanRecord(
 	segmentId: string,
 	openingId?: string,
 	startT?: number,
-	endT?: number
+	endT?: number,
+	wallKey?: string
 ) {
 	const aabb = bounds2(Math.min(start[0], end[0]), Math.min(start[1], end[1]), Math.max(start[0], end[0]), Math.max(start[1], end[1]));
+	// `wallKey` derives from parts already in the cache key (floor/room/
+	// segment), so it deliberately does not participate in the cache key:
+	// legacy cache keys stay byte-identical to the pre-cutover compiler.
 	return {
 		id: geometryId(parts),
 		cacheKey: cacheKeyOf([
@@ -789,7 +825,8 @@ function spanRecord(
 		floorId,
 		roomId,
 		segmentId,
-		...(openingId ? { openingId } : {})
+		...(openingId ? { openingId } : {}),
+		...(wallKey ? { wallKey } : {})
 	};
 }
 

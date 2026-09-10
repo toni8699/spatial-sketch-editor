@@ -1489,7 +1489,7 @@
 				// segments keep the legacy linear grid snap.
 				const resolution = resolveOpeningDragSnap(
 					preview.geometry,
-					{ segmentId: segment.id, start: segment.start, end: segment.end },
+					{ segmentId: segment.id, roomId: openingDrag.roomId, start: segment.start, end: segment.end },
 					openingDrag.openingId,
 					projection.offset,
 					width,
