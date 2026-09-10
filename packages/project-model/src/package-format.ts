@@ -3,9 +3,15 @@
  *
  * ZIP/Blob/File orchestration stays in the editor. This module owns only the
  * deterministic, browser/Node-safe values consumed by that orchestration.
+ *
+ * P23.0 stage 2: the manifest carries an explicit package `formatVersion`
+ * (separate from the nested Scene/Layout schema versions — H5 §10.1).
  */
 
 import { sha256Bytes } from './package-sha';
+
+/** Portable package format version written by P23.0 stage-2 writers. */
+export const PACKAGE_MANIFEST_FORMAT_VERSION = 2 as const;
 
 export type SupportedMime = 'image/png' | 'image/webp' | 'image/jpeg';
 
@@ -36,6 +42,16 @@ export interface PackageManifestPackage {
 	createdAt: string;
 	generator: string;
 	documentTitle: string;
+	/**
+	 * P23.0 (stage 2): portable package format version. A SEPARATE concept
+	 * from the nested Scene/Layout schema versions — package orchestration
+	 * must never dispatch on the generator string, and the nested documents
+	 * identify themselves (`layout.formatVersion: 4` wall-first, `scene
+	 * .formatVersion: 1` world-local, missing = recognized legacy). Old
+	 * manifests without the key remain importable through the recognized
+	 * legacy decoder path.
+	 */
+	formatVersion: number;
 }
 
 export interface PackageManifestTextureEntry {
@@ -130,7 +146,8 @@ export function buildPackageManifest(input: {
 			id: input.packageId,
 			createdAt: input.createdAt.toISOString(),
 			generator: 'editor-5.4',
-			documentTitle: input.documentTitle || 'scene'
+			documentTitle: input.documentTitle || 'scene',
+			formatVersion: PACKAGE_MANIFEST_FORMAT_VERSION
 		},
 		textures: [...input.textures]
 	};

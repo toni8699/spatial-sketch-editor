@@ -75,6 +75,10 @@ function readWorldLocalRoomId(
 	if (!options.worldLocal) return readRoomId(input, key, path, issues);
 	const value = input[key];
 	if (value === undefined) return undefined;
+	// P23.0b: world-local documents must never carry Room ownership. A present
+	// value is rejected by name (and reported here so the aggregate issue check
+	// sees it); an absent key is legal — world coordinates — and must not fail
+	// the `roomId === undefined` guards below.
 	addIssue(
 		issues,
 		`${path}.${key}`,
@@ -277,7 +281,7 @@ export function parseModelEntity(
 	if (
 		!id ||
 		!name ||
-		roomId === undefined ||
+		(!options.worldLocal && roomId === undefined) ||
 		!assetId ||
 		!fallback ||
 		!transform ||
@@ -355,7 +359,7 @@ export function parsePrimitiveEntity(
 	if (
 		!id ||
 		!name ||
-		roomId === undefined ||
+		(!options.worldLocal && roomId === undefined) ||
 		!primitive ||
 		!dimensions ||
 		!materialId ||
@@ -478,7 +482,7 @@ export function parseLightEntity(
 	if (
 		!id ||
 		!name ||
-		roomId === undefined ||
+		(!options.worldLocal && roomId === undefined) ||
 		!light ||
 		!colorValid ||
 		!intensityValid ||
@@ -568,6 +572,6 @@ export function parseCluster(
 	const name = readRequiredString(input, 'name', path, issues);
 	const roomId = readWorldLocalRoomId(input, 'roomId', path, issues, options);
 	const memberIds = readStringArray(input.memberIds, `${path}.memberIds`, issues);
-	if (!id || !name || roomId === undefined || !memberIds) return undefined;
+	if (!id || !name || (!options.worldLocal && roomId === undefined) || !memberIds) return undefined;
 	return { id, name, memberIds, ...(roomId === undefined ? {} : { roomId }) };
 }

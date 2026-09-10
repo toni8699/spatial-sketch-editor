@@ -107,7 +107,7 @@ export function parseNode(
 	const holdSeconds = readHoldSeconds(input, 'holdSeconds', path, issues);
 	if (
 		!id ||
-		roomId === undefined ||
+		(!options.worldLocal && roomId === undefined) ||
 		!label ||
 		!position ||
 		!cameraTarget ||
@@ -142,6 +142,9 @@ function readWorldLocalRoomId(
 ): string | undefined {
 	if (!options.worldLocal) return readRoomId(input, 'roomId', path, issues);
 	if (!('roomId' in input)) return undefined;
+	// P23.0b: a present roomId is rejected by name (and reported here so the
+	// aggregate issue check sees it); an absent key is legal — world
+	// coordinates — and must not fail the `roomId === undefined` guard below.
 	addIssue(
 		issues,
 		`${path}.roomId`,

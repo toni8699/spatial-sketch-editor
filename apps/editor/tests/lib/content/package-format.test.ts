@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	PACKAGE_MANIFEST_FORMAT_VERSION,
 	REWRITE_URI_PREFIX,
 	buildPackageManifest,
 	collisionSuffix,
@@ -142,7 +143,8 @@ describe('package-format', () => {
 					id: 'package-aabbccddeeff',
 					createdAt: '2026-08-07T18:30:00.000Z',
 					generator: 'editor-5.4',
-					documentTitle: 'scene'
+					documentTitle: 'scene',
+					formatVersion: PACKAGE_MANIFEST_FORMAT_VERSION
 				},
 				textures: entries
 			};

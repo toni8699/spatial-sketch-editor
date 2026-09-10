@@ -5,24 +5,21 @@ slice plus one next action only.
 
 ## Working tree
 
-- P22 shipped 2026-09-08 on `main` as `f46e8f3` (public-route `untrack(disposeBundle)` fix, committed + pushed with owner permission; Vercel auto-deployed and fresh anonymous production proof passed). P22 plan archived to `docs/archive/plans/`; tracker collapsed, stub added.
-- Uncommitted closeout docs (agent's, needs separate commit authorization): `docs/hand-off/CURRENT.md` (this file), `docs/plans/README.md`, `docs/README.md`, `docs/architecture.md` (merged around user's test-auth paragraph), `docs/components/persistence.md`, `docs/components/assets.md`, `docs/components/shell.md`, `docs/plans/model-assessment.md`, plus the archived P22 plan with its ship record.
-- User-owned pre-existing dirty files remain untouched: `apps/editor/tests/README.md`, `docs/plans/2026-09-07-P23-layout-depth-minimum-build.md` (and the user's paragraph inside `docs/architecture.md`). Preserve them; do not blanket-stage.
-- Production live state left active: project `project:02b951a3-5adc-4a38-a4e7-af76abdc5bc2` version 3, publication `b0f01de5-7d3a-4931-96ea-82a8ee40731f` revision 6, texture asset `7326b421-897a-4b21-9861-da29d922b3c2` (76,488-byte PNG), name `P22.5 Hosted Gate N+1 verified`.
-- Immediate previous slice: **P22.5 (hosted acceptance); P22 is the just-shipped increment.**
+- **P23.0 F0 stage 2 committed 2026-09-09 on `main`** (canonical writers for the P23 minimum, all writes still disabled): authoring planners `planFirstEnclosureRoomCreation` + `planPartitionToBoundaryRoomBirth` over the P23.8 engine (`packages/layout-core/src/layout-wall-topology-ops.ts`), canonical wall-first Save writer (`packages/project-model/src/wall-first-project.ts`), package manifest `formatVersion: 2` (`PACKAGE_MANIFEST_FORMAT_VERSION`, old manifests stay importable). Stage status recorded in the P23.0 plan's F0 execution order addendum.
+- Fixed en route (latent P23.0b defect): world-local Scene decode failed on every document with entities/navigation nodes — parser guards treated a legally absent `roomId` as failure and the canonicalizer re-serialized `roomId: undefined` keys. Guards are mode-aware now; present roomIds still reject (`room_id_forbidden_in_world_local`). `scene-codec/canonical.ts`, `parse-document.ts`, `parse-entities.ts`.
+- Immediate previous slice: **P23.0 F0 stage 1** (mutator inventory + dual-dispatch guards, `Stage 1 wriing p23` / `Stage 1 p23 nits`), itself after P24 reconciliation work.
+- User's parallel commits (P24 reconciliation, R186 research) interleaved on `main`; no overlap with stage-2 files.
+- Per-stage commits now authorized for the remaining pre-F0 stages (user instruction: "After each stage, commit"); still no pushes.
 
 ## Next action
 
-- P23 Layout Depth minimum useful Build set is the sole next action (brief registered at `docs/plans/2026-09-07-P23-layout-depth-minimum-build.md`, assumes P22 complete). No code yet; open it via the tracker when the owner schedules it.
-- Do not commit the closeout docs above unless the user separately authorizes that commit (hard rule).
+- **P23.0 F0 stage 3**: P23.8 defaults/allocation/replay fixture suite against the stage-2 writers (subdivision / Room identity / portal fixtures from the P23.8 plan), then gate + commit.
+- Then stage 4 (visitor parity + cold-load byte-identity proofs), stage 5 (standalone Scene import frame mapping, portal Save-blocker, no-second-transform regression) — each committed. **Stop at the F0 boundary; do not run the stage-6 flip / enable new-schema writes.**
 
 ## Verification
 
-- Final gate on deployable SHA `f46e8f3`: Vitest 194 files passed, 1 skipped; 2,570 tests passed, 1 skipped. Real local-Postgres API: 23 core + 10 publication + 6 test-auth (39 total, zero skipped).
-- Checks clean: editor + museum `svelte-check` 0/0; API/camera-core/layout-core/project-model `tsc` clean. Root build, API build, editor Vercel build green.
-- Boundary gates: preview surface 11 files/no leaks; public surface 2 files/no leaks; visitor bundle 3 server + 9 client entries.
-- Production (fresh anonymous sessions, deployed first-party `/api` proxy → Render/Postgres/R2): `/p/b0f01de5…` settles on the version-3 titled canvas with exactly one metadata + one texture-content request, zero-camera orbit guidance, no console/WebGL errors; mobile 375×667 + reduced motion repeat green. Anonymous boundary: metadata 200, member asset 200 (76,488 bytes), random-asset 404, unknown-publication 404, `POST /test-auth/session` 404 with editor Origin (403 CSRF guard without).
-- Deployed SHA `f46e8f3` proven by behavior (fresh sessions settle post-push; pre-fix bundle looped). `/museum`, `/museum/editor`, guest Preview/exit, Plan↔3D, and unknown-publication unavailable state smoke-tested on the prior SHA; no regressions introduced by the two-file fix (route effect + regression test only).
+- Stage-2 full gate on the dirty tree immediately before commit: Vitest 208 files / 2745 tests passed (+1 skipped), `layout-core` + `project-model` tsc clean, editor + museum svelte-check 0/0.
+- New coverage: `apps/editor/tests/lib/editor/p23-f0-stage2-writers.test.ts` (26 tests — deterministic IDs/names, 0.1 m defaults, undo/redo exact replay, custom allocator, rejection taxonomy, Save round-trip through `decodeProjectCompatible`, legacy-payload rejection by name, manifest versioning, wall-first mutation gate), `package-format.test.ts` manifest key pin, codec suites green after the world-local fix.
 
 ## Known bugs / deferred
 
@@ -49,6 +46,7 @@ slice plus one next action only.
 - agent-browser `press` keys land unreliably unless the target holds focus; window-dispatched `KeyboardEvent` via `eval` exercises the same handler path deterministically. Never hold CDP mouse-down across shell calls — it blocks the channel until `up`.
 - Public `/p/:publicationId` load `$effect` must not track `bundle`: dispose it via `untrack(disposeBundle)` — assigning the loaded bundle retriggers a tracking effect into an infinite refetch/WebGL loop (P22.5 lesson, regression-pinned).
 - Direct curl POSTs without the editor `Origin` header get 403 from the API CSRF guard before routing; send `Origin: https://spatial-sketch-editor.vercel.app` when probing production route existence (test-auth 404 check).
+- World-local Scene documents must never carry `roomId` anywhere (entities, nodes, clusters, anchors, waypoints, view keys); the codec rejects a *present* key by name but treats an *absent* key as legal — don't "restore" the old `roomId === undefined` guards.
 
 ## Non-negotiables
 
