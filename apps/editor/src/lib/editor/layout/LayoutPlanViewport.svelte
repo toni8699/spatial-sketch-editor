@@ -197,14 +197,12 @@
 	let roomUnitSnapshot = $state<LayoutPreviewSnapshot | null>(null);
 	let rotationHoverScreen = $state<LayoutVec2 | null>(null);
 	let sceneBridgeHover = $state<{ entityId: string; screen: LayoutVec2 } | null>(null);
-	// P23.2 — transient snap resolution (session-only). The point is the raw
-	// pointer world position the last resolution ran at; null clears feedback.
+	// P23.2 — transient snap resolution (session-only). The resolution was
+	// computed at the raw pointer world position; null clears feedback.
 	let snapFeedback = $state<SnapResolution | null>(null);
-	let snapFeedbackPoint = $state<LayoutVec2 | null>(null);
 
 	function clearLayoutSnapFeedback(): void {
 		snapFeedback = null;
-		snapFeedbackPoint = null;
 	}
 
 	/**
@@ -237,7 +235,6 @@
 			input
 		);
 		snapFeedback = resolution;
-		snapFeedbackPoint = [...point] as LayoutVec2;
 		return resolution.kind === 'snap' ? [...resolution.candidate.point] as LayoutVec2 : point;
 	}
 	let previousPlanViewMode = $state<PlanViewMode | null>(null);
@@ -1013,6 +1010,18 @@
 		updateLayoutPrimitiveDraft(interaction, point, room?.roomId);
 	}
 
+	/** P23.2 — the moving interior anchor's current world point (self-snap exclusion). */
+	function movingInteriorAnchorPoint(): LayoutVec2 | null {
+		const dragged = draggedInteriorAnchor;
+		if (!dragged) return null;
+		const room = findLayoutRoom(rooms, dragged.roomId);
+		const segment = room?.boundary.segments.find((candidate) => candidate.id === dragged.segmentId);
+		if (!segment || segment.kind !== 'auto-bezier') return null;
+		return (
+			segment.interiorAnchors.find((candidate) => candidate.id === dragged.anchorId)?.point ?? null
+		);
+	}
+
 	function beginInteriorAnchorDrag(
 		event: PointerEvent,
 		roomId: string,
@@ -1301,7 +1310,8 @@
 				beginLayoutObjectDrag(interaction, target.objectId, object.position);
 			}
 			return;
-		}		if (target.kind === 'wall') {
+		}
+		if (target.kind === 'wall') {
 			selectLayoutWall(interaction, target.roomId, target.segmentId);
 			if (!svgElement) return;
 			const projected = applyLayoutSnap(target.projection.point, {
@@ -1381,9 +1391,14 @@
 		if (interiorAnchorPointerId === event.pointerId && draggedInteriorAnchor) {
 			const point = worldPoint(event);
 			if (!point) return;
+			// P23.2 — the moving anchor snaps like any drag path: its own
+			// segment (spans + endpoints) and its own current point are
+			// excluded so it cannot self-snap; other walls/junctions stay
+			// valid semantic targets.
+			const anchorPoint = movingInteriorAnchorPoint();
 			const next = applyLayoutSnap(point, {
-				allowedKinds: ['grid'],
-				excludeSourceIds: new Set([draggedInteriorAnchor.segmentId])
+				excludeSourceIds: new Set([draggedInteriorAnchor.segmentId]),
+				...(anchorPoint ? { excludePoints: [anchorPoint] } : {})
 			});
 			updateLayoutWallInteriorAnchor(
 				preview,
@@ -1417,6 +1432,20 @@
 			const point = worldPoint(event);
 			if (!point) {
 				clearLayoutSnapFeedback();
+				return;
+			}
+			if (interaction.objectDrag.mode === 'rotate') {
+				// P23.2 — rotation gestures keep the raw pointer: yaw derives
+				// from the pointer angle around the pivot and steps only via
+				// Shift angle-snap. Snapping the pointer itself would make the
+				// handle jump on grid/junction proximity.
+				updateLayoutObjectDrag(
+					interaction,
+					point,
+					false,
+					event.shiftKey,
+					interaction.planView.angleSnapEnabled
+				);
 				return;
 			}
 			const snapped = applyLayoutSnap(point, {
@@ -1677,12 +1706,12 @@
 	}
 
 	function onKeyDown(event: KeyboardEvent) {
-	if (event.key === 'Escape') {
-		event.preventDefault();
-		event.stopPropagation();
-		dismissSceneBridge();
-		clearLayoutSnapFeedback();
-		if (stagingGesture) {
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			event.stopPropagation();
+			dismissSceneBridge();
+			clearLayoutSnapFeedback();
+			if (stagingGesture) {
 				cancelStagingGesture();
 				return;
 			}

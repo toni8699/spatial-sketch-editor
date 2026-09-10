@@ -465,8 +465,16 @@ function guidesForCandidate(candidate: SnapCandidate): SnapGuide[] {
 /**
  * Merge per-sample wall spans of one segment into the full-length span so
  * candidate generation works on authored walls, not sample boundaries.
+ *
+ * The compiler emits one `wall` query span per sample interval (0.25 m for
+ * straight lines), and a shared wall compiles spans per incident room —
+ * reversed room refs traverse the wall the other way, so `startDistance` is
+ * measured from each room's own segment start and cannot be compared across
+ * rooms. The merged extent is therefore the bounding box of every span
+ * endpoint: for straight walls (the snap scope) that recovers the authored
+ * wall start/end exactly, independent of room count or traversal direction.
  */
-function dedupeWallSpans(
+export function dedupeWallSpans(
 	spans: readonly CompiledQuerySpan[]
 ): Array<{ id: string; start: LayoutVec2; end: LayoutVec2 }> {
 	const bySegment = new Map<string, CompiledQuerySpan[]>();
@@ -477,10 +485,21 @@ function dedupeWallSpans(
 	}
 	const merged: Array<{ id: string; start: LayoutVec2; end: LayoutVec2 }> = [];
 	for (const [segmentId, list] of bySegment) {
-		const sorted = [...list].sort((a, b) => a.startDistance - b.startDistance);
-		const first = sorted[0]!;
-		const last = sorted[sorted.length - 1]!;
-		merged.push({ id: segmentId, start: [first.start[0], first.start[1]], end: [last.end[0], last.end[1]] });
+		let minX = Infinity;
+		let minZ = Infinity;
+		let maxX = -Infinity;
+		let maxZ = -Infinity;
+		for (const span of list) {
+			minX = Math.min(minX, span.start[0], span.end[0]);
+			minZ = Math.min(minZ, span.start[1], span.end[1]);
+			maxX = Math.max(maxX, span.start[0], span.end[0]);
+			maxZ = Math.max(maxZ, span.start[1], span.end[1]);
+		}
+		merged.push({
+			id: segmentId,
+			start: [minX, minZ],
+			end: [maxX, maxZ]
+		});
 	}
 	return merged;
 }

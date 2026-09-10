@@ -16,7 +16,7 @@
  */
 import type { LayoutVec2 } from './layout-types';
 import type { CompiledLayoutGeometry, CompiledQuerySpan } from './layout-geometry-types';
-import { objectFootprintCenter } from './layout-snap';
+import { dedupeWallSpans, objectFootprintCenter } from './layout-snap';
 
 export type AlignAxis = 'x' | 'z';
 export type AlignAxisAction = 'min' | 'center' | 'max';
@@ -81,7 +81,7 @@ function spansAabb(spans: readonly CompiledQuerySpan[]): Bounds2 | null {
 function referenceBounds(
 	geometry: CompiledLayoutGeometry,
 	reference: AlignReference
-): { bounds: Bounds2; wallSpan?: CompiledQuerySpan } | null {
+): { bounds: Bounds2; wallSpan?: { start: LayoutVec2; end: LayoutVec2 } } | null {
 	if (reference.kind === 'object') {
 		for (const polygon of geometry.queries.polygons) {
 			if (polygon.kind !== 'object-footprint' || polygon.objectId !== reference.id) continue;
@@ -95,11 +95,14 @@ function referenceBounds(
 		const bounds = spansAabb(roomSpans);
 		return bounds ? { bounds } : null;
 	}
-	// Wall reference: the compiled wall spans for this segment (wall) ID.
+	// Wall reference: the compiled wall spans for this segment (wall) ID. The
+	// compiler emits one span per sample interval (0.25 m for straight
+	// lines), so the bounded Center-on-Wall span must be the merged
+	// full-length extent, never a single sample chunk.
 	const wallSpans = geometry.queries.spans.filter((span) => span.kind === 'wall' && span.segmentId === reference.id);
 	if (wallSpans.length === 0) return null;
-	const sorted = [...wallSpans].sort((a, b) => a.startDistance - b.startDistance);
-	return { bounds: spansAabb(wallSpans)!, wallSpan: sorted[0] };
+	const merged = dedupeWallSpans(wallSpans);
+	return { bounds: spansAabb(wallSpans)!, wallSpan: merged[0] };
 }
 
 function axisIndex(axis: AlignAxis): 0 | 1 {

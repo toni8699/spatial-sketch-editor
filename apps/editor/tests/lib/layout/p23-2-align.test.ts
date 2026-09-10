@@ -167,9 +167,7 @@ describe('P23.2 alignment bounds actions per axis', () => {
 		expect(alignedPositionOf(wallGeometry, 'box', { kind: 'wall', id: 'wall-a' }, 'min')).toEqual([5, 0.5, 0]);
 		expect(alignedPositionOf(wallGeometry, 'box', { kind: 'wall', id: 'wall-a' }, 'center')).toEqual([6, 0.5, 0]);
 	});
-});
-
-describe('P23.2 center-on-wall alignment', () => {
+});	describe('P23.2 center-on-wall alignment', () => {
 	it('projects the footprint center onto the canonical wall span', () => {
 		const geometry = emptyGeometry();
 		geometry.objects.push(
@@ -203,6 +201,61 @@ describe('P23.2 center-on-wall alignment', () => {
 		expect(plan.kind).toBe('success');
 		if (plan.kind !== 'success') return;
 		expect(plan.position).toEqual([3, 0, -1]);
+	});
+
+	it('centers on the full extent of a compiled-shaped multi-span wall', () => {
+		// The compiler emits one wall query span per sample interval
+		// (0.25 m for straight lines), so a 10 m wall arrives as 40 spans.
+		const geometry = emptyGeometry();
+		geometry.objects.push(
+			boxObject('box', [1, 0.5, 1], [
+				[0.5, 0.5],
+				[1.5, 0.5],
+				[1.5, 1.5],
+				[0.5, 1.5]
+			])
+		);
+		for (let start = 0; start < 10; start += 0.25) {
+			geometry.queries.spans.push(
+				wallSpan('multi', [start, 0], [start + 0.25, 0], 'r', start)
+			);
+		}
+		const plan = planLayoutObjectAlign(geometry, 'box', { kind: 'wall', id: 'multi' }, 'center-on-wall');
+		expect(plan.kind).toBe('success');
+		if (plan.kind !== 'success') return;
+		// Footprint center [1,1] projects onto the FULL wall at [1,0]: the
+		// along-wall coordinate is preserved and Z moves 1 → 0. Before the
+		// merge fix this resolved against the first 0.25 m sample and the
+		// object was dragged to x=0.25.
+		expect(plan.position[0]).toBeCloseTo(1, 6);
+		expect(plan.position[2]).toBeCloseTo(0, 6);
+	});
+
+	it('merges reversed shared-wall spans across rooms into the full extent', () => {
+		// A wall shared by two rooms compiles spans for both: room 'a'
+		// traverses forward (startDistance from the true start), room 'b'
+		// traverses reversed (startDistance from the true end).
+		const geometry = emptyGeometry();
+		geometry.objects.push(
+			boxObject('box', [1, 0.5, 1], [
+				[0.5, 0.5],
+				[1.5, 0.5],
+				[1.5, 1.5],
+				[0.5, 1.5]
+			])
+		);
+		for (let start = 0; start < 10; start += 0.25) {
+			geometry.queries.spans.push(wallSpan('shared', [start, 0], [start + 0.25, 0], 'a', start));
+			geometry.queries.spans.push(wallSpan('shared', [10 - start, 0], [10 - start - 0.25, 0], 'b', start));
+		}
+		const plan = planLayoutObjectAlign(geometry, 'box', { kind: 'wall', id: 'shared' }, 'center-on-wall');
+		expect(plan.kind).toBe('success');
+		if (plan.kind !== 'success') return;
+		// Same as the multi-span case: the merged extent preserves the
+		// along-wall coordinate (x=1) instead of clamping to the first
+		// sample chunk near the wall start.
+		expect(plan.position[0]).toBeCloseTo(1, 6);
+		expect(plan.position[2]).toBeCloseTo(0, 6);
 	});
 });
 

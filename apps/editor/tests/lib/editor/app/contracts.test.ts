@@ -735,6 +735,22 @@ describe('P21.3 camera reconciliation', () => {
 		expect(viewport).not.toContain('EditorCameraFramingHelpers');
 	});
 
+	it('binds camera-plan world X/Z fields at Vec3 indices 0/2', () => {
+		// World positions are Vec3 [x, y, z]. Z fields and both X/Z commits
+		// must use index 2 — a prior regression bound World Z to [1]
+		// (elevation Y), so dragging moved Z while the sidebar never updated,
+		// and X-field commits wrote the node's height as world Z.
+		const inspector = readLibSource('editor/app/CameraPlanInspector.svelte');
+		expect(inspector).toContain('value={nodeWorld[2]}');
+		expect(inspector).toContain('oncommit={(x) => commitNodeXZ(x, nodeWorld[2])}');
+		expect(inspector).toContain('oncommit={(z) => commitNodeXZ(nodeWorld[0], z)}');
+		expect(inspector).toContain('value={anchorWorld[2]}');
+		expect(inspector).toContain('oncommit={(x) => commitAnchorXZ(x, anchorWorld[2])}');
+		expect(inspector).toContain('oncommit={(z) => commitAnchorXZ(anchorWorld[0], z)}');
+		expect(inspector).not.toContain('value={nodeWorld[1]}');
+		expect(inspector).not.toContain('value={anchorWorld[1]}');
+	});
+
 	it('shares one Camera sidebar and one Timeline across Camera Plan and Camera 3D', () => {
 		const sidebar = readLibSource('editor/app/EditorSidebar.svelte');
 		expect(sidebar).toContain("{#if domain === 'camera'}");
