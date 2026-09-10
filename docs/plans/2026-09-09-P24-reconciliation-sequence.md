@@ -25,7 +25,7 @@ P24 reconciliation
 
 P24 implementation still depends on the accepted P23 minimum useful Build set. Any P24 decision touching coordinates, placement ownership, selection routing, Plan projection or Scene/Camera migration must consume the coordinate/ownership model accepted through P23, not assume the earlier Room-local baseline remains permanent.
 
-P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code. P23 F0 closed on 2026-09-10. **R0/R1/R2 are complete; R3 and R4 behavioral contracts closed 2026-09-10; R5 next.** Selected placement/selection/support-query and capability-specific asset/runtime seams still carry explicit later reconciliation before the R9 minimum freeze.
+P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code. P23 F0 closed on 2026-09-10. **R0/R1/R2 are complete; R3 and R4 behavioral contracts and R5–R7 maturity reconciliation closed 2026-09-10; R8 post-F0 presentation remainder next.** Selected placement/selection/support-query and capability-specific asset/runtime seams still carry explicit later reconciliation before the R9 minimum freeze.
 
 ## Authority and evidence order
 
@@ -281,6 +281,15 @@ The standalone R3 record is authoritative for the frozen placement semantics. R9
 Closed behavioral contract: [2026-09-10-P24-R4-cross-view-interaction-contract.md](2026-09-10-P24-R4-cross-view-interaction-contract.md).
 
 The standalone R4 record is authoritative for cross-view selection, cancellation, preview/commit and single-history semantics. R8 still owns presentation/polish and R9/B6 still owns minimum inclusion. The remaining implementation seam is cancel-on-switch wiring: current view controls block active interaction instead of routing an accepted transition through the existing gesture cancel owners.
+
+## R5–R7 post-F0 result — 2026-09-10
+
+The [bounded maturity reconciliation](2026-09-10-P24-R5-R7-maturity-reconciliation.md) is the current decision source for R5–R7 and supersedes conflicting dated hypotheses/freeze-packet details below. Source audit baseline: `b14568d9c34b2f2e5e7a42a80975fda19350929f`. No product implementation or minimum freeze occurred.
+
+- R5: retain the single authorities; wire Local/World with primary-oriented Local frames; preserve actual Selection Center default; optional Active Object pivot. Minimum uniform scale must round-trip; independent persistence and repeat arrays are follow-up. Room-free flat clusters, duplicate warnings and bounded world-X/Z arrangement are specified.
+- R6: retain definitions/instances; bounded tint/tile/PBR supply and atomic multi-apply with outside-selection sharing protection. Native imported appearance and explicit whole-model replacement are distinct; DCC slot/UV/graph editing excluded.
+- R7: retain three light types; explicit half-angle repair/compatibility policy and finite/unlimited semantics; editor-only helpers. Recommend one global static HDRI vertical slice, conditional on R9 supply/runtime acceptance; exposure deferred. Baseline/preset and disposal/parity contracts are explicit.
+- Next: R8 post-F0 presentation remainder → R9 inclusion/child-plan gate. Earlier pre-F0 drafts remain historical input, not an alternate current decision source.
 
 ## R5 — B1 transform + arrangement maturity
 
