@@ -25,7 +25,7 @@ P24 reconciliation
 
 P24 implementation still depends on the accepted P23 minimum useful Build set. Any P24 decision touching coordinates, placement ownership, selection routing, Plan projection or Scene/Camera migration must consume the coordinate/ownership model accepted through P23, not assume the earlier Room-local baseline remains permanent.
 
-P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code. P23 F0 closed on 2026-09-10. **R0/R1/R2 are complete; R3 and R4 behavioral contracts and R5–R7 maturity reconciliation closed 2026-09-10; R8 post-F0 presentation remainder next.** Selected placement/selection/support-query and capability-specific asset/runtime seams still carry explicit later reconciliation before the R9 minimum freeze.
+P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code. P23 F0 closed on 2026-09-10. **R0/R1/R2 are complete; R3 and R4 behavioral contracts and R5–R7 maturity reconciliation closed 2026-09-10; R8 post-F0 presentation reconciliation closed 2026-09-10; R9 minimum freeze next.** Selected placement/selection/support-query and capability-specific asset/runtime seams still carry explicit later reconciliation before the R9 minimum freeze.
 
 ## Authority and evidence order
 
@@ -289,7 +289,7 @@ The [bounded maturity reconciliation](2026-09-10-P24-R5-R7-maturity-reconciliati
 - R5: retain the single authorities; wire Local/World with primary-oriented Local frames; preserve actual Selection Center default; optional Active Object pivot. Minimum uniform scale must round-trip; independent persistence and repeat arrays are follow-up. Room-free flat clusters, duplicate warnings and bounded world-X/Z arrangement are specified.
 - R6: retain definitions/instances; bounded tint/tile/PBR supply and atomic multi-apply with outside-selection sharing protection. Native imported appearance and explicit whole-model replacement are distinct; DCC slot/UV/graph editing excluded.
 - R7: retain three light types; explicit half-angle repair/compatibility policy and finite/unlimited semantics; editor-only helpers. Recommend one global static HDRI vertical slice, conditional on R9 supply/runtime acceptance; exposure deferred. Gallery preset resets all authored lights/environment after an explicit replacement warning in one Scene transaction; generated lights retain no preset ownership/provenance. Baseline and disposal/parity contracts are explicit.
-- Next: R8 post-F0 presentation remainder → R9 inclusion/child-plan gate. Earlier pre-F0 drafts remain historical input, not an alternate current decision source.
+- Next: R9 inclusion/child-plan gate; R8 presentation reconciliation is complete. Earlier pre-F0 drafts remain historical input, not an alternate current decision source.
 
 ## R5 — B1 transform + arrangement maturity
 
@@ -403,7 +403,9 @@ baseline and editor assist lighting, avoiding hidden extra lighting. Preserve le
 appearance through an explicit compatibility policy. Presets create/update ordinary
 authored Scene lights and any selected environment state, never a persistent rig.
 
-## R8 — B5 final presentation reconciliation — EXECUTED pre-F0 (rules closed; minimum inclusion still R9)
+## R8 — B5 final presentation reconciliation — COMPLETE 2026-09-10
+
+Authoritative post-F0 result: [R8 presentation reconciliation](2026-09-10-P24-R8-presentation-reconciliation.md). Current-code gaps, minimum presentation conditions, optional polish exclusions and implementation acceptance are recorded there. R3–R7 retain behavioral ownership; R9 retains inclusion. The pre-F0 evidence below is superseded where it conflicts; “Fixed” below was a requirement, not implementation completion.
 
 ### Decided presentation rules (code-verified on main)
 
