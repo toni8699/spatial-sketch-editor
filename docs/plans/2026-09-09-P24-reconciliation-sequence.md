@@ -25,7 +25,7 @@ P24 reconciliation
 
 P24 implementation still depends on the accepted P23 minimum useful Build set. Any P24 decision touching coordinates, placement ownership, selection routing, Plan projection or Scene/Camera migration must consume the coordinate/ownership model accepted through P23, not assume the earlier Room-local baseline remains permanent.
 
-P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code. P23 F0 closed on 2026-09-10. **R0/R1/R2 are complete; R3 and R4 behavioral contracts closed 2026-09-10; R5 next.** Selected placement/selection/support-query and capability-specific asset/runtime seams still carry explicit later reconciliation before the R9 minimum freeze.
+P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code. P23 F0 closed on 2026-09-10. **R0/R1/R2 are complete; R3 and R4 behavioral contracts and R5–R7 maturity reconciliation closed 2026-09-10; R8 post-F0 presentation remainder next.** Selected placement/selection/support-query and capability-specific asset/runtime seams still carry explicit later reconciliation before the R9 minimum freeze.
 
 ## Authority and evidence order
 
@@ -282,6 +282,15 @@ Closed behavioral contract: [2026-09-10-P24-R4-cross-view-interaction-contract.m
 
 The standalone R4 record is authoritative for cross-view selection, cancellation, preview/commit and single-history semantics. R8 still owns presentation/polish and R9/B6 still owns minimum inclusion. The remaining implementation seam is cancel-on-switch wiring: current view controls block active interaction instead of routing an accepted transition through the existing gesture cancel owners.
 
+## R5–R7 post-F0 result — 2026-09-10
+
+The [bounded maturity reconciliation](2026-09-10-P24-R5-R7-maturity-reconciliation.md) is the current decision source for R5–R7 and supersedes conflicting dated hypotheses/freeze-packet details below. Source audit baseline: `b14568d9c34b2f2e5e7a42a80975fda19350929f`. No product implementation or minimum freeze occurred.
+
+- R5: retain the single authorities; wire Local/World with primary-oriented Local frames; preserve actual Selection Center default; optional Active Object pivot. Minimum uniform scale must round-trip; independent persistence and repeat arrays are follow-up. Room-free flat clusters, duplicate warnings and bounded world-X/Z arrangement are specified.
+- R6: retain definitions/instances; bounded tint/tile/PBR supply and atomic multi-apply with outside-selection sharing protection. Native imported appearance and explicit whole-model replacement are distinct; DCC slot/UV/graph editing excluded.
+- R7: retain three light types; explicit half-angle repair/compatibility policy and finite/unlimited semantics; editor-only helpers. Recommend one global static HDRI vertical slice, conditional on R9 supply/runtime acceptance; exposure deferred. Gallery preset resets all authored lights/environment after an explicit replacement warning in one Scene transaction; generated lights retain no preset ownership/provenance. Baseline and disposal/parity contracts are explicit.
+- Next: R8 post-F0 presentation remainder → R9 inclusion/child-plan gate. Earlier pre-F0 drafts remain historical input, not an alternate current decision source.
+
 ## R5 — B1 transform + arrangement maturity
 
 Reconcile only proven gaps in the existing transform/arrangement system:
@@ -527,7 +536,7 @@ No mixed Layout/Scene transaction and no persistent cross-document support refer
 - F8 material assign + Make Unique: shared edit prompts choice; unique clone `-copy`; editor authored output, Preview and Publish resolve materials consistently on the selected renderer baseline. Review expected BRDF/PMREM differences separately if the baseline changes.
 - F9 light authoring: create point/spot → Inspector sync (explicit half-angle/degree semantics, supported range and existing out-of-range policy, `castShadow`) → visitor renders same lights with no helpers. Verify finite/unlimited range feedback and no second gizmo authority.
 - F10 Save/Load + cold visitor: staged Scene/materials/lights and, if selected, global environment/optional exposure survive round-trip; referenced assets remain retained/resolvable. Cold visitor and Preview consume the same canonical meaning with no editor-only state. [asset resolution + selected-capability parity]
-- F11 gallery preset: one preset op yields ordinary authored Scene light/environment state selected by the preset, with one history result and no persistent rig. Verify explicit baseline/assist-light interaction and legacy appearance policy; environment remains conditional on R9 inclusion.
+- F11 gallery preset: reset replaces all authored lights/environment after an explicit warning, in one Scene transaction with no persistent rig or preset provenance. Verify reset after user edits/additions and Save/Load, cancellation/failure atomicity, exact undo/redo, removed-light reference cleanup and non-light preservation. Verify explicit baseline/assist-light interaction and legacy appearance policy; environment remains conditional on R9 inclusion.
 - F12 explicit support choice: ambiguous stacked surface forces a visible choice; never silent `Y = 0`. [R3/R9]
 
 - F13 renderer/dependency acceptance [baseline selected at freeze; additional comparisons if upgraded]: use harvest §F dimensions for package/types/Threlte compatibility, editor gestures, material/light/shadow output, accepted assets/decoders, context recovery, visitor isolation, disposal and performance. Test only selected capabilities/formats; calibrate proposed numeric thresholds on named devices/fixtures before ratifying them. Include PCFSoft→PCF behavior, BRDF/PMREM/environment rotation changes and Object3D/Threlte disposal interaction as applicable. Explicitly investigate the post-r186 point-shadow disposal fix on the exact candidate baseline; later fixes cannot be assumed present. Failure requires a verified compatible baseline/fix or deferral, not an automatic r186 upgrade.
