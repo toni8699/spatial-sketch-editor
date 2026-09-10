@@ -380,7 +380,6 @@ describe('P23.0 F0 stage 1 — behavioral guard contract', () => {
 	function expectMidTransactionSwapRefused(
 		store: ReturnType<typeof createFixtureEditorStore>,
 		holder: { project: { layout: unknown } },
-		swapTo: unknown,
 		commitSnapshot: unknown
 	): void {
 		expect(store.commitLayoutTransaction(commitSnapshot)).toBe(false);
@@ -402,7 +401,7 @@ describe('P23.0 F0 stage 1 — behavioral guard contract', () => {
 		// implicitly (wall-first was disabled); the commit re-check must keep
 		// refusing it explicitly.
 		holder.project.layout = wallFirstLayout;
-		expectMidTransactionSwapRefused(store, holder, wallFirstLayout, null);
+		expectMidTransactionSwapRefused(store, holder, null);
 	});
 
 	it('a wall-first → legacy swap landing mid-transaction refuses commit and closes the bracket (stage-6 invariant)', () => {
@@ -411,7 +410,7 @@ describe('P23.0 F0 stage 1 — behavioral guard contract', () => {
 		expect(store.beginLayoutTransaction()).toBe(true); // begin saw wall-first
 
 		holder.project.layout = chopinProject.layout;
-		expectMidTransactionSwapRefused(store, holder, chopinProject.layout, null);
+		expectMidTransactionSwapRefused(store, holder, null);
 	});
 
 	it('a wall-first → wall-first transaction commits normally (no false refusal)', () => {
@@ -428,13 +427,23 @@ describe('P23.0 F0 stage 1 — behavioral guard contract', () => {
 		store.setLayoutFormatPolicySource(() => holder);
 		expect(store.beginLayoutTransaction()).toBe(true);
 
-		// Same format at begin and commit — the invariant holds and the
-		// bracket closes through the normal commit path.
-		expect(store.commitLayoutTransaction(null)).toBe(true);
+		// Same format at begin, live host and candidate — the invariant holds
+		// and the bracket closes through the normal commit path.
+		expect(store.commitLayoutTransaction({ project: { layout: wallFirstLayout } })).toBe(true);
 		expect(store.statusMessage).toBeNull();
 		// No leaked bracket: the next transaction opens.
 		expect(store.beginLayoutTransaction()).toBe(true);
 		store.cancelLayoutTransaction();
+	});
+
+	it('a candidate snapshot format change is refused even when the live host format did not change', () => {
+		const store = createFixtureEditorStore();
+		const holder = attachLayoutHost(store, chopinProject.layout);
+		expect(store.beginLayoutTransaction()).toBe(true); // begin/live both legacy
+
+		// The host stays legacy, but the candidate carries wall-first shape.
+		// This directly pins the third leg of begin = live = candidate.
+		expectMidTransactionSwapRefused(store, holder, { project: { layout: wallFirstLayout } });
 	});
 
 	it('an adapted → unrecognized swap landing mid-transaction refuses commit and closes the bracket (F0 review, post-flip)', () => {
@@ -445,7 +454,7 @@ describe('P23.0 F0 stage 1 — behavioral guard contract', () => {
 		// The live layout is now unrecognized — refused both by the begin
 		// format mismatch and by the never-adapted policy entry.
 		holder.project.layout = { units: 'nonsense' };
-		expectMidTransactionSwapRefused(store, holder, { units: 'nonsense' }, null);
+		expectMidTransactionSwapRefused(store, holder, null);
 	});
 
 	it('a scene swap landing mid-transaction refuses document commit and closes the bracket (F0 review)', () => {
