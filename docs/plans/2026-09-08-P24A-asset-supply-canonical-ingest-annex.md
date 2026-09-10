@@ -5,7 +5,7 @@
 
 **Created:** 2026-09-08  
 **Parent:** [P24 — Scene / Staging Depth umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md)  
-**Status:** `seed — evidence pending` — Phase 2 research reviewed; the bounded implementation-readiness reconciliation below has not run, so this is not yet implementation-ready.  
+**Status:** `evidence complete — reconciliation pending` — Phase 2 research plus the bounded R1 implementation-readiness pass are complete; implementation still waits for R9 minimum freeze and the named integration blockers below.  
 **Tracker:** P24 remains the registered plan number. `P24A` is an umbrella-internal label, not a new tracker number.  
 **Planning model:** child seed of the [P24 umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md) — implementation detail preserved here; evidence (Phase 2 research + the readiness reconciliation) informs but never overrides the umbrella contract.
 
@@ -31,11 +31,9 @@ The research JSON's 32-object Wave 1 is an **acquisition backlog**, not the P24A
 
 The **broad source-discovery gate is closed**. P24A does not need another general survey of asset sites, model repositories, material libraries or HDRI providers before planning can continue.
 
-That does **not** mean every pipeline choice below is automatically implementation-ready. Before P24A.0–P24A.6 become implementation tickets, run a bounded implementation-readiness reconciliation against the exact current repository and the exact upstream tools/resources selected from Phase 2.
+The bounded implementation-readiness reconciliation is also now complete. It was run against the shipped post-F0 world-local contract, current P20/P22 persistence/runtime code, the existing normalization/proxy evidence and the selected Phase 2 source/tool set. R1 resolves the architecture/readiness questions below; it does **not** implement P24A or waive R9 minimum freeze.
 
-This readiness work may run in parallel with P23 implementation. It must distinguish today's Room-local baseline from the ratified P23 world-local target and mark any placement/proxy seam that requires a targeted post-P23-F0 recheck before implementation-ready P24 child plans freeze.
-
-The readiness pass must inspect the current end-to-end asset path, including:
+The readiness pass inspected the current end-to-end asset path, including:
 
 - built-in `Asset` catalogue / manifest behavior and `AssetFootprint` generation/consumption;
 - current model loading and Scene asset references;
@@ -47,26 +45,47 @@ The readiness pass must inspect the current end-to-end asset path, including:
 - current Plan footprint/proxy behavior;
 - editor/visitor bundle isolation.
 
-It must also verify the exact external tools/sources that would become implementation dependencies or acquisition authorities. For each serious dependency/reference record:
-
-```text
-Project / source
-Pinned version / commit / dated API or archive
-Exact module / CLI / endpoint / file format used
-License / redistribution evidence
-Current measured behavior in Museum's pipeline
-Disposition: KEEP CURRENT | EXTEND | BENCHMARK FIRST | DEFER | REJECT
-```
-
-At minimum recheck glTF Transform, Khronos glTF Validator, meshoptimizer/`gltfpack`, the selected Poly Haven/Kenney/Sweet Home 3D acquisition paths, ambientCG material supply and any `pmndrs/assets` packaging pattern actually reused.
-
-The readiness pass is **not another broad ecosystem-research phase**. Its purpose is to prevent the annex from assuming that a research recommendation maps cleanly onto the live P20/P22/Scene runtime, and to benchmark unresolved choices before they become architecture.
+It also verified the exact external tools/sources already selected by Phase 2 rather than reopening broad discovery. glTF Transform remains the primary normalization seam; Khronos validation remains a hard QA input; meshoptimizer/`gltfpack` remains benchmark-first; the selected Poly Haven/Kenney/Sweet Home 3D and ambientCG sources remain the acquisition authorities described by the checked-in evidence.
 
 The same maturity rule used by P24B applies here:
 
 > Existing asset infrastructure is not automatically product-complete because a registry, loader or catalogue seam has shipped; external tooling is not automatically better because Phase 2 recommends it. Preserve canonical Museum Editor ownership, identify the concrete pipeline gap, then extend only the seam that needs depth.
 
-Until this reconciliation closes, P24A.0–P24A.6 below are the **approved planning direction and acceptance hypotheses**, not permission to blindly implement every named mechanism exactly as written.
+### R1 readiness finish — 2026-09-10
+
+**Decision 1 — world-local placement/proxy meaning is ready.** `SceneModelEntity.assetId` remains the placed semantic identity. `AssetFootprint` remains asset-definition metadata relative to the normalized asset pivot; no per-instance PlanProxy record is added. For canonical world-local Scene entities, Plan projection applies effective scale + entity yaw + project/world X/Z directly; the optional `roomId` frame branch remains compatibility-only. The current Plan projection code already supports this identity-frame path, so P24A does not need another projection model.
+
+For the static-first furniture proof set, the existing `furniture-floor` normalization recipe (`center --pivot below`) establishes the floor-contact pivot. Treat its normalized floor-contact offset as **0** for that recipe; keep the explicitly recorded `unitScaleToMeters` / current calibrated `defaultScale` semantics until a separately verified metre-baking rule replaces them. Wall/ceiling/stacked-surface contact metadata is not inferred from this floor recipe and is not required to prove the first furniture corpus.
+
+The remaining Room coupling in live Stage **creation/selectability** is therefore an integration blocker, not an unresolved P24A supply model: P24A must reuse the single Scene placement operation once that path authors canonical world-local entities. It must not create a second asset-specific placement system to work around the editor seam.
+
+**Decision 2 — static-first model delivery is the P24A minimum.** The minimum does not require uploaded/provider GLB ingestion. Each accepted Wave-1 model keeps one stable logical `assetId`; Scene Save/Load persists that identity plus fallback/transform/material state, never a provider URL, static path, signed URL or R2 key. The normalized GLB and its asset-definition metadata are added through the checked-in/static supply path and the append-only shipped-static compatibility registry.
+
+Static model durability has one concrete implementation requirement before acceptance: cold visitor model **source resolution must use the shipped-static compatibility mapping as release authority**, not only validate the `assetId` there and then load the URL from the mutable live catalogue. Current `visitor-cold-runtime.ts` validates models through `getShippedModelByAssetId`, but `VisitorEntities` → `AssetModel.svelte` still resolves `productionFile` through `getAsset(assetId)`. The child plan must close that drift with one visitor-safe model-source resolver/shared seam; it must not add a visitor dependency on editor stores or a second model renderer.
+
+For every accepted static model addition:
+
+- append its stable `assetId` → retained production-file mapping to the canonical shipped-static registry and bump the registry version;
+- retain the referenced deployed file for already-published releases;
+- prove the file exists in production/static output and that cold resolution does not depend on the current editable catalogue entry;
+- if stable shipped-static retention cannot be proven in the deployment topology, fall back to P22's already-ratified rule: copy/pin those required bytes into release-controlled delivery storage rather than weakening release durability.
+
+**Decision 3 — P22 pinning has two explicit model cases.** Built-in/static P24A models use the existing append-only shipped-static retention contract; they do not need a duplicate per-release R2 hash pin when stable retention is proven. Future project/upload/provider models, if later selected, must extend the existing P20/P22 byte path and be release-pinned exactly as durable project assets are: immutable release membership plus object identity, SHA-256, MIME and byte size, then version-qualified cold delivery.
+
+That future project-model path is **DEFERRED from the static-first P24A minimum**. Current P20 is intentionally texture/procedural-only: API/editor asset kinds exclude `model`, MIME accepts images only, upload validation sniffs images, and the public release client verifies only PNG/JPEG/WebP bytes. A later dynamic-model slice must extend those existing seams coherently (`kind: 'model'`, canonical GLB MIME/validation, project/release-scoped model source resolution) instead of inventing a parallel registry. Scene still stores the stable asset identity, not delivery coordinates.
+
+**Decision 4 — model Save/Load semantics and current cloud format acceptance are sufficient; end-to-end proof remains.** The Scene codec already round-trips model `assetId`, fallback, transform and material-instance reference. P23.1 also widened the shared project codec so `validateProject()` accepts explicit wall-first Layout + world-local Scene, and live `captureValidatedSaveSnapshot()` / `loadProject()` already flow through that shared codec. P24A therefore needs no model-specific serializer and no separate project-persistence codec cutover merely to persist a static-model identity. This does **not** mean the editor Scene-format authoring lifecycle is closed: `createEmptyProject()` still boots a legacy-compatible Scene without `formatVersion`, and live mutation policy still permits legacy-room-local Scene mutation. Before any world-local/no-`roomId` Stage write, reachable canonical authoring must therefore ensure the Scene is `formatVersion: 1`, or explicitly adapt legacy mutation without mixing coordinate meanings. The P24A implementation gate still must prove a real world-local model Save → Load round-trip.
+
+**Decision 5 — cold visitor coordinate preparation is closed; capability delivery remains to prove.** F0's shared `prepareCompatibleRuntime()` already gives Preview and cold visitor the same world-local coordinate meaning. P24A must not reopen coordinate migration. The remaining P24A visitor proof is resource-level: selected static models resolve through the shipped-static authority, required files are retained, selected material/HDRI dependencies resolve, and no editor-warmed/global source state is required.
+
+**R1 remaining blockers before implementation-ready P24A child plans freeze:**
+
+1. shared Stage placement/selectability must stop requiring Room ownership for canonical world-local Scene, **and reachable canonical authoring must ensure the Scene is `formatVersion: 1` before world-local Stage writes occur; legacy Scene mutation remains compatibility-only or must be explicitly adapted without mixing coordinate meanings**;
+2. cold static-model rendering must take its production source from the shipped-static compatibility authority rather than the mutable live catalogue;
+3. the selected floor/support placement operation still needs the shared P24 support/surface resolution contract for Y/ambiguity; P24A's floor-normalized pivot does not replace that Layout query;
+4. P24A.3–P24A.6 execution still has to acquire/run the frozen proof corpus and bounded material/HDRI supply through the decided pipeline and acceptance fixtures, including real Save/Load + cold-visitor model delivery proof.
+
+These are implementation/reconciliation blockers, not missing broad research. Dynamic project/upload/provider GLB ingestion is a deferred depth path and does **not** block the static-first P24A minimum.
 
 ## Outcome
 
@@ -192,6 +211,8 @@ Wall art and ceiling/hanging assets may remain Plan-ineligible when a floor foot
 
 The completed Pascal harvest may be used only for fixture-level evidence that one semantic item can expose derived 2D/3D representations and eligibility-specific affordances. Museum's `AssetDefinition`/`SceneEntity` split remains authority: PlanProxy belongs to asset definition metadata, not a duplicate per-instance Scene record.
 
+Post-F0 R1 closes the coordinate question: this metadata is placement-local, while the placed Scene entity is canonical project/world-local. The existing Plan projector already treats absent `roomId` as the identity frame; legacy Room conversion remains compatibility-only. Do not bake project/world position into `AssetFootprint` or generate a second per-placement proxy record.
+
 ## P24A.3 — Cross-source proof set
 
 Before catalog expansion, prove the same pipeline on roughly **10–12 representative assets**:
@@ -220,32 +241,53 @@ Where research marks exact archive members unresolved, implementation must enume
 
 ## P24A.4 — Canonical model registry/runtime path
 
-This is the main repository-specific gap.
+This is the main repository-specific integration gap, but its minimum direction is now closed by R1.
 
-P20 shipped durable registry/R2 support around images/textures and explicitly recorded that no viable generic client GLB import/placement path existed. P22 also excludes uploaded model ingestion. P24A must therefore establish the canonical model path rather than assuming normalized GLBs already flow through the durable project/runtime boundary.
+P20 shipped durable registry/R2 support around images/textures and explicitly recorded that no viable generic client GLB import/placement path existed. P22 excludes uploaded model ingestion but already ships the visitor-safe static-model compatibility registry and retention contract. P24A therefore uses **static-first** for the minimum instead of making generic uploaded GLB infrastructure a prerequisite.
 
-Required direction:
+Minimum path:
 
 ```text
-accepted model identity
+accepted static model identity + normalized derivative
    ↓
-project/catalogue asset resolution
+append-only shipped-static model mapping
    ↓
-Scene asset reference + placement
+SceneModelEntity.assetId + canonical world-local placement
    ↓
-Save / Load
+canonical Scene/Project Save + compatible Load
    ↓
-P22-compatible release resource identity
+retained shipped-static release identity
+   ↓
+visitor-safe shipped-static model source resolver
    ↓
 cold visitor runtime
 ```
 
-Implementation may stage this:
+Rules:
 
-1. prove bundled/static Wave 1 resources through P22's shipped-resource compatibility path;
-2. when upload/provider model ingestion is introduced, extend the P20 registry/R2 + P22 resolver to canonical GLB bytes.
+- `SceneModelEntity.assetId` is the authored identity; file/storage/provider coordinates never enter Scene truth;
+- built-in/static Wave-1 definitions carry PlanProxy, pivot/grounding and provenance metadata outside the placed Scene record;
+- cold visitor validation **and loading** must resolve the static model through the append-only compatibility authority, not the mutable live catalogue;
+- shipped files referenced by prior releases remain retained; if deployment retention is insufficient, use P22's release-controlled byte-pinning fallback;
+- live project Save/Load must consume the shared canonical/compatible project persistence seam, not a model-specific serializer.
 
-End state: one authored asset-resolution model, not separate placement systems for Built-in, Upload and Online.
+Deferred dynamic path:
+
+```text
+accepted project/upload/provider model
+   ↓
+P20 registry/R2 extended with model kind + canonical GLB validation
+   ↓
+SceneModelEntity.assetId
+   ↓
+release manifest hash/size/MIME pin
+   ↓
+version-qualified release-scoped model resolver
+   ↓
+cold visitor
+```
+
+That dynamic path is a later depth slice unless R9 explicitly promotes it. It must extend the existing project asset and release systems; no separate model registry/persistence system is permitted.
 
 ## P24A.5 — Materials + HDRIs supply
 
@@ -313,10 +355,12 @@ P24A minimum is complete when:
 3. 10–12 cross-source proof assets pass one pipeline;
 4. Plan-eligible proof assets compile to existing `AssetFootprint` and pass the Phase 2 proxy fixtures;
 5. an attribution-required item proves provenance survives use;
-6. accepted model identity has an explicit Scene placement + Save/Load + P22 visitor delivery path, with no live-provider/editor-warmed dependency;
+6. accepted static model identity has an explicit canonical Scene placement + Save/Load + retained shipped-static visitor delivery path, with loading sourced from the compatibility authority and no live-provider/editor-warmed dependency;
 7. a bounded material/HDRI set is available for P24B;
 8. the rest of the 32-object manifest is demonstrably repeatable backlog work and does not gate P24B or P25.
 
+Dynamic project/upload/provider GLB ingestion is not required to close this static-first minimum. If later promoted, it must prove P20/R2 registration + immutable P22 release pinning + release-scoped cold model resolution before shipping.
+
 ## Deferred scope
 
-P24A minimum does not include marketplace/community catalogue, user-wide My Assets, arbitrary remote import, full asset search/discovery platform, foliage/LOD system, every provider adapter, giant asset counts, material-editing UX, lighting authoring, shader graphs, UV editing, animation/rigging or mesh topology editing.
+P24A minimum does not include marketplace/community catalogue, user-wide My Assets, arbitrary remote import, full asset search/discovery platform, generic project/upload/provider GLB ingestion, foliage/LOD system, every provider adapter, giant asset counts, material-editing UX, lighting authoring, shader graphs, UV editing, animation/rigging or mesh topology editing.
