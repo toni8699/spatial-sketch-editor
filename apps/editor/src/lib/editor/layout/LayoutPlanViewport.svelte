@@ -25,6 +25,7 @@
 		selectLayoutWall,
 		setArrangeOwner,
 		setLayoutDraftTool,
+		type LayoutDraftTool,
 		removeLastPolygonPoint,
 		resolveArrangeScenePick,
 		shouldBeginWallBend,
@@ -66,7 +67,6 @@
 		panPlanViewport,
 		planScreenToWorld,
 		setPlanViewportSize,
-		snapToGrid,
 		zoomPlanViewport
 	} from './layout-plan-transform';
 	import type { LayoutRoom, LayoutVec2 } from '$lib/layout/layout-types';
@@ -96,10 +96,18 @@
 		planHandleScreenPoints,
 		rotationHandleScreenPoint,
 		withArrangeHoverOutline,
+		withLayoutSnapFeedback,
 		withPlanObjectRotationHandle,
 		withPlanSceneRotationHandle,
 		yawFeedbackText
 	} from './plan-overlays';
+	import {
+		LAYOUT_PLAN_GRID_STEP,
+		resolveLayoutSnap,
+		type SnapFeatureKind,
+		type SnapInputContext,
+		type SnapResolution
+	} from '@portfolio/layout-core';
 	import { planCameraProjectionForProject } from './plan-camera-projection';
 	import PlanSvg from './PlanSvg.svelte';
 	import PlanCanvasChrome from './PlanCanvasChrome.svelte';
@@ -189,6 +197,49 @@
 	let roomUnitSnapshot = $state<LayoutPreviewSnapshot | null>(null);
 	let rotationHoverScreen = $state<LayoutVec2 | null>(null);
 	let sceneBridgeHover = $state<{ entityId: string; screen: LayoutVec2 } | null>(null);
+	// P23.2 — transient snap resolution (session-only). The point is the raw
+	// pointer world position the last resolution ran at; null clears feedback.
+	let snapFeedback = $state<SnapResolution | null>(null);
+	let snapFeedbackPoint = $state<LayoutVec2 | null>(null);
+
+	function clearLayoutSnapFeedback(): void {
+		snapFeedback = null;
+		snapFeedbackPoint = null;
+	}
+
+	/**
+	 * P23.2 — resolve one deterministic snap for a raw pointer world point.
+	 * Pure over the compiled geometry; exclusion is explicit and tool-specific
+	 * (moving targets never self-snap). Falls back to the shared grid step
+	 * exactly like the legacy `snapToGrid` call it replaces. Snap-off returns
+	 * the raw point and clears any live feedback (toggle clear rule).
+	 */
+	function applyLayoutSnap(
+		point: LayoutVec2,
+		options: {
+			allowedKinds?: SnapFeatureKind[];
+			excludeSourceIds?: ReadonlySet<string>;
+			excludePoints?: readonly LayoutVec2[];
+		} = {}
+	): LayoutVec2 {
+		if (!interaction.planView.snapEnabled) {
+			clearLayoutSnapFeedback();
+			return point;
+		}
+		const input: SnapInputContext = {};
+		if (options.allowedKinds) input.allowedKinds = options.allowedKinds;
+		if (options.excludeSourceIds) input.excludeSourceIds = options.excludeSourceIds;
+		if (options.excludePoints) input.excludePoints = options.excludePoints;
+		const resolution = resolveLayoutSnap(
+			preview.geometry,
+			point,
+			{ pixelsPerMeter: interaction.planView.pixelsPerMeter, gridStep: LAYOUT_PLAN_GRID_STEP },
+			input
+		);
+		snapFeedback = resolution;
+		snapFeedbackPoint = [...point] as LayoutVec2;
+		return resolution.kind === 'snap' ? [...resolution.candidate.point] as LayoutVec2 : point;
+	}
 	let previousPlanViewMode = $state<PlanViewMode | null>(null);
 	let stagingGesture = $state<{
 		pointerId: number;
@@ -403,7 +454,8 @@
 		return { id: footprint.entityId, points: footprint.points };
 	});
 	const interactionProjection = $derived(
-		withArrangeHoverOutline(
+		withLayoutSnapFeedback(
+			withArrangeHoverOutline(
 			withPlanObjectRotationHandle(
 				withPlanSceneRotationHandle(
 					baseInteractionProjection,
@@ -426,6 +478,8 @@
 				objectRotateFeedback
 			),
 			arrangeHoverOutline
+			),
+			snapFeedback
 		)
 	);
 	const planModel = $derived(
@@ -470,6 +524,12 @@
 		if (!active || interaction.planViewMode !== 'layout' || interaction.tool !== 'select') {
 			sceneBridgeHover = null;
 		}
+		// P23.2 clear rules — tool change and Layout/Arrange authority change
+		// drop transient guides (the shared state helpers also cancel gestures,
+		// so this runs for every reset path).
+		if (interaction.tool !== 'select' || interaction.planViewMode !== 'layout') {
+			clearLayoutSnapFeedback();
+		}
 	});
 
 	$effect(() => {
@@ -481,6 +541,14 @@
 		if (mode === previousPlanViewMode) return;
 		previousPlanViewMode = mode;
 		cancelLocalPlanInteraction();
+	});
+
+	$effect(() => {
+		// P23.2 clear rules — snap toggle off or a Plan↔3D switch drops any
+		// live guide/marker.
+		if (!interaction.planView.snapEnabled || interaction.viewMode !== 'plan') {
+			clearLayoutSnapFeedback();
+		}
 	});
 
 	$effect(() => {
@@ -527,6 +595,7 @@
 
 	function cancelLocalPlanInteraction(): void {
 		const scenePointerId = stagingGesture?.pointerId ?? null;
+		clearLayoutSnapFeedback();
 		if (stagingGesture) onSceneGestureCancel?.();
 		const hadLayoutInteraction = Boolean(
 			dragSnapshot ||
@@ -926,8 +995,7 @@
 		if (anchor && event.shiftKey && interaction.planView.angleSnapEnabled) {
 			point = constrainToAngle(anchor, point);
 		}
-		if (interaction.planView.snapEnabled) point = snapToGrid(point);
-		return point;
+		return applyLayoutSnap(point);
 	}
 
 	function isPrimitiveTool(tool: LayoutInteractionState['tool']): tool is 'box' | 'cylinder' | 'sphere' {
@@ -1233,13 +1301,12 @@
 				beginLayoutObjectDrag(interaction, target.objectId, object.position);
 			}
 			return;
-		}
-		if (target.kind === 'wall') {
+		}		if (target.kind === 'wall') {
 			selectLayoutWall(interaction, target.roomId, target.segmentId);
 			if (!svgElement) return;
-			const projected = interaction.planView.snapEnabled
-				? snapToGrid(target.projection.point)
-				: target.projection.point;
+			const projected = applyLayoutSnap(target.projection.point, {
+				excludeSourceIds: new Set([target.segmentId])
+			});
 			pendingWallBend = {
 				pointerId: event.pointerId,
 				roomId: target.roomId,
@@ -1314,7 +1381,10 @@
 		if (interiorAnchorPointerId === event.pointerId && draggedInteriorAnchor) {
 			const point = worldPoint(event);
 			if (!point) return;
-			const next = interaction.planView.snapEnabled ? snapToGrid(point) : point;
+			const next = applyLayoutSnap(point, {
+				allowedKinds: ['grid'],
+				excludeSourceIds: new Set([draggedInteriorAnchor.segmentId])
+			});
 			updateLayoutWallInteriorAnchor(
 				preview,
 				draggedInteriorAnchor.roomId,
@@ -1345,10 +1415,19 @@
 		}
 		if (interaction.objectDrag) {
 			const point = worldPoint(event);
-			if (point) updateLayoutObjectDrag(
+			if (!point) {
+				clearLayoutSnapFeedback();
+				return;
+			}
+			const snapped = applyLayoutSnap(point, {
+				excludeSourceIds: new Set([interaction.objectDrag.objectId])
+			});
+			// The point is already snap-resolved (semantic or grid fallback);
+			// `false` stops the drag helper from re-rounding it to the grid.
+			updateLayoutObjectDrag(
 				interaction,
-				point,
-				interaction.planView.snapEnabled,
+				snapped,
+				false,
 				event.shiftKey,
 				interaction.planView.angleSnapEnabled
 			);
@@ -1379,11 +1458,25 @@
 		}
 		if (interaction.tool === 'select' && interaction.editing) {
 			const point = worldPoint(event);
-			if (point) updateRoomEdit(interaction, point, interaction.planView.snapEnabled);
+			if (!point) {
+				clearLayoutSnapFeedback();
+				return;
+			}
+			const edit = interaction.editing;
+			// P23.2 — a moving vertex excludes its own current point so it
+			// cannot snap to itself; rigid room translates share one resolved
+			// target exactly like the legacy grid behavior.
+			const excludePoints = edit.vertexIndex !== null
+				? [edit.currentPoints[edit.vertexIndex]].filter((candidate): candidate is LayoutVec2 => Boolean(candidate))
+				: undefined;
+			updateRoomEdit(interaction, applyLayoutSnap(point, { excludePoints }), false);
 		}
 	}
 
 	function onPointerUp(event: PointerEvent) {
+		// P23.2 clear rule — a released pointer ends feedback; commits consume
+		// the already-resolved candidate positions captured during the drag.
+		clearLayoutSnapFeedback();
 		if (stagingGesture?.pointerId === event.pointerId) {
 			const gesture = stagingGesture;
 			previewStagingGesture(event);
@@ -1428,13 +1521,15 @@
 				preview.statusMessage = 'Choose a non-zero gesture inside a first-floor room';
 				onLayoutTransactionCancel();
 			} else {
+				// draft.current is already snap-resolved via draftPoint; commit
+				// must not re-round a semantic snap back to the grid.
 				const result = commitLayoutPrimitive(
 					preview,
 					draft.kind,
 					draft.start,
 					draft.current,
 					draft.roomId,
-					interaction.planView.snapEnabled
+					false
 				);
 				if (result.success) {
 					selectLayoutObject(interaction, result.objectId);
@@ -1518,6 +1613,7 @@
 	function onPointerCancel(event: PointerEvent) {
 		if (stagingGesture?.pointerId === event.pointerId) cancelStagingGesture();
 		arrangeLayoutRotationHoverScreen = null;
+		clearLayoutSnapFeedback();
 		if (interaction.primitiveDraft && pointerId === event.pointerId) {
 			onLayoutTransactionCancel();
 			cancelLayoutPrimitiveDraft(interaction);
@@ -1558,7 +1654,7 @@
 		const anchor = interaction.polygonPoints.at(-1) ?? null;
 		let nextPoint = point;
 		if (anchor && event.shiftKey && interaction.planView.angleSnapEnabled) nextPoint = constrainToAngle(anchor, nextPoint);
-		if (interaction.planView.snapEnabled) nextPoint = snapToGrid(nextPoint);
+		nextPoint = applyLayoutSnap(nextPoint);
 		const first = interaction.polygonPoints[0];
 		const closeDistance = 14 / interaction.planView.pixelsPerMeter;
 		if (first && interaction.polygonPoints.length >= 3 && distance(first, nextPoint) <= closeDistance) {
@@ -1581,11 +1677,12 @@
 	}
 
 	function onKeyDown(event: KeyboardEvent) {
-		if (event.key === 'Escape') {
-			event.preventDefault();
-			event.stopPropagation();
-			dismissSceneBridge();
-			if (stagingGesture) {
+	if (event.key === 'Escape') {
+		event.preventDefault();
+		event.stopPropagation();
+		dismissSceneBridge();
+		clearLayoutSnapFeedback();
+		if (stagingGesture) {
 				cancelStagingGesture();
 				return;
 			}
@@ -1777,6 +1874,7 @@
 			rotationHoverScreen = null;
 			arrangeLayoutRotationHoverScreen = null;
 			arrangeHover = null;
+			clearLayoutSnapFeedback();
 		}}
 	>
 		<PlanCanvasChrome layer="grid" planView={interaction.planView} />

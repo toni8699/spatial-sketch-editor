@@ -635,7 +635,8 @@ describe('P21.2 scene reconciliation', () => {
 		expect(inspector).toContain('layout-primer');
 		expect(inspector).toContain('Rect Room');
 		expect(inspector).toContain('Poly Room');
-		expect(inspector).toContain('Snap 0.25m');
+		// P23.2 — the snap label reads the centralized grid step constant.
+		expect(inspector).toContain('Snap {LAYOUT_PLAN_GRID_STEP}m');
 		// Primer carries no buttons — directional guidance only (Design-Plan H).
 		const primerStart = inspector.indexOf('<div class="layout-primer"');
 		const primerEnd = inspector.indexOf('</div>', primerStart);

@@ -69,6 +69,9 @@ export type PlanStyleToken =
 	| 'primitive-ghost-invalid'
 	| 'draft-outline'
 	| 'draft-point'
+	| 'snap-guide'
+	| 'snap-marker'
+	| 'snap-marker-grid'
 	| 'dimension-label'
 	| 'selection-label'
 	| 'scale-label';

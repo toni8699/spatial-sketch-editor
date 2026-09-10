@@ -8,6 +8,7 @@ import {
 } from './layout-interaction';
 import { worldToPlanScreen, type PlanViewportState } from './layout-plan-transform';
 import { geometryId } from '$lib/layout/layout-geometry-types';
+import type { SnapResolution } from '@portfolio/layout-core';
 import type {
 	PlanHitIdentity,
 	PlanInteractionProjection,
@@ -24,6 +25,7 @@ import type {
  * into this projection instead of computing overlay screen coordinates.
  */
 
+const SNAP_MARKER_RADIUS_PX = 4;
 const ROTATION_HANDLE_OFFSET_PX = 28;
 const ROTATION_FEEDBACK_OFFSET_PX = 40;
 const DIMENSION_LABEL_OFFSET_PX = 5;
@@ -181,6 +183,35 @@ export function withPlanObjectRotationHandle(
 				: [])
 		]
 	};
+}
+
+/**
+ * P23.2 — transient snap feedback as render primitives. Session state only:
+ * the resolution is recomputed per pointer event and never mutates the
+ * document or history. Guides render as thin dashed screen-space lines; the
+ * marker shows the resolved point, muted for the grid fallback so semantic
+ * candidates are visually distinct.
+ */
+export function withLayoutSnapFeedback(
+	projection: PlanInteractionProjection,
+	resolution: SnapResolution | null
+): PlanInteractionProjection {
+	if (!resolution || resolution.kind !== 'snap') return projection;
+	const { candidate, guides } = resolution;
+	const primitives: PlanRenderPrimitive[] = guides.map((guide, index) => ({
+		kind: 'polyline',
+		key: geometryId(['plan', 'snap-feedback', 'guide', candidate.sourceId, String(index)]),
+		points: [guide.start, guide.end],
+		style: 'snap-guide'
+	}));
+	primitives.push({
+		kind: 'circle',
+		key: geometryId(['plan', 'snap-feedback', 'marker', candidate.sourceId]),
+		center: candidate.point,
+		radiusPx: SNAP_MARKER_RADIUS_PX,
+		style: candidate.kind === 'grid' ? 'snap-marker-grid' : 'snap-marker'
+	});
+	return { ...projection, drafts: [...projection.drafts, ...primitives] };
 }
 
 /** Shared `+NN°` gesture feedback formatting (matches the room label). */
