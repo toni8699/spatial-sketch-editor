@@ -113,7 +113,7 @@ Policy rules:
 | # | Plan | Status | Depends on | Doc |
 |---|------|--------|------------|-----|
 | P13 | Sequence stop-at-node playback | proposed — nice-to-have, unscheduled (owner 2026-08-27) | P12 | [2026-08-27-P13-stop-at-node-playback.md](2026-08-27-P13-stop-at-node-playback.md) |
-| P23 | Layout Depth — minimum useful Build set | approved — owner-ratified wall-first reconciliation 2026-09-09; H1/H2/H3/H5 complete; coupled Foundation Gate **P23.0a → P23.8 → P23.0b shipped** (commits `13a96a0`, `7d9df94`, `41a5cde` on main); **F0 acceptance passed 2026-09-10** (stages 1–5 + review fixes `b5427d8`/`e57b1c3`/`2c9b04d`/`0d66aed`/`442f85a`); remaining: owner-gated stage-6 flip (enable new-schema writes) — writers stay disabled until flip | P22 | [umbrella](2026-09-07-P23-layout-depth-minimum-build.md) |
+| P23 | Layout Depth — minimum useful Build set | approved — owner-ratified wall-first reconciliation 2026-09-09; H1/H2/H3/H5 complete; coupled Foundation Gate **P23.0a → P23.8 → P23.0b shipped** (commits `13a96a0`, `7d9df94`, `41a5cde` on main); **F0 acceptance passed 2026-09-10**; **stage-6 flip executed 2026-09-10 on branch `p23-stage6-flip` (owner go-ahead; uncommitted — wall-first writes adapted, full gate green)** — pending owner merge to `main` | P22 | [umbrella](2026-09-07-P23-layout-depth-minimum-build.md) |
 | P24 | Scene / Staging Depth umbrella — P24A asset supply + P24B Rich Scene / Staging Authoring | proposed — umbrella/research reconciliation; Pascal direct-reference harvest closed; active reconciliation sequence is R0–R9/B0–B6; planning may run in parallel with P23, implementation still depends on P23; P24A remains child seed/evidence pending; targeted post-F0 seam recheck required before implementation-ready child plans freeze | P23 | [umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md) · [reconciliation](2026-09-09-P24-reconciliation-sequence.md) |
 | P25 | Experience Foundation umbrella | proposed — focused research reconciled 2026-09-09: Destination + guided Stop/occurrence + Content/Info Panel + bounded Interaction + visitor/a11y product semantics closed; implementation remains blocked on targeted post-F0/P24 seam rechecks, E5 reference integrity and E6 persistence/operations; no P25.x implementation-ready child plans yet | P24 | [umbrella](2026-09-08-P25-experience-foundation-umbrella.md) |
 | — | Branch rejoin — experiment, no schedule | proposed | P8 conceptually | [2026-08-21-branch-rejoin-experiment.md](2026-08-21-branch-rejoin-experiment.md) |
@@ -154,8 +154,10 @@ gate) now lives in the archived docs, not here.
   cold-browser loop through deployed proxy/API/Postgres/R2, anonymous
   release-membership boundary, shipped-static retention, full checks + route
   bundle gates green; public-route `untrack` fix deployed as `f46e8f3`);
-  **P23 Foundation Gate F0 passed 2026-09-10**, next is the owner-gated
-  stage-6 flip (enable wall-first writes). P23 wall-first reconciliation was
+  **P23 Foundation Gate F0 passed 2026-09-10**; **stage-6 flip executed
+  2026-09-10 on branch `p23-stage6-flip`** with owner go-ahead (wall-first
+  layout mutation `adapted`; full gate green on the branch; uncommitted,
+  pending owner merge). P23 wall-first reconciliation was
   owner-ratified 2026-09-09 after H1/H2/H3/H5. F0 is one gate across P23.0 +
   P23.8: schema/compat scaffolding → topology/Room reconciliation →
   migration/compiler/editor-adapter cutover → compatibility acceptance →

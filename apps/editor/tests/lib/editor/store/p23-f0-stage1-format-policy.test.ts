@@ -172,13 +172,13 @@ describe('P23.0 F0 stage 1 — central format-dispatch policy tables', () => {
 		}
 	});
 
-	it('wall-first layout mutation is explicitly disabled with a named reason', () => {
-		expect(LAYOUT_MUTATION_POLICY['wall-first']).toBe('disabled');
-		const reason = LAYOUT_MUTATION_REASONS['wall-first'];
-		expect(reason).toBeTruthy();
+	it('wall-first layout mutation is adapted after the stage-6 flip (2026-09-10 owner go-ahead)', () => {
+		expect(LAYOUT_MUTATION_POLICY['wall-first']).toBe('adapted');
+		// The refusal reason is retired: the flip enabled wall-first writes.
+		expect(LAYOUT_MUTATION_REASONS['wall-first']).toBeNull();
 		// The shipped Chopin layout is legacy and adapted; a minimal
 		// wall-first-shaped value (real fixtures live in the codec suite)
-		// classifies as wall-first and refuses.
+		// classifies as wall-first and is now adapted.
 		expect(classifyLayoutFormat(chopinProject.layout)).toBe('legacy');
 		const wallFirstShape = {
 			units: 'meters',
@@ -191,10 +191,10 @@ describe('P23.0 F0 stage 1 — central format-dispatch policy tables', () => {
 			objects: []
 		};
 		expect(classifyLayoutFormat(wallFirstShape)).toBe('wall-first');
-		const disabledClass = layoutMutationClassFor(wallFirstShape);
-		expect(disabledClass.policy).toBe('disabled');
-		expect(disabledClass.reason).toBe(reason);
-		expect(isMutationAllowed(disabledClass)).toBe(false);
+		const adaptedClass = layoutMutationClassFor(wallFirstShape);
+		expect(adaptedClass.policy).toBe('adapted');
+		expect(adaptedClass.reason).toBeNull();
+		expect(isMutationAllowed(adaptedClass)).toBe(true);
 	});
 
 	it('unrecognized layouts are disabled; legacy layout is adapted', () => {
@@ -341,7 +341,7 @@ describe('P23.0 F0 stage 1 — behavioral guard contract', () => {
 		expect(store.cancelLayoutTransaction()).toBe(true);
 	});
 
-	it('wall-first layout documents refuse layout authoring with the named reason', () => {
+	it('wall-first layout documents accept layout authoring after the stage-6 flip', () => {
 		const store = createFixtureEditorStore();
 		expect(classifyLayoutFormat(wallFirstLayout)).toBe('wall-first');
 		const holder = attachLayoutHost(store, chopinProject.layout);
@@ -350,32 +350,31 @@ describe('P23.0 F0 stage 1 — behavioral guard contract', () => {
 		expect(store.beginLayoutTransaction()).toBe(true);
 		store.cancelLayoutTransaction();
 
-		// Swap the live layout to wall-first: the central guard refuses with
-		// the stage-2 reason.
+		// Swap the live layout to wall-first: the central guard is adapted —
+		// the flip means the switch is the document, not a per-controller
+		// flag, and no refusal message is set.
 		holder.project.layout = wallFirstLayout;
-		expect(store.beginLayoutTransaction()).toBe(false);
-		expect(store.statusMessage).toBe(
-			'Wall-first layout mutation enables with the canonical writers (P23.0 stage 2)'
-		);
+		expect(store.beginLayoutTransaction()).toBe(true);
+		expect(store.statusMessage).toBeNull();
+		store.cancelLayoutTransaction();
 
-		// Swap back: the switch is the document, not a per-controller flag.
+		// Swap back: legacy authoring still opens.
 		holder.project.layout = chopinProject.layout;
 		expect(store.beginLayoutTransaction()).toBe(true);
 		store.cancelLayoutTransaction();
 	});
 
-	it('a layout swap landing mid-transaction refuses commit and closes the bracket (F0 review)', () => {
+	it('an unrecognized layout swap landing mid-transaction refuses commit and closes the bracket (F0 review)', () => {
 		const store = createFixtureEditorStore();
 		const holder = attachLayoutHost(store, chopinProject.layout);
 		expect(store.beginLayoutTransaction()).toBe(true);
 
 		// The swap lands while the transaction is open: begin saw legacy,
-		// the live layout is now wall-first.
-		holder.project.layout = wallFirstLayout;
+		// the live layout is now unrecognized (the only remaining refused
+		// layout format after the stage-6 flip).
+		holder.project.layout = { units: 'nonsense' };
 		expect(store.commitLayoutTransaction(null)).toBe(false);
-		expect(store.statusMessage).toBe(
-			'Wall-first layout mutation enables with the canonical writers (P23.0 stage 2)'
-		);
+		expect(store.statusMessage).toBe('Unrecognized layout format cannot be authored');
 
 		// The refused commit rolled back via cancel(): no open transaction
 		// leaks — swapping back to legacy re-opens cleanly. (begin() leaves
