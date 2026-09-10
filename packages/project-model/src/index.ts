@@ -10,5 +10,6 @@ export * from './scene';
 export * from './scene-codec';
 export * from './scene-format';
 export * from './scene-world-conversion';
+export * from './standalone-scene-import';
 export * from './wall-first-project';
 export * from './shipped-static';

@@ -47,6 +47,7 @@ import type {
 } from './layout-wall-first-types';
 import { LAYOUT_WALL_FIRST_FORMAT_VERSION } from './layout-wall-first-types';
 import { classifyWallIntersection } from './layout-wall-topology';
+import { validateWallFirstPortalRelations } from './layout-portals';
 import { planWallSplitAtPoint, type NodingIdAllocator } from './layout-wall-noding';
 import {
 	extractBoundaryCandidateFaces,
@@ -266,6 +267,20 @@ export function migrateLegacyLayoutDocument(
 	const issues = validateCandidate(finalDocument);
 	if (issues.length > 0) {
 		return rejected('candidate-validation-failed', issues);
+	}
+
+	// --- 8. carried portal relations: non-blocking adjacency diagnostic -----
+	// Legacy relations migrate verbatim (never silently cleared) so old
+	// projects stay readable; a relation that violates the strict new-schema
+	// adjacency contract is diagnosed here and blocks new-schema Save later
+	// (P23.0 portal Save-blocker), instead of failing this migration.
+	for (const portal of validateWallFirstPortalRelations(finalDocument)) {
+		diagnostics.push({
+			path: `$.openings.${portal.openingId}.connectsRoomIds`,
+			code: portal.code,
+			message: `Carried legacy portal relation: ${portal.message}`,
+			targetId: portal.openingId
+		});
 	}
 
 	return {

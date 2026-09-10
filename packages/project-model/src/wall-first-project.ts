@@ -16,6 +16,7 @@
  */
 import {
 	validateWallFirstLayoutDocument,
+	validateWallFirstPortalRelations,
 	type LayoutDocumentWallFirst,
 	type LayoutDocumentIssue
 } from '@portfolio/layout-core';
@@ -155,6 +156,24 @@ export function validateWallFirstProject(input: unknown): WallFirstProjectValida
 
 	if (!layout.success || scene.kind !== 'world-local' || issues.length > 0) {
 		return { success: false, issues };
+	}
+
+	// P23.0 portal Save-blocker (F0 stage 5): a legacy nonadjacent relation
+	// stays compatibility-readable on the read path, but new-schema Save
+	// requires the strict P23.3 adjacency contract — resolve or remove the
+	// relation first. This runs after the codec gate so endpoint existence is
+	// already established; adjacency is the Save-side rule, never a codec rule.
+	const portalIssues = validateWallFirstPortalRelations(layout.document);
+	if (portalIssues.length > 0) {
+		return {
+			success: false,
+			issues: portalIssues.map((issue) => ({
+				side: 'layout' as const,
+				path: `$.layout${issue.path.slice(1)}`,
+				code: issue.code,
+				message: issue.message
+			}))
+		};
 	}
 
 	const project: WallFirstProjectPayload = {

@@ -555,33 +555,38 @@ describe('P23.0 stage 3 — portal fixtures against the birth writers', () => {
 	});
 
 	it('a valid born portal relation survives the Save round-trip', () => {
-		// Two independent rooms share nothing; the door on the shared annex
-		// wall declares the explicit semantic relation between the born IDs.
-		const twinJunctions: readonly JunctionSeed[] = [
-			...RECT_JUNCTIONS,
-			['j-e', 10, 0],
-			['j-f', 16, 0],
-			['j-g', 16, 4],
-			['j-h', 10, 4]
+		// Two rooms sharing wall-e (6x4 rect split at x=3): the door on the
+		// shared wall declares the explicit semantic relation between the
+		// born IDs, which is exactly the two rooms adjacent to the host.
+		const junctions: readonly JunctionSeed[] = [
+			['j-a', 0, 0],
+			['j-m', 3, 0],
+			['j-b', 6, 0],
+			['j-c', 6, 4],
+			['j-n', 3, 4],
+			['j-d', 0, 4]
 		];
-		const twinWalls: readonly WallSeed[] = [
-			...RECT_CLOSED,
-			['wall-e', 'j-e', 'j-f'],
-			['wall-f', 'j-f', 'j-g'],
-			['wall-g', 'j-g', 'j-h'],
-			['wall-h', 'j-h', 'j-e']
+		const walls: readonly WallSeed[] = [
+			['wall-a1', 'j-a', 'j-m'],
+			['wall-a2', 'j-m', 'j-b'],
+			['wall-b', 'j-b', 'j-c'],
+			['wall-c1', 'j-c', 'j-n'],
+			['wall-c2', 'j-n', 'j-d'],
+			['wall-d', 'j-d', 'j-a'],
+			['wall-e', 'j-m', 'j-n']
 		];
 		const birth = planFirstEnclosureCreation({
-			candidateDocument: birthDocument({ junctions: twinJunctions, walls: twinWalls })
+			candidateDocument: birthDocument({ junctions, walls })
 		});
 		expectSuccess(birth);
+		expect(birth.document.rooms).toHaveLength(2);
 		const [leftId, rightId] = birth.document.rooms.map((room) => room.id);
 		const withPortal: LayoutDocumentWallFirst = {
 			...birth.document,
 			openings: [
 				{
 					id: 'door-bridge',
-					wallId: 'wall-b',
+					wallId: 'wall-e',
 					kind: 'door',
 					offset: 1,
 					width: 0.9,
