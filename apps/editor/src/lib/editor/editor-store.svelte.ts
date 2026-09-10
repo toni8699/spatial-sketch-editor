@@ -314,6 +314,17 @@ export class EditorStore {
 	}
 
 	#layoutFormatPolicySource: (() => { project: { layout: unknown } }) | null = null;
+
+	/**
+	 * P23.0 stage-6 safety invariant: the layout format the open transaction
+	 * began on. Captured by `beginLayoutTransaction`, enforced by
+	 * `commitLayoutTransaction` — a document swap landing mid-transaction
+	 * (legacy ↔ wall-first in either direction, or anything → unrecognized)
+	 * must never commit, because the history snapshot and the live host would
+	 * then mix schemas across one undo boundary. `null` when no layout
+	 * transaction is open.
+	 */
+	#openLayoutTransactionFormat: LayoutFormatKey | null = null;
 	/** public read over the private `relicMode` flag. */
 	get isRelic(): boolean {
 		return this.relicMode;
@@ -2825,9 +2836,9 @@ export class EditorStore {
 		if (this.isDocumentMutationBlocked || this.historyController.isDocumentUndoBlocked) return false;
 		// P23.0 F0 stage 1 — central document-format dispatch: the live layout
 		// format must be `adapted` before any layout mutator opens a
-		// transaction. Wall-first/unrecognized layouts refuse here until the
-		// stage-2 canonical writers land. An unregistered source classifies
-		// as legacy (see `layoutDocumentForFormatPolicy`).
+		// transaction. Post stage-6 flip both legacy and wall-first are
+		// adapted; only unrecognized layouts refuse. An unregistered source
+		// classifies as legacy (see `layoutDocumentForFormatPolicy`).
 		const layoutFormat: LayoutFormatKey = this.layoutDocumentForFormatPolicy === null
 			? 'legacy'
 			: classifyLayoutFormat(this.layoutDocumentForFormatPolicy);
@@ -2837,39 +2848,65 @@ export class EditorStore {
 			);
 			return false;
 		}
+		// P23.0 stage-6 safety invariant: remember the begin format so the
+		// commit re-check can restore the original cross-format rejection
+		// the pre-flip policy table provided implicitly.
+		this.#openLayoutTransactionFormat = layoutFormat;
 		return this.historyController.beginLayout();
 	}
 
 	commitLayoutTransaction(snapshot: unknown): boolean {
 		if (!this.historyController.isDocumentUndoBlocked) return false;
-		// P23.0 stage-2 precondition: the format gate is re-checked at COMMIT.
-		// A document swap landing mid-transaction (begin saw legacy, the live
-		// layout is now wall-first) must not commit wall-first shape through
-		// an entry-guarded-only bracket — roll the transaction back instead.
-		// `cancel()` restores the pre-transaction preview snapshot and closes
-		// the bracket, so a refused commit leaks no open transaction.
-		const layoutFormat: LayoutFormatKey = this.layoutDocumentForFormatPolicy === null
+		// P23.0 stage-6 safety invariant — the commit re-check now enforces the
+		// ORIGINAL cross-format transaction invariant the pre-flip policy table
+		// provided implicitly: the format seen at begin, the format of the live
+		// host at commit, and the format of the committed snapshot must all
+		// agree and be adapted. A document swap landing mid-transaction
+		// (legacy ↔ wall-first in either direction) mixes schemas across one
+		// undo boundary — the history controller would push a snapshot whose
+		// `before` and `next` differ in format while `undo()` blindly replaces
+		// host state — so the transaction rolls back instead. `cancel()`
+		// restores the pre-transaction preview snapshot and closes the
+		// bracket, so a refused commit leaks no open transaction.
+		const currentFormat: LayoutFormatKey = this.layoutDocumentForFormatPolicy === null
 			? 'legacy'
 			: classifyLayoutFormat(this.layoutDocumentForFormatPolicy);
-		if (LAYOUT_MUTATION_POLICY[layoutFormat] !== 'adapted') {
-			this.historyController.cancel();
-			this.setStatusMessage(
-				LAYOUT_MUTATION_REASONS[layoutFormat] ?? 'Unrecognized layout format cannot be authored'
+		const candidateFormat: LayoutFormatKey = snapshot === null || snapshot === undefined
+			? currentFormat
+			: classifyLayoutFormat(
+				(snapshot as { project?: { layout?: unknown } }).project?.layout ?? snapshot
 			);
+		const beginFormat = this.#openLayoutTransactionFormat ?? currentFormat;
+		if (
+			LAYOUT_MUTATION_POLICY[currentFormat] !== 'adapted' ||
+			LAYOUT_MUTATION_POLICY[candidateFormat] !== 'adapted' ||
+			beginFormat !== currentFormat ||
+			beginFormat !== candidateFormat
+		) {
+			this.historyController.cancel();
+			this.#openLayoutTransactionFormat = null;
+			this.setStatusMessage('Layout format changed mid-transaction — edit refused');
 			return false;
 		}
 		const result = this.historyController.commitLayout(snapshot);
+		this.#openLayoutTransactionFormat = null;
 		if (result.error) this.setStatusMessage(result.error.message);
 		return result.changed;
 	}
 
 	cancelLayoutTransaction(): boolean {
 		if (!this.historyController.isDocumentUndoBlocked) return false;
+		// Stage-6 invariant bookkeeping: the bracket closes, the begin format
+		// captured for the commit re-check goes with it.
+		this.#openLayoutTransactionFormat = null;
 		return this.historyController.cancel();
 	}
 
 	clearSharedHistory(): void {
 		this.historyController.clear();
+		// A cleared stack cannot carry an open layout bracket either; drop the
+		// captured begin format with it.
+		this.#openLayoutTransactionFormat = null;
 	}
 
 	beginDocumentTransaction() {
@@ -3004,6 +3041,9 @@ export class EditorStore {
 		this.documentStore.replace(document, rooms);
 		this.documentStore.setBaseline(canonicalJson);
 		this.historyController.clear();
+		// A document import closes any layout bracket the previous session
+		// still held; drop the captured begin format with it.
+		this.#openLayoutTransactionFormat = null;
 		return true;
 	}
 
