@@ -25,7 +25,7 @@ P24 reconciliation
 
 P24 implementation still depends on the accepted P23 minimum useful Build set. Any P24 decision touching coordinates, placement ownership, selection routing, Plan projection or Scene/Camera migration must consume the coordinate/ownership model accepted through P23, not assume the earlier Room-local baseline remains permanent.
 
-P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code. P23 F0 closed on 2026-09-10. The R0 post-F0 delta refresh below is complete; selected P24 placement, selection, support-query and capability-specific asset/runtime seams still carry explicit R9 rechecks before the minimum can freeze.
+P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code. P23 F0 closed on 2026-09-10. The R0/R1/R2 post-F0 refreshes below are complete; selected placement/selection/support-query and capability-specific asset/runtime seams still carry explicit later reconciliation before the R9 minimum freeze.
 
 ## Authority and evidence order
 
@@ -217,7 +217,7 @@ Closed architecture/readiness decisions:
 
 Remaining implementation/reconciliation blockers before implementation-ready P24A children freeze:
 
-1. shared Stage placement/selectability must stop requiring legacy Room ownership for canonical world-local Scene entities;
+1. shared Stage placement/selectability must stop requiring Room ownership for canonical world-local Scene, **and reachable canonical authoring must ensure the Scene is `formatVersion: 1` before world-local Stage writes occur; legacy Scene mutation remains compatibility-only or must be explicitly adapted without mixing coordinate meanings**;
 2. cold static-model rendering must resolve the production source from shipped-static compatibility authority rather than the mutable live catalogue;
 3. selected floor/support placement still needs the shared Layout-query Y/ambiguity contract; normalized floor pivot metadata does not replace support resolution;
 4. P24A.3–P24A.6 execution must run the frozen corpus and bounded material/HDRI supply through real Save/Load + cold-visitor acceptance.
@@ -239,32 +239,36 @@ Keep static-first Wave 1 and the benchmark-first gltfpack disposition. This does
 not force uploaded-model support into Wave 1, replace the normalization/rights
 pipeline or turn every harvest loader into a required fixture.
 
-## R2 — P24B B0 capability-maturity baseline
+## R2 — P24B B0 capability-maturity baseline — POST-F0 REFRESH COMPLETE 2026-09-10
 
 Audit current Stage capabilities end-to-end before deciding depth.
 
-Dated pre-F0 baseline matrix (coordinate/room observations require the current-state qualification in R0 and a post-F0 refresh):
+**Audit baseline:** live `main` at `ddccab6` after P23 F0, P23.1 and the accepted R1 reconciliation. R2 is a maturity map, not a ship-scope expansion. Missing features stay FOLLOW-UP or R9 choices unless they close a proven minimum workflow gap.
 
-| Capability | Current Museum behavior | Canonical owner | Proven gap | Evidence needed? | Disposition |
-|---|---|---|---|---|---|
-| Selection / multi-select | room-scoped ordered multi-select (pre-F0) | canonical ordered selection semantics | Room gating is not a future invariant; cross-view continuity open | code for baseline; R4 owns continuity evidence | KEEP selection identity/order; POST-F0 RECHECK room-gate removal + continuity |
-| Transform / pivot | one host, bounds-center pivot, world-space; scalar `scale?: number` persisted, per-axis session-only/lossy | single transform authority | no Local/World switch; no authored pivot options | code for baseline; bounded refs in R5 only if an unresolved maturity question remains | KEEP authority; DEPTH DECISION → R5 (Local/World, Selection-Center, scale, snap feedback) |
-| Duplicate | clones selection +0.5 XZ, one history entry | existing mutator/history | no collision/bounds/re-ground; partial clusters silently skipped | code for baseline; R5 decides depth | KEEP mechanism; DEPTH DECISION → R5 |
-| Groups / clusters | flat same-room cluster with required `roomId` (pre-F0) | flat non-nested grouping concept | Room ownership scheduled to disappear; no group pivot/Inspector | code for baseline; R5 decides UX depth | KEEP flat concept; do not preserve Room ownership; POST-F0 RECHECK before R5 |
-| Plan Scene staging | derived footprints, Y discarded, lights skipped | Scene entity + derived Plan projection | no height/support/stacked choice; eligibility implicit | code for baseline; R3 owns contract | KEEP derivation; contract per R3 |
-| Placement / grounding | tagged-floor-only, 5-ray, Drop/Keep-on-Floor, `GROUND_EPSILON` no-op guard | existing placement pipeline | single-surface only; no wall/ceiling/surface arming | code for baseline; later tracks decide depth | KEEP pipeline; DEPTH DECISION → later tracks, no persistent links |
-| Asset-library placement entry points | click-to-place 3D only; model Place via Inspector; no Plan entry, no drag | existing asset picker → placement pipeline | entry-point gaps only | code for baseline | POLISH entries; no new framework |
-| Snapping / guides | room-local steps, Shift-bypass; grid visual-only | existing Scene/Plan seams | no align/distribute; no guides/collision feedback | code for baseline; bounded refs in R5 only if open | KEEP seams; DEPTH DECISION → R5; REJECT generic framework |
-| Materials | 6-entry catalogue, single-select, roughness/metalness + one map override | current Scene material model | no tint/PBR-set/scale UI; no multi-apply; no P24A import path | code for baseline; bounded refs in R6 only if open | KEEP model; DEPTH DECISION → R6 |
-| Lights | point/spot/directional, 2.5m drop, 0.12m proxy, fixed -Z aim | `SceneLightEntity` authority | no handles; no cone/range viz; no presets | code for baseline; bounded refs in R7 only if open | KEEP authority; DEPTH DECISION → R7; REJECT second gizmo |
-| Environment | fixed ambient + directional rig; Threlte AgX + sRGB; no authored exposure/HDRI/IBL state | Scene intent + renderer resources | asset resolution, semantic mapping, lifecycle and parity remain; native Three environment/PMREM primitives exist | Three harvest + R7 | Global architecture ratified conditionally; minimum inclusion R9, schema/runtime gate still open |
-| Outliner / Inspector | single-select panels; multi has Duplicate/Delete + prefs only | existing editor surfaces | no bulk transform/material edit; commit-only sync by design | code for baseline | POLISH bulk + sync |
-| History integration | single stack, 1-gesture-1-entry, `documentsMatch` no-op guard | canonical history | cross-view fixture pins missing | code only | KEEP; fixtures per R3/R4 |
-| Editor-only vs visitor + asset-resolution boundary | zero editor imports in `apps/museum`; P20 project bytes remain image/procedural-only; built-in models use shipped-static compatibility | P20 registry / P22 resolver / visitor isolation | cold static-model loading still resolves its URL through live catalogue; dynamic GLB ingest absent | code only | KEEP boundary; DEEPEN shipped-static model source authority; dynamic project GLB FOLLOW-UP |
+| Capability | Live post-F0 behavior / what already works | Genuine Stage-depth gap | Disposition |
+|---|---|---|---|
+| Selection / multi-select | One ordered `EditorSelectionStore` owns workspace + navigation selection, deterministic modifier semantics and `lastSelectedId` primary intent. `selectPlacementFromTree()` / `selectClusterFromTree()` contain partial roomless/world-local branches. | Those branches are not end-to-end functional: `WorkspaceSelection` placement/cluster variants still require `roomId`; `isPlacementSelectable()` still requires selected Room + matching entity Room; `selectCluster()`, select-all and tree expansion remain Room-gated. Canonical roomless Scene selection therefore is not closed. | **KEEP** the selection reducer/identity/order. **DEEPEN only** Room-context removal + R4 continuity fixtures; no second selection store. |
+| Transform / pivot / scale | One Scene gizmo policy/host owns translate/rotate/scale. Drags capture immutable start matrices, preview roots transiently, then commit once. Shared multi-object pivot is a world-AABB center. Numeric Inspector edits already commit through the same Scene transform path. Local/World toolbar + shortcut state already exists. Independent X/Y/Z scale UI/session state also exists. | Scene gizmo policy still hardcodes `space: () => 'world'`, so the existing Local/World control is not wired to Scene behavior. Persisted Scene scale remains one scalar; independent scale is averaged on write. The Inspector still labels Scene transforms `Room-local`. Bounded pivot alternatives and per-axis persistence remain R5/R9 choices, not missing foundations. | **KEEP** one transform authority. **POLISH/DEEPEN narrowly in R5**: wire selected space semantics, clean stale labels, decide bounded pivot/per-axis depth only if useful. |
+| Duplicate | `duplicateSelection()` is deterministic: +0.5 X/Z, preserves source pose/state, duplicates fully selected clusters, selects the copies, and commits one Scene transaction/history result. | No collision/bounds/support re-ground check. If only part of a cluster is selected, copies are created ungrouped without a warning. | **KEEP** operation. R5 may add duplicate-then-move spatial checks + silent-skip warning; no duplicate subsystem. |
+| Groups / clusters | `SceneObjectCluster.roomId` is optional in the schema and the flat non-nested cluster concept already exists. | Live cluster create/add/select paths still require same-Room membership, write/compare `roomId`, and depend on selected Room context. Group pivot/Inspector richness is optional depth, not a canonicalization prerequisite. | **KEEP** flat grouping and no nesting. **DEEPEN only** canonical world-local Room-free CRUD/selection; R5 decides any extra UX depth. |
+| Plan Scene staging | Plan footprints are derived from canonical Scene state. Roomless entities use the identity frame; models are eligible only when asset metadata has floor placement + a valid footprint; primitives derive deterministic shapes; lights intentionally have no footprint. Plan transform adapters already author X/Z + yaw while preserving Y, pitch, roll and scale. | New shared placement still needs explicit support/Y/ambiguity semantics, and selected-but-Plan-ineligible behavior still needs R4 acceptance. Projection math, eligibility and transform ownership are not gaps. | **KEEP** derived Plan projection + adapters. R3/R4 close placement/interaction fixtures; do not create persisted Plan entities/proxies. |
+| Placement / grounding | One pending-placement pipeline serves models, primitives and lights. Floor grounding uses semantic tagged rendered floors, five downward rays, highest valid floor, rigid-selection Y delta, Keep/Drop-to-Floor behavior and `GROUND_EPSILON` no-op protection; commit is one Scene transaction. | Creation APIs still require/write `roomId`; reachable authoring can still start from a Scene without `formatVersion: 1`; click placement depends on room-tagged rendered floor objects rather than compiled Layout queries. Explicit stacked/support choice is absent. Wall/ceiling placement is not automatically a P24 minimum requirement. | **KEEP** placement/grounding pipeline. **DEEPEN** canonical `formatVersion: 1`/Room-free writes + shared Layout-query support/Y resolution. R3/R9 decide exact support surfaces; no persistent Layout↔Scene support link by default. |
+| Asset-library placement entry points | One Asset Library already exposes Models, Shapes, Lights and Textures. Shapes/lights arm placement from the library; model selection routes to the existing Inspector `Place` action; texture local/cloud flows are separate asset-resource operations. | Model entry is less direct, and there is no shared Plan model placement/drag path yet. This is entry-point consistency after R3, not evidence for another placement framework. | **POLISH** existing entries after shared placement contract; no new asset-placement system. |
+| Snapping / guides | 3D Scene transform already has translation/rotation snap preferences with modifier bypass; Plan Scene transforms already snap through their existing Plan helpers. Local/World session state exists. | Scene gizmo still ignores Local/World state; no snap-winner visual feedback or align/distribute/equal-spacing Scene operations were found. These are productivity depth choices, not missing snap infrastructure. | **KEEP** current snap seams. R5 selects exact feedback/alignment depth; **REJECT** a generic snapping framework. |
+| Materials | Six built-in definitions exist; `MaterialDefinition` already supports base/normal/roughness/AO/metalness map slots + physical default tile size. `SceneMaterialInstance` and the canonical mutator already support shared-vs-unique decisions, base material/base texture, roughness/metalness overrides and one-transaction Make Unique. Single-object Inspector is live. | No authored base-color/tint instance override, no multi-selection apply, no editable physical tile-size workflow, and P24A material supply is not yet consumed. The gap is not “PBR support absent”; it is authoring breadth over an existing model. | **KEEP** material definition/instance authority. R6 decides tint/tile-scale/multi-apply/import depth; no graph/UV/slot-editor expansion. |
+| Lights | `SceneLightEntity` already owns point/spot/directional lights, color, intensity, range, spot angle/penumbra and `castShadow`; renderer aims spot/directional lights along local -Z. Single-light Inspector is live and an invisible 0.12m pick proxy supports editor picking. | Light creation still requires/writes Room context. There is no light-specific visible range/cone/direction feedback or authored gallery preset. Spot angle is presented in radians and current validation accepts up to π, wider than Three's supported half-angle. | **KEEP** `SceneLightEntity` + shared transform authority. R7 may deepen helpers/angle UX/preset behavior after canonical Room-free creation; **REJECT** a second light gizmo. |
+| Environment | Shared scene rendering already has system/runtime background, fog, ambient light and directional light controls; authored Scene lights render in addition. | No authored Scene-level HDRI/IBL/environment/exposure state exists. If selected, asset resolution, semantic mapping, lifecycle and visitor parity still need implementation. | Global Scene environment architecture remains ratified **conditionally**; **R9-PICK** minimum inclusion. Absence is not a blocker to the rest of Stage. |
+| Outliner / Inspector | One `UnifiedProjectTree`/Inspector architecture already serves the existing domains, and the single-object transform/material/light/primitive inspectors plus commit-only numeric editing are live. | The current tree model is still legacy Room-nesting based: `buildUnifiedProjectTreeModel()` returns `{ rooms: [], cameraTour }` for wall-first Layout, so canonical world-local Scene entities/clusters are not surfaced in that hierarchy. Multi-selection editing remains shallow; cluster Inspector depth and disabled-without-reason polish remain limited. | **KEEP** one hierarchy/Inspector model. **DEEPEN only** wall-first/world-local Scene surfacing, then let R5/R6/R8/R9 choose bounded bulk/cluster/polish depth; no second hierarchy. |
+| History integration | One Svelte-5 `EditorHistoryController` owns the chronological Scene/Layout stack (`HISTORY_LIMIT=100`), atomic begin/commit/cancel, validation-failure rollback, undo/redo and structural no-op suppression. Scene gizmo and placement operations already use one transaction per completed gesture. | P24 only needs owner/fixture coverage for newly selected operations and cross-view cancellation; history architecture itself is not a Stage-depth gap. | **KEEP** canonical history. Add capability-specific acceptance only; no command/history framework. |
+| Editor / visitor + asset resolution | Visitor-safe runtime remains isolated from editor selection/history/gizmos. R1 confirmed built-in models have shipped-static validation/retention and P20 dynamic project bytes remain image/procedural-only. | Static model validation authority and actual load-source authority are split: cold validation uses shipped-static, while model loading still reads `productionFile` from the live catalogue. Selected P24 material/light/environment additions need capability parity. Dynamic project GLB ingest remains absent but is deferred by R1. | **KEEP** visitor/editor boundary. **DEEPEN** shipped-static source authority for the static-first minimum + selected capability parity. Dynamic GLB stays **FOLLOW-UP**. |
 
-R2 answers what exists and where the gap is. Exact ship scope is decided in R5/R6/R7 and frozen only in R9/B6.
+### R2 conclusion
 
-Do not create a generic Stage command framework merely to organize this matrix.
+**R2 COMPLETE.** The post-F0 audit narrows P24B substantially: selection/history architecture, the one Scene gizmo/transform authority, derived Plan projection/transform math, material-instance semantics, light entity authority and visitor/editor isolation are existing foundations to preserve, not systems to replace.
+
+The genuine cross-cutting integration blockers remain narrow: reachable canonical authoring must be `Scene formatVersion: 1` before world-local/no-`roomId` writes; Stage placement/selection/group/light creation must stop treating Room as ownership; the existing `UnifiedProjectTree` must surface canonical world-local Scene entities/clusters when Layout is wall-first; placement must consult the shared Layout-query seam for support/Y/ambiguity; and the static visitor must load model bytes from shipped-static authority. R5–R7 still decide **depth**, not foundations.
+
+R2 does **not** promote box selection, visibility/lock, generic model upload, wall/ceiling support, align/distribute, environment authoring, material graphs, a new command layer, a new selection store, a new gizmo or a new asset registry into the minimum. Existing R5–R8 hypotheses remain candidate input only; where their dated baseline wording conflicts with this refresh, this R2 result wins until the relevant reconciliation step explicitly updates it.
 
 ## R3 — B2 shared Plan / 3D placement contract
 
@@ -487,11 +491,11 @@ instruction to run them all or automatically adopt its numerical budgets.
 
 1. Minimum P24A+P24B set — open (packet A is input, not the freeze).
 2. Depth tails separated — open.
-3. Final maturity matrix — R2 baseline done; final pass at freeze.
+3. Final maturity matrix — **R2 post-F0 baseline complete 2026-09-10**; final pass still occurs at freeze.
 4. Operation/history ownership per capability — open.
 5. Plan/3D acceptance — themes + R3/R4/R8 rules done; fixtures at freeze.
 6. Save/Load + P22 acceptance — open as capability acceptance; basic wall-first/world-local format persistence is closed by P23.1, while static-model source authority and selected material/light/environment parity still need proof.
-7. Post-F0 seam recheck — **R0 delta refresh complete 2026-09-10; R1 complete 2026-09-10**; selected P24 placement/selection/support-query integration checks remain named blockers before R9 freeze.
+7. Post-F0 seam recheck — **R0 delta refresh, R1 and R2 complete 2026-09-10**; selected P24 placement/selection/support-query integration checks remain named blockers before R9 freeze.
 8. Renderer/dependency baseline + acceptance definition — open; conditional upgrade comparison, no r186 pin.
 9. Child plans + owner review — last.
 
@@ -499,30 +503,32 @@ instruction to run them all or automatically adopt its numerical budgets.
 
 Consolidates the pre-F0 packet into freeze-ready input. Legend: [F0-FREE] resolved pre-F0 · [POST-F0 RECHECK] blocked on F0 seam recheck · [R9-PICK] F0-independent inclusion call at freeze.
 
-### 1. Final capability maturity matrix (draft; dated baseline, affected rows require post-F0 refresh)
+### 1. Final capability maturity matrix (draft; R2 post-F0 refresh is the current baseline, and R9 still owns the final inclusion pass)
 
-| Capability | Verified behavior + owner | Disposition | Sensitivity |
+The R2 matrix above is the current source for live capability maturity. This R9 draft retains only freeze-oriented dispositions; it must not reintroduce pre-F0 Room-local behavior as current truth.
+
+| Capability | Verified current baseline | Disposition | Remaining freeze question |
 |---|---|---|---|
-| Selection / multi-select | Room-scoped ordered multi-select; canonical ordered selection; R4 continuity ratified | KEEP; room-gate removal rechecked | [POST-F0 RECHECK] |
-| Transform / pivot | One host, bounds-center pivot, scalar v6 scale; Local/World wire direction, no stored state | POLISH wire + Inspector sync + snap-winner feedback | [F0-FREE] direction; pivot rigidity + multi-select Local frame [POST-F0 RECHECK] |
-| Align / distribute | Absent (only CSS/triangle-align matches); deterministic Scene ops direction | DEEPEN direction | [F0-FREE]; exact op set [R9-PICK], frames [POST-F0 RECHECK] |
-| Duplicate | +0.5 XZ clone, one history entry, no collision/re-ground, partial clusters silently skipped (`placement-cluster-mutator.svelte.ts:639-669`) | Duplicate-then-move + collision/bounds + warn fix | [F0-FREE]; re-ground support source [POST-F0 RECHECK] |
-| Groups / clusters | Flat same-room, required `roomId` (`:486-508`) | KEEP flat, no nesting | [F0-FREE]; Room-gate removal [POST-F0 RECHECK] |
-| Box selection | Absent (only camera-plan rubber band) | FOLLOW-UP | [F0-FREE] |
-| Visibility / lock | Absent from Scene schema | FOLLOW-UP | [F0-FREE] |
-| Placement / grounding | Tagged-floor-only 5-ray Drop/Keep-on-Floor; no stacked/support choice, no Layout-query lookup | KEEP pipeline; wall/support direction one-time-placement-first | [F0-FREE]; support source + stacked choice [POST-F0 RECHECK] |
-| Replacement | No replace-asset path found | New op preserving placement via normalized metadata | [F0-FREE] direction; bounds/pivot variance [POST-F0 RECHECK] |
-| Placement entry points | Click-to-place 3D only; model Place via Inspector; no Plan entry/drag | POLISH entries, no new framework | [F0-FREE] |
-| Snapping | Room-local steps + Shift-bypass; no winner feedback | KEEP seams; winner feedback | [F0-FREE]; snap frame/application [POST-F0 RECHECK] |
-| Materials | 6-entry catalogue; shared/unique + Make Unique; single-select Inspector; roughness/metalness + one map override; read-only repeat path | KEEP model; tint + PBR set + tile scale + multi-apply + preview feedback | [F0-FREE]; import consumption [POST-F0 RECHECK / R1] |
-| Lights | Point/spot/directional + 0.12m proxy, -Z aim, radian UI, authored `castShadow`; current angle validation exceeds renderer limit | KEEP authority; accurate units without rescaling; explicit half-angle + compatibility handling; native helpers preferred only for selected feedback/handle capabilities; preset baseline policy | Direction [F0-FREE]; minimum inclusion R9; compatibility fixture required |
-| Environment | Fixed ambient+directional rig; Threlte AgX/sRGB; no authored environment; native backend primitives available | Global Scene intent ratified if included; tone mapper system-owned; caches derived; per-room blending follow-up | Inclusion + optional exposure [R9-PICK]; schema/registry/runtime [POST-F0 RECHECK / R1] |
-| Outliner / Inspector | Shared selection, commit-only numerics, single-select panels, existing density treatment | KEEP + POLISH; bulk edit | [F0-FREE]; bulk edit [R9-PICK] |
-| History | Single stack (`HISTORY_LIMIT=100`), 1-gesture-1-entry, `begin/commit/cancelDocumentTransaction` (`editor-store.svelte.ts:2813-2867`) | KEEP; cross-view fixture pins at freeze | [F0-FREE]; operation-owner tags [POST-F0 RECHECK] |
-| Editor / visitor boundary | Visitor runtime excludes editor stores/history/gizmos; P20 dynamic bytes remain image/procedural-only; static models have shipped-static validation/retention | KEEP boundary; DEEPEN static model loading authority | static source resolver + capability parity [R1]; dynamic GLB FOLLOW-UP |
-| P24A supply | Proven normalization/rights/OBB evidence, frozen 12-object proof set, static-first registry direction; `gltfpack` deferred | Evidence complete; static-first minimum direction closed; dynamic GLB deferred | static-model source authority + corpus/runtime acceptance [R1]; no project-codec blocker |
+| Selection / multi-select | Ordered canonical reducer/identity exists; partial roomless orchestration exists but live workspace/selectability remains Room-gated for canonical roomless Scene | KEEP system; remove Room gate | R4 fixtures + canonical selection integration |
+| Transform / pivot | One shared Scene gizmo/transaction authority; world-bounds-center pivot; numeric Inspector; Local/World UI state exists but Scene policy is world-only; independent scale is session-rich but scalar-persisted | KEEP authority; POLISH/DEEPEN only selected R5 depth | Local frame/pivot choice; per-axis persistence only if selected |
+| Align / distribute | No Scene operators found | Candidate deterministic Scene ops only | Exact op set is an R9-PICK; no generic framework |
+| Duplicate | Deterministic +0.5 XZ, one transaction; full selected clusters copy | KEEP operation | Collision/bounds/re-ground + partial-cluster warning if included |
+| Groups / clusters | Flat schema permits roomless clusters; live editor CRUD/select remains same-Room/`roomId`-dependent | KEEP flat/no nesting; remove Room ownership | Any extra group pivot/Inspector depth is R5/R9-PICK |
+| Box selection | No Scene box-selection path found in R2 audit | FOLLOW-UP | Do not promote from absence alone |
+| Visibility / lock | No authored Scene visibility/lock fields found in the current Scene schema | FOLLOW-UP | Do not promote from absence alone |
+| Placement / grounding | One pending pipeline + 5-ray tagged-floor grounding exists; creation still writes Room context and support lookup is renderer-tag based | KEEP pipeline; canonicalize writes + support query | Exact support surfaces/ambiguity behavior through R3/R9 |
+| Replacement | No current replace-asset semantic operation found | FOLLOW-UP unless R9 proves minimum value | Preserve placement through normalized metadata if later selected |
+| Placement entry points | Models place through Library selection → Inspector; shapes/lights arm from Library | POLISH only | Shared Plan placement entry after R3 if selected |
+| Snapping | Existing Plan/3D snapping + modifier bypass; Local/World state exists; no winner feedback/align ops | KEEP seams | Exact feedback/productivity ops at R5/R9 |
+| Materials | Six definitions; multi-slot PBR definition model; shared/unique instances; base texture + roughness/metalness Inspector | KEEP model | Tint/tile scale/multi-apply/P24A consumption only if selected |
+| Lights | Point/spot/directional authority + Inspector + pick proxy + authored castShadow; creation still Room-coupled | KEEP authority; no second gizmo | Room-free creation, angle semantics, selected helper/preset depth |
+| Environment | System/runtime ambient+directional/fog/background only; no authored Scene environment | Conditional global Scene architecture | Inclusion + optional exposure are R9-PICK |
+| Outliner / Inspector | One hierarchy/Inspector architecture exists, but wall-first `buildUnifiedProjectTreeModel()` returns no room rows, so canonical world-local Scene entities/clusters are not surfaced there; single-object editors remain live | KEEP surfaces; adapt existing hierarchy | Wall-first/world-local Scene surfacing; bulk/cluster/discoverability polish only if selected |
+| History | One chronological Scene/Layout stack with atomic transaction/cancel/no-op/rollback behavior | KEEP canonical history | Capability-specific owner/fixture pins only |
+| Editor / visitor boundary | Visitor isolation stable; shipped-static validation/retention exists; actual static model load URL still comes from live catalogue | KEEP boundary; fix static source authority | Selected capability parity; dynamic GLB FOLLOW-UP |
+| P24A supply | Normalization/rights/OBB evidence + frozen 12-object static-first proof set; dynamic GLB deferred | Evidence complete; static-first direction closed | Source authority + corpus/runtime acceptance per R1 |
 
-No broad direct-reference survey is needed. The dated R0–R8 baseline plus completed Three harvest inform these dispositions; refresh affected code evidence after F0 and run only the bounded compatibility/implementation checks required by the selected capabilities and dependency baseline.
+No broad direct-reference survey is needed. The current R2 audit plus completed bounded harvests are enough to proceed. Later R5/R6/R7 work should inspect external references only if a concrete interaction/compatibility question remains after reading live Museum code.
 
 ### 2. Deterministic operation / history ownership matrix (draft)
 
@@ -530,34 +536,34 @@ One completed gesture = one history entry; cancel/no-op = none. All Scene ops ta
 
 | Semantic operation / current seam | Owner | Inputs | History | Sensitivity |
 |---|---|---|---|---|
-| Place asset [conceptual]; current `beginAssetPlacement` / `createPendingPlacementAt` seam | Placement pipeline (`pendingPlacement*` → commit) | asset id + pose intent | One entry on commit | Support/Y resolution [POST-F0 RECHECK] |
-| Scene transform gesture → gizmo/Plan adapter → begin transaction → transient preview → `updatePlacementTransform*` at commit → one `commitDocumentTransaction` | Scene 3D gizmo adapter + Scene Plan gesture adapter + `editor-store` transaction | entity ids + owned components | One entry; no-op none | Frames [POST-F0 RECHECK] |
-| Inspector transform edit → `commitPlacementTransform(id, transform)` | `editor-store.commitPlacementTransform` | single entity id + transform | One entry | Sync [F0-FREE] |
-| `duplicateSelection` | `placement-cluster-mutator` | selection set | One entry; partial warns (fix directed) | Re-ground [POST-F0 RECHECK] |
-| `createCluster(name?)` / `deleteCluster` | `placement-cluster-mutator` on `SceneDocument.clusters` | member ids + optional name; dated pre-F0 baseline derived/validated common room internally; recheck world-local compatibility/cutover behavior | One entry | Room constraint [POST-F0 RECHECK] |
-| Align / distribute (new) | Deterministic Scene ops | entity set + mode | One entry each | Exact set [R9-PICK]; frames [POST-F0 RECHECK] |
-| `replaceSceneAsset` (new, no current seam) | Scene op via normalized metadata | entity id + asset id | One entry | Bounds behavior [POST-F0 RECHECK] |
-| `applyMaterialPatch` / `makeMaterialInstanceUnique` | `material-resource-mutator` via `store.requestMaterialEdit` | entity/material ids + patch | One entry (confirm at freeze) | [F0-FREE] |
-| Light authoring [conceptual]; current `beginLightPlacement` / `createPendingLightAt` / `updateLightFields` seam + gallery preset op | Light mutators (`editor-lights.ts`, preset as ordinary Scene ops) | kind + props | One entry | [F0-FREE] |
-| Environment edit / selected gallery preset [conditional; conceptual, no API/schema freeze] | Scene semantic operations; registry owns referenced asset bytes | Global environment intent + optional exposure only if selected | One entry per logical authored edit/preset; cache generation/update produces none | Inclusion [R9-PICK]; schema/runtime [POST-F0 RECHECK / R1] |
+| Place asset [conceptual]; current `beginAssetPlacement` / `createPendingPlacementAt` seam | Placement pipeline (`pendingPlacement*` → commit) | asset id + pose intent | One entry on commit | Canonical Scene format + Room-free support/Y resolution [POST-F0 RECHECK] |
+| Scene transform gesture → gizmo/Plan adapter → begin transaction → transient preview → `updatePlacementTransform*` at commit → one `commitDocumentTransaction` | Scene 3D gizmo adapter + Scene Plan gesture adapter + `editor-store` transaction | entity ids + owned components | One entry; no-op none | Local/World and selected R5 depth; world-local Plan adapter math already stable |
+| Inspector transform edit → `commitPlacementTransform(id, transform)` | `editor-store.commitPlacementTransform` | single entity id + transform | One entry | Sync foundation already live; selected polish only |
+| `duplicateSelection` | `placement-cluster-mutator` | selection set | One entry; partial cluster currently copies ungrouped without warning | Re-ground/warn depth [R5/R9] |
+| `createCluster(name?)` / `deleteCluster` | `placement-cluster-mutator` on `SceneDocument.clusters` | member ids + optional name; schema roomless-capable, live mutator still requires same Room | One entry | Canonical Room-free cluster CRUD/select [POST-F0 RECHECK] |
+| Align / distribute (new) | Deterministic Scene ops if selected | entity set + mode | One entry each | Exact set [R9-PICK] |
+| `replaceSceneAsset` (new, no current seam) | Scene op via normalized metadata if selected | entity id + asset id | One entry | FOLLOW-UP unless promoted at R9 |
+| `applyMaterialPatch` / `makeMaterialInstanceUnique` | `material-resource-mutator` via `store.requestMaterialEdit` | entity/material ids + patch | One transaction per logical edit | Selected R6 breadth only |
+| Light authoring; current `beginLightPlacement` / `createPendingLightAt` / `updateLightFields` seam | Existing Scene light mutators | kind + props | One entry per logical edit | Canonical Room-free create + selected R7 helpers/preset depth |
+| Environment edit / selected gallery preset [conditional; conceptual, no API/schema freeze] | Scene semantic operations; registry owns referenced asset bytes | Global environment intent + optional exposure only if selected | One entry per logical authored edit/preset; cache generation/update produces none | Inclusion [R9-PICK]; schema/runtime if selected |
 | P24A acquire / normalize / approve | Pipeline-owned lifecycle, not editor undo | source + recipe + rights evidence | Promotion gated by acceptance, never half-approved | static registry/runtime acceptance [R1]; no editor history |
 
 No mixed Layout/Scene transaction and no persistent cross-document support reference without a separately specified ownership/delete/history contract (umbrella invariant; addendum entity-ownership rule).
 
 ### 3. Museum-owned acceptance fixtures (draft)
 
-- F1 same-ID Plan/3D mutation: place in 3D → move X/Z + yaw in Plan → Y/pitch/roll/scale preserved; one entity identity throughout. [POST-F0 RECHECK projection source]
+- F1 same-ID Plan/3D mutation: place in 3D → move X/Z + yaw in Plan → Y/pitch/roll/scale preserved; one entity identity throughout. [R3 fixture; projection/adapter math already stable]
 - F2 Plan-ineligible-but-selected: select a light in 3D or Outliner → switch to Plan → selection persists, no transform handles, `Not editable in Plan` reason shown in viewport + Inspector badge.
 - F3 view-switch cancel: mid-drag placement/transform + switch view → gesture cancelled, no history result, committed state untouched.
 - F4 preview/state consistency: ghost/proxy/overlay treatment never appears in serialized `SceneDocument`.
 - F5 preview/commit agreement: final displayed preview equals committed result for one staging gesture.
 - F6 one-handle-drag-one-history: single yaw-handle drag → exactly one history entry; failed/no-op drag → none.
-- F7 duplicate-then-move: +0.5 XZ clone, collision/bounds checked, one entry; partial-cluster duplicate warns. [re-ground POST-F0 RECHECK]
+- F7 duplicate-then-move: +0.5 XZ clone, collision/bounds checked, one entry; partial-cluster duplicate warns. [re-ground depth if selected]
 - F8 material assign + Make Unique: shared edit prompts choice; unique clone `-copy`; editor authored output, Preview and Publish resolve materials consistently on the selected renderer baseline. Review expected BRDF/PMREM differences separately if the baseline changes.
 - F9 light authoring: create point/spot → Inspector sync (explicit half-angle/degree semantics, supported range and existing out-of-range policy, `castShadow`) → visitor renders same lights with no helpers. Verify finite/unlimited range feedback and no second gizmo authority.
 - F10 Save/Load + cold visitor: staged Scene/materials/lights and, if selected, global environment/optional exposure survive round-trip; referenced assets remain retained/resolvable. Cold visitor and Preview consume the same canonical meaning with no editor-only state. [asset resolution + selected-capability parity]
 - F11 gallery preset: one preset op yields ordinary authored Scene light/environment state selected by the preset, with one history result and no persistent rig. Verify explicit baseline/assist-light interaction and legacy appearance policy; environment remains conditional on R9 inclusion.
-- F12 explicit support choice: ambiguous stacked surface forces a visible choice; never silent `Y = 0`. [POST-F0 RECHECK]
+- F12 explicit support choice: ambiguous stacked surface forces a visible choice; never silent `Y = 0`. [R3/R9]
 
 - F13 renderer/dependency acceptance [baseline selected at freeze; additional comparisons if upgraded]: use harvest §F dimensions for package/types/Threlte compatibility, editor gestures, material/light/shadow output, accepted assets/decoders, context recovery, visitor isolation, disposal and performance. Test only selected capabilities/formats; calibrate proposed numeric thresholds on named devices/fixtures before ratifying them. Include PCFSoft→PCF behavior, BRDF/PMREM/environment rotation changes and Object3D/Threlte disposal interaction as applicable. Explicitly investigate the post-r186 point-shadow disposal fix on the exact candidate baseline; later fixes cannot be assumed present. Failure requires a verified compatible baseline/fix or deferral, not an automatic r186 upgrade.
 
@@ -571,7 +577,7 @@ Only after R0–R8 have enough evidence:
 4. define deterministic operation/history ownership for every included capability;
 5. define Plan/3D acceptance where both views participate;
 6. define Save/Load + P22 visitor acceptance;
-7. consume the completed R0/R1 post-F0 refresh and close the named capability-specific placement/selection/support-query rechecks before freezing any affected child plan;
+7. consume the completed R0/R1/R2 post-F0 refresh and close the named capability-specific placement/selection/support-query rechecks before freezing any affected child plan;
 8. select the conditional Three/types/Threlte renderer/dependency baseline and define its acceptance gate (F13); an upgrade is separately scoped, not implied by the harvest or required for already-available capabilities. Record required compatibility/visual/lifetime/performance proof as an implementation ship gate; no changed baseline enters production until it passes;
 9. then update/write implementation-ready P24 child plans and request owner review.
 
