@@ -25,7 +25,7 @@ P24 reconciliation
 
 P24 implementation still depends on the accepted P23 minimum useful Build set. Any P24 decision touching coordinates, placement ownership, selection routing, Plan projection or Scene/Camera migration must consume the coordinate/ownership model accepted through P23, not assume the earlier Room-local baseline remains permanent.
 
-P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code, but F0 acceptance remains open and wall-first writer enablement remains gated.
+P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code. P23 F0 closed on 2026-09-10; this sequence is now in its targeted post-F0 seam recheck before the R9 minimum freeze.
 
 ## Authority and evidence order
 
@@ -441,7 +441,7 @@ instruction to run them all or automatically adopt its numerical budgets.
 4. Operation/history ownership per capability — open.
 5. Plan/3D acceptance — themes + R3/R4/R8 rules done; fixtures at freeze.
 6. Save/Load + P22 acceptance — open, post-F0.
-7. Post-F0 seam recheck — blocked on F0.
+7. Post-F0 seam recheck — in progress after F0 closure; required before R9 freeze.
 8. Renderer/dependency baseline + acceptance definition — open; conditional upgrade comparison, no r186 pin.
 9. Child plans + owner review — last.
 
