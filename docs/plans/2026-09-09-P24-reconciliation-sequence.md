@@ -25,7 +25,7 @@ P24 reconciliation
 
 P24 implementation still depends on the accepted P23 minimum useful Build set. Any P24 decision touching coordinates, placement ownership, selection routing, Plan projection or Scene/Camera migration must consume the coordinate/ownership model accepted through P23, not assume the earlier Room-local baseline remains permanent.
 
-P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code. P23 F0 closed on 2026-09-10. **R0/R1/R2 are complete; R3 behavioral contract closed 2026-09-10; R4 next.** Selected placement/selection/support-query and capability-specific asset/runtime seams still carry explicit later reconciliation before the R9 minimum freeze.
+P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code. P23 F0 closed on 2026-09-10. **R0/R1/R2 are complete; R3 and R4 behavioral contracts closed 2026-09-10; R5 next.** Selected placement/selection/support-query and capability-specific asset/runtime seams still carry explicit later reconciliation before the R9 minimum freeze.
 
 ## Authority and evidence order
 
@@ -276,22 +276,11 @@ Closed behavioral contract: [2026-09-10-P24-R3-shared-plan-3d-placement-contract
 
 The standalone R3 record is authoritative for the frozen placement semantics. R9/B6 still owns minimum inclusion; R3 completion does not itself authorize implementation or promote optional placement depth.
 
-## R4 — B5 cross-view interaction contract, then defer polish freeze
+## R4 — B5 cross-view interaction contract — COMPLETE 2026-09-10
 
-Freeze the **behavioral** B5 contract early:
+Closed behavioral contract: [2026-09-10-P24-R4-cross-view-interaction-contract.md](2026-09-10-P24-R4-cross-view-interaction-contract.md).
 
-- committed canonical selection survives Plan ↔ 3D switching;
-- a Plan-ineligible selected entity stays selected while losing unsupported handles;
-- unfinished placement/transform cancels on view switch with no history result;
-- view switching never silently commits;
-- PlanProxy/ghost presentation is derived editor state;
-- final displayed preview and committed result agree.
-
-Do not freeze the full B5 presentation/polish scope yet. Final visual density, affordances and staging polish should close only after B1–B4 determine what tools actually ship. R4 is the behavioral constraint set; R8 holds the remaining presentation/polish. Only R9/B6 freezes minimum inclusion.
-
-Pascal's mounted-pane behavior is a **negative reference** here: its view switch does not provide Museum's required cancel semantics.
-
-**Ratified constraint (2026-09-09 reconciliation):** the six behaviors above constrain any P24 capability that participates in cross-view interaction. They do not by themselves require that capability to enter the P24 minimum. R9/B6 decides minimum inclusion. Presentation/polish remainder stays in R8.
+The standalone R4 record is authoritative for cross-view selection, cancellation, preview/commit and single-history semantics. R8 still owns presentation/polish and R9/B6 still owns minimum inclusion. The remaining implementation seam is cancel-on-switch wiring: current view controls block active interaction instead of routing an accepted transition through the existing gesture cancel owners.
 
 ## R5 — B1 transform + arrangement maturity
 
@@ -471,7 +460,7 @@ instruction to run them all or automatically adopt its numerical budgets.
 4. Operation/history ownership per capability — open.
 5. Plan/3D acceptance — themes + R3/R4/R8 rules done; fixtures at freeze.
 6. Save/Load + P22 acceptance — open as capability acceptance; basic wall-first/world-local format persistence is closed by P23.1, while static-model source authority and selected material/light/environment parity still need proof.
-7. Post-F0 seam recheck — **R0 delta refresh, R1, R2 and the R3 behavioral contract are complete 2026-09-10**; selected P24 placement/selection/support-query implementation checks remain named blockers before R9 freeze.
+7. Post-F0 seam recheck — **R0 delta refresh, R1, R2 and the R3/R4 behavioral contracts are complete 2026-09-10**; selected P24 placement/selection/support-query implementation checks plus cross-view cancel-on-switch wiring remain named blockers before R9 freeze.
 8. Renderer/dependency baseline + acceptance definition — open; conditional upgrade comparison, no r186 pin.
 9. Child plans + owner review — last.
 
@@ -553,7 +542,7 @@ Only after R0–R8 have enough evidence:
 4. define deterministic operation/history ownership for every included capability;
 5. define Plan/3D acceptance where both views participate;
 6. define Save/Load + P22 visitor acceptance;
-7. consume the completed R0/R1/R2 refresh plus the closed R3 behavioral contract, and close the named capability-specific placement/selection/support-query implementation rechecks before freezing any affected child plan;
+7. consume the completed R0/R1/R2 refresh plus the closed R3/R4 behavioral contracts, and close the named capability-specific placement/selection/support-query implementation rechecks plus cross-view cancel-on-switch wiring before freezing any affected child plan;
 8. select the conditional Three/types/Threlte renderer/dependency baseline and define its acceptance gate (F13); an upgrade is separately scoped, not implied by the harvest or required for already-available capabilities. Record required compatibility/visual/lifetime/performance proof as an implementation ship gate; no changed baseline enters production until it passes;
 9. then update/write implementation-ready P24 child plans and request owner review.
 
