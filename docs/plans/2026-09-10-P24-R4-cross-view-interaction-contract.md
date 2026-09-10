@@ -21,6 +21,7 @@ The live editor already contains most of the required lifecycle primitives, but 
 - Plan staging gestures open one Scene document transaction, preview through reversible candidate document updates, commit once, and cancel through `cancelDocumentTransaction()`.
 - the single 3D gizmo host owns one drag session at a time. Its existing cancel reasons include `view-change`; cancellation is exactly-once, restores the adapter baseline/orbit state, releases the Three drag, and makes a later natural `mouseUp` unable to commit.
 - the Scene gizmo adapter previews against live roots, then installs final transforms into `SceneDocument` once at commit; cancel restores root snapshots and rolls back the transaction.
+- with 3D Scene `Keep on Floor`, commit currently calls `groundSelectionRigidly(...)` after the gizmo host's final displayed preview. Grounding may therefore change Y between the last displayed candidate and the authored commit. This is an existing R3 support/Y integration gap, not a reason to add another preview or placement system.
 - `WorkspaceRibbon` currently disables domain/view switching while `store.isEditorInteractionActive`. This is safe against accidental commit but does **not** yet implement the ratified accepted-switch → cancel → switch behavior.
 
 The target contract below therefore deepens existing seams rather than replacing them.
@@ -95,6 +96,8 @@ It does require:
 - validation refusal or cancellation restores the committed baseline instead of silently committing a different/clamped result;
 - derived PlanProxy, placement ghost, gizmo helper and other preview-only presentation never become competing persisted truth.
 
+For 3D `Keep on Floor`, the current commit-only grounding step does not yet satisfy that equality: the final preview must reflect the same resolved support/grounding result used by commit. Close this through the existing R3 support/Y integration so support resolution is semantically shared; do not add a second preview, placement pipeline or persisted support owner.
+
 Numerical tolerances for renderer-level acceptance may be specified by the eventual implementation fixture; R4 freezes the semantic equality requirement, not a pixel threshold.
 
 ### 6. One completed semantic gesture produces one history result
@@ -123,9 +126,10 @@ Plan/3D switching is therefore an interaction boundary, not a document migration
 
 ## R4 implementation gap handoff
 
-The semantic contract is closed, but one cross-view lifecycle seam remains explicitly open for selected P24 implementation:
+The semantic contract is closed. Two concrete integration gaps remain, both owned by existing seams rather than new architecture:
 
-**cancel-on-switch wiring:** `WorkspaceRibbon` currently refuses view/domain changes while `isEditorInteractionActive`. If a shared Plan ↔ 3D transition becomes available during an unfinished selected P24 interaction, the shell must cancel through the current interaction owner first, confirm the transient transaction/session is closed, then change view. Existing gizmo and Plan staging cancel paths are the implementation primitives.
+- **cancel-on-switch wiring:** `WorkspaceRibbon` currently refuses view/domain changes while `isEditorInteractionActive`. If a shared Plan ↔ 3D transition becomes available during an unfinished selected P24 interaction, the shell must cancel through the current interaction owner first, confirm the transient transaction/session is closed, then change view. Existing gizmo and Plan staging cancel paths are the implementation primitives.
+- **3D Keep-on-Floor preview/commit parity:** grounding currently runs during Scene gizmo commit after the final displayed preview and may change Y. Close this through the already-open R3 support/Y integration so the final preview reflects the same resolved support/grounding result that commit authors. No second preview or placement system.
 
 This is not an argument to allow every domain switch during every editor operation. Capability-specific guards may still refuse a transition when cancellation cannot be made safe. The invariant is: an accepted transition cannot carry or silently commit unfinished shared authoring.
 
@@ -138,7 +142,7 @@ For capabilities R9 actually selects, acceptance should include at least:
 - mid-Plan Scene gesture → request 3D → one cancel, committed baseline restored, zero new history, then view changes;
 - mid-3D Scene gizmo → request Plan → one `view-change` cancel, late `mouseUp` inert, committed selection preserved, zero new history, then view changes;
 - armed placement → view switch → pending intent cleared, no Scene entity, no history result;
-- final preview and committed authored values agree for each selected shared operation;
+- final preview and committed authored values agree for each selected shared operation, including any support/grounding-adjusted Y;
 - cancelled/refused/no-op operation leaves no history result and no preview residue.
 
 R9 owns fixture execution and capability inclusion. These behaviors do not independently promote Plan placement, extra transforms, material/light depth or any other capability into the minimum.
