@@ -1,7 +1,10 @@
 # P24 — reconciliation sequence
 
+**R9 closeout (2026-09-10):** [Minimum freeze](2026-09-10-P24-R9-minimum-freeze.md) is the current inclusion/maturity/operation/acceptance authority; [P24.0–P24.5 child briefs](2026-09-10-P24-minimum-child-plans.md) are implementation-ready for owner review. Earlier draft/pending-minimum wording below is superseded by R9. Source rechecks are closed as planning evidence; implementation and runtime ship gates remain open. P24 remains proposed; execution waits for the accepted P23 minimum and approval.
+
+
 **Date:** 2026-09-09  
-**Status:** umbrella-internal reconciliation plan — evidence/planning only, not implementation-ready  
+**Status:** R0–R9 planning reconciliation complete — R9 freeze and execution child briefs linked above; implementation not started
 **Parent:** [P24 — Scene / Staging Depth umbrella](2026-09-08-P24-scene-staging-depth-umbrella.md)  
 **Cross-view authority:** [Unified Plan / 3D authoring addendum](2026-09-09-P23-P24-unified-plan-3d-authoring-addendum.md)  
 **Pascal evidence:** [`Pascal-editor-harvest.md`](../Deep-research/P24-3D-assets-staging/Pascal-editor-harvest.md) — CLOSED at pinned revision `32c3c8a24dae17c55beaabf45029148900a3b409`  
@@ -25,7 +28,7 @@ P24 reconciliation
 
 P24 implementation still depends on the accepted P23 minimum useful Build set. Any P24 decision touching coordinates, placement ownership, selection routing, Plan projection or Scene/Camera migration must consume the coordinate/ownership model accepted through P23, not assume the earlier Room-local baseline remains permanent.
 
-P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code. P23 F0 closed on 2026-09-10. **R0/R1/R2 are complete; R3 and R4 behavioral contracts and R5–R7 maturity reconciliation closed 2026-09-10; R8 post-F0 presentation reconciliation closed 2026-09-10; R9 minimum freeze next.** Selected placement/selection/support-query and capability-specific asset/runtime seams still carry explicit later reconciliation before the R9 minimum freeze.
+P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code. P23 F0 closed on 2026-09-10. **R0/R1/R2 are complete; R3 and R4 behavioral contracts and R5–R7 maturity reconciliation closed 2026-09-10; R8 post-F0 presentation reconciliation closed 2026-09-10; R9 minimum freeze complete; owner review of child briefs next.** Selected placement/selection/support-query and capability-specific asset/runtime seams still carry explicit later reconciliation before the R9 minimum freeze.
 
 ## Authority and evidence order
 
@@ -557,7 +560,7 @@ Only after R0–R8 have enough evidence:
 8. select the conditional Three/types/Threlte renderer/dependency baseline and define its acceptance gate (F13); an upgrade is separately scoped, not implied by the harvest or required for already-available capabilities. Record required compatibility/visual/lifetime/performance proof as an implementation ship gate; no changed baseline enters production until it passes;
 9. then update/write implementation-ready P24 child plans and request owner review.
 
-No implementation-ready P24B brief is created before this gate closes.
+This planning gate is closed by the linked R9 record; P24.0–P24.5 briefs now exist. Their implementation acceptance is not yet passed.
 
 ## Required acceptance themes for the eventual P24 minimum
 

@@ -5,7 +5,7 @@ slice plus one next action only.
 
 ## Working tree
 
-- **P24 planning**: [R8 presentation reconciliation](../plans/2026-09-10-P24-R8-presentation-reconciliation.md) refreshes decided rules against current code and bounds minimum polish versus optional refinement. Documentation only; no product/schema changes. Previous: [R5–R7 reconciliation](../plans/2026-09-10-P24-R5-R7-maturity-reconciliation.md). Next on this track: R9 minimum freeze/child-plan briefs; earlier behavioral integration and accepted-P23 implementation dependency remain open.
+- **P24 planning**: [R9 minimum freeze](../plans/2026-09-10-P24-R9-minimum-freeze.md) and [P24.0–P24.5 child briefs](../plans/2026-09-10-P24-minimum-child-plans.md) complete the planning reconciliation. Documentation only; no product/schema/dependency changes or runtime acceptance. Previous: [R8 presentation reconciliation](../plans/2026-09-10-P24-R8-presentation-reconciliation.md). Next on this track: owner review of the concrete freeze/briefs; execution remains blocked on accepted P23 minimum and approval.
 
 - **P23.1 implementation track is complete in `/Users/tony/Documents/Biskiq/p23` on `codex/p23-implementation`** (no commit): exact Junction X/Z, Wall length/angle/thickness, Add Vertex subdivision, bounded rectangle sizing, document-level object transforms, wall-first preview/save/compiler/Inspector seams, and 8 focused precision tests are in place. Full editor Vitest, editor/museum `svelte-check`, and both production builds are green.
 - **P23 Foundation Gate F0 is CLOSED on `main` as of 2026-09-10**: PR #7 merged as `32b2e8f`. Stage-6 writer flip is `455f587`; cross-format transaction-invariant restoration is `93111a2`; final proof tightening is `79b3551`. `LAYOUT_MUTATION_POLICY['wall-first']` is `adapted`, its refusal reason is retired, and layout commits explicitly require begin format = live format = candidate format with all three adapted.
@@ -20,7 +20,7 @@ slice plus one next action only.
 
 ## Next action
 
-- **Next:** owner review/rejoin of `codex/p23-implementation`, then P23.2 predictable Plan snapping and alignment. P24 planning may continue its targeted post-F0 recheck toward the R9 minimum freeze; P25 implementation remains blocked.
+- **Next:** owner review/rejoin of `codex/p23-implementation`, then P23.2 predictable Plan snapping and alignment. P24 R9 freeze/child briefs are ready for owner review; no P24 implementation started; P25 implementation remains blocked.
 
 ## Verification
 

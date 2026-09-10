@@ -1,5 +1,8 @@
 # P23 / P24 addendum — unified Plan / 3D semantic authoring
 
+**R9 closeout (2026-09-10):** [Minimum freeze](2026-09-10-P24-R9-minimum-freeze.md) is the current inclusion/maturity/operation/acceptance authority; [P24.0–P24.5 child briefs](2026-09-10-P24-minimum-child-plans.md) are implementation-ready for owner review. Earlier draft/pending-minimum wording below is superseded by R9. Source rechecks are closed as planning evidence; implementation and runtime ship gates remain open. P24 remains proposed; execution waits for the accepted P23 minimum and approval.
+
+
 **Date:** 2026-09-09  
 **Status:** ratified directional addendum  
 **Applies to:** P23 Layout Depth + P24 Scene / Staging Depth  
