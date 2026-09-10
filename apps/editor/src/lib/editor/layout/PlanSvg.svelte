@@ -336,4 +336,8 @@
 	.dimension-label { fill: var(--editor-plan-muted); font: 10px var(--editor-font); font-variant-numeric: tabular-nums; paint-order: stroke; stroke: var(--editor-plan-canvas-bg); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
 	.draft-outline { fill: rgb(47 140 255 / 10%); stroke: var(--editor-plan-selection); stroke-width: 2; stroke-dasharray: 8 4; vector-effect: non-scaling-stroke; }
 	.draft-point { fill: var(--editor-plan-handle-fill); stroke: var(--editor-plan-handle-stroke); stroke-width: 2; vector-effect: non-scaling-stroke; }
+	/* P23.2 — session-only snap feedback (semantic rank above grid fallback). */
+	.snap-guide { fill: none; stroke: var(--editor-plan-selection); stroke-width: 1.25; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; pointer-events: none; }
+	.snap-marker { fill: var(--editor-plan-selection); stroke: var(--editor-plan-canvas-bg); stroke-width: 1.25; vector-effect: non-scaling-stroke; pointer-events: none; }
+	.snap-marker-grid { fill: var(--editor-plan-muted); stroke: var(--editor-plan-canvas-bg); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
 </style>

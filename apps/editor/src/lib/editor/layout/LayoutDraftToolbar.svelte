@@ -13,6 +13,9 @@
 	} from './layout-interaction';
 	import type { LayoutPreviewState } from './layout-preview-state.svelte';
 	import { toggleLayoutCeilings } from './layout-preview-state.svelte';
+	import { LAYOUT_PLAN_GRID_STEP } from '$lib/layout/layout-wall-first-precision';
+
+	const gridStepLabel = `${LAYOUT_PLAN_GRID_STEP}m`;
 
 	let {
 		ribbon = false,
@@ -94,7 +97,7 @@
 	</div>
 	{#if ribbon || interaction.viewMode === 'plan'}
 		<div class="tool-group options" aria-label="Plan options">
-			<button type="button" class:active={interaction.planView.snapEnabled} aria-pressed={interaction.planView.snapEnabled} onclick={() => togglePlanViewportOption(interaction, 'snapEnabled')}>Snap 0.25m</button>
+			<button type="button" class:active={interaction.planView.snapEnabled} aria-pressed={interaction.planView.snapEnabled} onclick={() => togglePlanViewportOption(interaction, 'snapEnabled')}>Snap {gridStepLabel}</button>
 			<button type="button" class:active={interaction.planView.gridEnabled} aria-pressed={interaction.planView.gridEnabled} onclick={() => togglePlanViewportOption(interaction, 'gridEnabled')}>Grid</button>
 			{#if interaction.planViewMode === 'layout'}
 				<button type="button" class:active={interaction.planView.showTourOverlay} aria-pressed={interaction.planView.showTourOverlay} onclick={() => togglePlanViewportOption(interaction, 'showTourOverlay')}>Tour</button>

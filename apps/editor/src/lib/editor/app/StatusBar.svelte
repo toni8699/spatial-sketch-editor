@@ -11,6 +11,7 @@
 	} from '$lib/editor/layout/layout-preview-state.svelte';
 	import type { EditorActiveSelectionStore } from './active-editor-selection.svelte';
 	import type { EditorViewState } from './editor-view-state.svelte';
+	import { LAYOUT_PLAN_GRID_STEP } from '$lib/layout/layout-wall-first-precision';
 
 	let {
 		store,
@@ -45,7 +46,7 @@
 	);
 	const snapLabel = $derived(
 		isPlan
-			? `Snap 0.25 m ${layoutInteraction.planView.snapEnabled ? 'on' : 'off'}`
+			? `Snap ${LAYOUT_PLAN_GRID_STEP} m ${layoutInteraction.planView.snapEnabled ? 'on' : 'off'}`
 			: `Snap ${transformSnapEnabled ? 'on' : 'off'}`
 	);
 	const selectionLabel = $derived.by(() => {

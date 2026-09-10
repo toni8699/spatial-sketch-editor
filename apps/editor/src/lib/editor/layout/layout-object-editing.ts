@@ -1,5 +1,6 @@
 import type { Vec3 } from '$lib/types/scene';
 import type { LayoutDocument, LayoutObject, LayoutRoom, LayoutVec2 } from '$lib/layout/layout-types';
+import { LAYOUT_PLAN_GRID_STEP } from '$lib/layout/layout-wall-first-precision';
 import {
 	describeLayoutObject,
 	findHitLayoutObject,
@@ -86,7 +87,7 @@ export function floorObjectPosition(
 	return [x, floorElevation + dimensions[1] / 2, z];
 }
 
-export function snapLayoutPlanPoint(point: LayoutVec2, step = 0.25): LayoutVec2 {
+export function snapLayoutPlanPoint(point: LayoutVec2, step = LAYOUT_PLAN_GRID_STEP): LayoutVec2 {
 	return [Math.round(point[0] / step) * step, Math.round(point[1] / step) * step];
 }
 

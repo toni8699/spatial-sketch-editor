@@ -1,5 +1,6 @@
 import type { DraftSegment, LayoutOpening, LayoutRoom } from '$lib/layout/layout-types';
 import { segmentLength } from '$lib/layout/layout-geometry-curve';
+import { LAYOUT_PLAN_GRID_STEP } from '$lib/layout/layout-wall-first-precision';
 
 export type LayoutOpeningKind = LayoutOpening['kind'];
 
@@ -12,7 +13,7 @@ export type SegmentProjection = {
 
 export type LayoutOpeningPatch = Partial<Pick<LayoutOpening, 'offset' | 'width' | 'height' | 'sillHeight' | 'kind' | 'profile'>>;
 
-export const LAYOUT_OPENING_SNAP = 0.25;
+export const LAYOUT_OPENING_SNAP = LAYOUT_PLAN_GRID_STEP;
 export const LAYOUT_PLAN_HIT_RADIUS_PX = 12;
 
 const OPENING_DEFAULTS: Record<LayoutOpeningKind, Pick<LayoutOpening, 'width' | 'height' | 'sillHeight'>> = {

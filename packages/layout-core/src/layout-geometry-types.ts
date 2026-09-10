@@ -155,6 +155,13 @@ export type CompiledQueryPoint = CompiledIdentity & {
 	roomId: string;
 	segmentId: string;
 	sourceIndex: number;
+	/**
+	 * Collision-safe wall identity of the owning segment — same contract as
+	 * `CompiledQuerySpan.wallKey` (document-global for wall-first, length-
+	 * prefixed floor+room+segment for legacy). Used for moving-target
+	 * ownership of junction candidates.
+	 */
+	wallKey?: string;
 };
 export type CompiledQuerySpan = CompiledIdentity & {
 	kind: 'wall' | 'opening' | 'solid';
@@ -170,6 +177,17 @@ export type CompiledQuerySpan = CompiledIdentity & {
 	roomId: string;
 	segmentId: string;
 	openingId?: string;
+	/**
+	 * Collision-safe wall identity for wall-bound spans. Wall-first segment
+	 * ids are document-global, so `wallKey` is the bare `segmentId`; legacy
+	 * segment ids are only unique inside their room, so `wallKey` is the
+	 * length-prefixed `geometryId([floorId, roomId, segmentId])` — plain
+	 * delimiter joining would collide because `:` is legal inside ids.
+	 * Snap/align consumers must group and match walls by `wallKey` (falling
+	 * back to `segmentId` for hand-built records), never by `segmentId`
+	 * alone.
+	 */
+	wallKey?: string;
 };
 export type CompiledQueryPolygon = CompiledIdentity & {
 	kind: 'room-floor' | 'object-footprint';

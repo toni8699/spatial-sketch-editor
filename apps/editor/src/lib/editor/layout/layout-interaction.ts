@@ -3,6 +3,7 @@ import type { LayoutRoomUnitTransform } from './layout-room-transform';
 import { createPlanViewportState, snapToGrid, type PlanViewportState } from './layout-plan-transform';
 import { EDITOR_DRAG_THRESHOLD_PX } from '../interaction-constants';
 import type { Vec3 } from '$lib/types/scene';
+import { LAYOUT_PLAN_GRID_STEP } from '$lib/layout/layout-wall-first-precision';
 export type LayoutViewMode = 'plan' | '3d';
 /** Scene → Plan's local authoring authority. Camera Plan never reads this. */
 export type PlanViewMode = 'layout' | 'staging';
@@ -457,8 +458,8 @@ export function updateLayoutObjectDrag(
 	const drag = state.objectDrag;
 	if (!drag) return;
 	if (drag.mode === 'translate') {
-		const x = snapEnabled ? Math.round(point[0] * 4) / 4 : point[0];
-		const z = snapEnabled ? Math.round(point[1] * 4) / 4 : point[1];
+		const x = snapEnabled ? Math.round(point[0] / LAYOUT_PLAN_GRID_STEP) * LAYOUT_PLAN_GRID_STEP : point[0];
+		const z = snapEnabled ? Math.round(point[1] / LAYOUT_PLAN_GRID_STEP) * LAYOUT_PLAN_GRID_STEP : point[1];
 		drag.candidatePosition = [x, drag.originalPosition[1], z];
 		return;
 	}

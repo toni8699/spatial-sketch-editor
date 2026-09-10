@@ -55,7 +55,15 @@
 	import type { EditorViewMode } from './app/editor-view-mode';
 import { buildPlanSceneFootprintProjection } from './layout/plan-scene-footprint';
 import { resolveEditorPlacementScale } from './scale-vector';
-import { resolveRectangle } from '$lib/layout/layout-wall-first-precision';
+import {
+	resolveRectangle,
+	LAYOUT_PLAN_GRID_STEP,
+	alignReferenceKey,
+	planLayoutObjectAlign,
+	type AlignAction,
+	type AlignAxis,
+	type AlignReference
+} from '$lib/layout/layout-wall-first-precision';
 import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall, LayoutWallFirstRoom } from '$lib/layout/layout-wall-first-types';
 
 	let {
@@ -546,6 +554,83 @@ import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall, LayoutWallFir
 		updateObjectVector('position', index, value);
 	}
 
+	// P23.2 — bounded alignment: one selected Layout object → one explicit
+	// reference through the pure planner + the existing one-transaction
+	// mutation runner. Reference picking never touches canonical selection and
+	// a no-op adds no history (the planner rejects before any mutation).
+	type AlignReferenceOption = AlignReference & { label: string };
+
+	const alignObjectOptions = $derived.by<AlignReferenceOption[]>(() => {
+		if (!selectedLayoutObject || selectedLayoutObject.kind === 'profile') return [];
+		return layoutPreview.project.layout.objects
+			.filter((object) => object.id !== selectedLayoutObject.id && object.kind !== 'profile')
+			.map((object) => ({ kind: 'object' as const, id: object.id, label: `${object.kind} · ${object.id}` }));
+	});
+
+	const alignRoomOptions = $derived.by<AlignReferenceOption[]>(() => {
+		if (!selectedLayoutObject?.roomId) return [];
+		return [{ kind: 'room' as const, id: selectedLayoutObject.roomId, label: `Room bounds · ${selectedLayoutObject.roomId}` }];
+	});
+
+	const alignWallOptions = $derived.by<AlignReferenceOption[]>(() => {
+		if (!selectedLayoutObject?.roomId) return [];
+		const room = layoutRooms.find((candidate) => candidate.id === selectedLayoutObject.roomId);
+		if (!room) return [];
+		return room.boundary.segments.map((segment) => ({
+			kind: 'wall' as const,
+			id: segment.id,
+			label: `Wall · ${segment.id}`
+		}));
+	});
+
+	const alignReferenceOptions = $derived(
+		[...alignObjectOptions, ...alignRoomOptions, ...alignWallOptions]
+	);
+
+	let alignReferenceId = $state('');
+
+	const activeAlignReference = $derived.by<AlignReferenceOption | null>(() => {
+		if (alignReferenceOptions.length === 0) return null;
+		// Match on the collision-safe `kind:id` key — IDs are only unique
+		// inside each collection, so an object `foo` and a wall `foo` must
+		// not collapse to the first option.
+		return (
+			alignReferenceOptions.find((option) => alignReferenceKey(option) === alignReferenceId) ??
+			alignReferenceOptions[0]!
+		);
+	});
+
+	function alignSelectedObject(action: AlignAction, axis: AlignAxis = 'x'): void {
+		if (!selectedLayoutObject || selectedLayoutObject.kind === 'profile') return;
+		const reference = activeAlignReference;
+		if (!reference) {
+			store.setStatusMessage('No alignment reference available');
+			return;
+		}
+		const plan = planLayoutObjectAlign(
+			layoutPreview.geometry,
+			selectedLayoutObject.id,
+			reference,
+			action,
+			axis
+		);
+		if (plan.kind === 'rejected') {
+			store.setStatusMessage(
+				plan.code === 'no_op' ? 'Already aligned — no change recorded' : `Align rejected: ${plan.message}`
+			);
+			return;
+		}
+		const outcome = runLayoutMutationGuarded(
+			() => updateLayoutObjectFields(layoutPreview, selectedLayoutObject.id, { position: plan.position }),
+			(result) => result.success
+		);
+		if (outcome.kind === 'skipped') {
+			store.setStatusMessage('Finish the current layout interaction first');
+			return;
+		}
+		store.setStatusMessage(outcome.result.success ? 'Aligned object' : `Align rejected: ${outcome.result.message}`);
+	}
+
 	function updateObjectYaw(value: number): void {
 		updateObjectVector('rotation', 1, degreesToRadians(value));
 	}
@@ -933,7 +1018,7 @@ import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall, LayoutWallFir
 					<strong>Layout primer</strong>
 					<p>Rect Room — drag to draw a rectangular room · Poly Room — click points, close to finish.</p>
 					<p>Door / Window — click a wall to place a supported opening.</p>
-					<p>Grid {layoutInteraction.planView.gridEnabled ? 'on' : 'off'} · Snap 0.25m {layoutInteraction.planView.snapEnabled ? 'on' : 'off'} · Units metric (m).</p>
+					<p>Grid {layoutInteraction.planView.gridEnabled ? 'on' : 'off'} · Snap {LAYOUT_PLAN_GRID_STEP}m {layoutInteraction.planView.snapEnabled ? 'on' : 'off'} · Units metric (m).</p>
 					<p class="layout-primer-tip">Tip: walls stay room-derived; drag mid-span to bend existing walls.</p>
 				</div>
 			{/if}
@@ -1060,13 +1145,13 @@ import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall, LayoutWallFir
 							<EditorNumberField
 								label="X"
 								value={selectedLayoutObject.position[0]}
-								step={layoutInteraction.planView.snapEnabled ? 0.25 : 0.01}
+								step={layoutInteraction.planView.snapEnabled ? LAYOUT_PLAN_GRID_STEP : 0.01}
 								oncommit={(value) => updateObjectPosition(0, value)}
 							/>
 							<EditorNumberField
 								label="Z"
 								value={selectedLayoutObject.position[2]}
-								step={layoutInteraction.planView.snapEnabled ? 0.25 : 0.01}
+								step={layoutInteraction.planView.snapEnabled ? LAYOUT_PLAN_GRID_STEP : 0.01}
 								oncommit={(value) => updateObjectPosition(2, value)}
 							/>
 							<EditorNumberField
@@ -1078,6 +1163,27 @@ import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall, LayoutWallFir
 							/>
 						</div>
 					</fieldset>
+					{#if alignReferenceOptions.length > 0}
+						<fieldset class="staging-transform-fields layout-align-fields">
+							<legend>Align</legend>
+							<label>Reference<select bind:value={alignReferenceId}>
+								{#each alignReferenceOptions as option (alignReferenceKey(option))}
+									<option value={alignReferenceKey(option)}>{option.label}</option>
+								{/each}
+							</select></label>
+							<div class="layout-align-actions">
+								<button type="button" onclick={() => alignSelectedObject('min', 'x')}>X min</button>
+								<button type="button" onclick={() => alignSelectedObject('center', 'x')}>X center</button>
+								<button type="button" onclick={() => alignSelectedObject('max', 'x')}>X max</button>
+								<button type="button" onclick={() => alignSelectedObject('min', 'z')}>Z min</button>
+								<button type="button" onclick={() => alignSelectedObject('center', 'z')}>Z center</button>
+								<button type="button" onclick={() => alignSelectedObject('max', 'z')}>Z max</button>
+								{#if activeAlignReference?.kind === 'wall'}
+									<button type="button" onclick={() => alignSelectedObject('center-on-wall')}>Center on wall</button>
+								{/if}
+							</div>
+						</fieldset>
+					{/if}
 				{/if}
 				{#if selectedLayoutObject.kind === 'profile'}
 					<span>Position: {selectedLayoutObject.position.join(', ')} · rotation: {selectedLayoutObject.rotation.join(', ')}</span>
@@ -1206,13 +1312,13 @@ import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall, LayoutWallFir
 								<EditorNumberField
 									label="X"
 									value={stagingSingleTransform.position[0]}
-									step={layoutInteraction.planView.snapEnabled ? 0.25 : 0.01}
+									step={layoutInteraction.planView.snapEnabled ? LAYOUT_PLAN_GRID_STEP : 0.01}
 									oncommit={(value) => updateStagingPosition(0, value)}
 								/>
 								<EditorNumberField
 									label="Z"
 									value={stagingSingleTransform.position[2]}
-									step={layoutInteraction.planView.snapEnabled ? 0.25 : 0.01}
+									step={layoutInteraction.planView.snapEnabled ? LAYOUT_PLAN_GRID_STEP : 0.01}
 									oncommit={(value) => updateStagingPosition(2, value)}
 								/>
 								<EditorNumberField
@@ -1437,6 +1543,9 @@ import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall, LayoutWallFir
 	.layout-selected-room { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.6rem; border: 1px solid var(--editor-accent-border); border-radius: 0.35rem; background: var(--editor-bg-selected); color: var(--editor-text-primary); font-size: 0.7rem; }
 	.layout-selected-room span { color: var(--editor-text-secondary); font-size: 0.66rem; overflow-wrap: anywhere; }
 	.layout-selected-room label { display: flex; flex-direction: column; gap: 0.25rem; color: var(--editor-text-secondary); font-size: 12px; font-weight: 400; }
+	.layout-align-fields .layout-align-actions { display: flex; flex-wrap: wrap; gap: 0.25rem; }
+	.layout-align-fields .layout-align-actions button { padding: 0.2rem 0.45rem; border: 1px solid var(--editor-border-normal); border-radius: 0.25rem; background: var(--editor-bg-control); color: var(--editor-text-primary); font: inherit; font-size: 0.65rem; cursor: pointer; }
+	.layout-align-fields .layout-align-actions button:hover { background: var(--editor-bg-control-hover, var(--editor-bg-panel-raised)); }
 	.layout-selected-room input, .layout-selected-room select { box-sizing: border-box; width: 100%; padding: 0.34rem; border: 1px solid var(--editor-border-normal); border-radius: 0.28rem; background: var(--editor-bg-panel-raised); color: var(--editor-text-primary); font: 500 12.5px var(--editor-font); font-variant-numeric: tabular-nums; }
 	.layout-selected-room input:focus, .layout-selected-room select:focus { outline: 1px solid var(--editor-accent); border-color: var(--editor-accent); }
 	.layout-selected-room input:disabled, .layout-selected-room select:disabled, .layout-danger:disabled { opacity: 0.48; cursor: default; }

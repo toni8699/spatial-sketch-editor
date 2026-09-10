@@ -1,4 +1,5 @@
 import type { LayoutVec2 } from '$lib/layout/layout-types';
+import { LAYOUT_PLAN_GRID_STEP } from '$lib/layout/layout-wall-first-precision';
 
 export type PlanViewportState = {
 	width: number;
@@ -180,7 +181,7 @@ export function zoomPlanViewport(
 	];
 }
 
-export function snapToGrid(point: LayoutVec2, spacing = 0.25): LayoutVec2 {
+export function snapToGrid(point: LayoutVec2, spacing = LAYOUT_PLAN_GRID_STEP): LayoutVec2 {
 	if (!Number.isFinite(spacing) || spacing <= 0) return [...point];
 	return [Math.round(point[0] / spacing) * spacing, Math.round(point[1] / spacing) * spacing];
 }
@@ -211,7 +212,7 @@ export function visiblePlanBounds(state: PlanViewportState): PlanBounds {
 
 export function buildPlanGrid(
 	state: PlanViewportState,
-	minorSpacing = 0.25,
+	minorSpacing = LAYOUT_PLAN_GRID_STEP,
 	majorSpacing = 1
 ): PlanGridLine[] {
 	if (!state.gridEnabled) return [];

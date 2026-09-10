@@ -196,11 +196,11 @@
 					value={nodeWorld[0]}
 					step={0.01}
 					fractionDigits={3}
-					oncommit={(x) => commitNodeXZ(x, nodeWorld[1])}
+					oncommit={(x) => commitNodeXZ(x, nodeWorld[2])}
 				/>
 				<EditorNumberField
 					label="World Z (m)"
-					value={nodeWorld[1]}
+					value={nodeWorld[2]}
 					step={0.01}
 					fractionDigits={3}
 					oncommit={(z) => commitNodeXZ(nodeWorld[0], z)}
@@ -317,11 +317,11 @@
 					value={anchorWorld[0]}
 					step={0.01}
 					fractionDigits={3}
-					oncommit={(x) => commitAnchorXZ(x, anchorWorld[1])}
+					oncommit={(x) => commitAnchorXZ(x, anchorWorld[2])}
 				/>
 				<EditorNumberField
 					label="World Z (m)"
-					value={anchorWorld[1]}
+					value={anchorWorld[2]}
 					step={0.01}
 					fractionDigits={3}
 					oncommit={(z) => commitAnchorXZ(anchorWorld[0], z)}
