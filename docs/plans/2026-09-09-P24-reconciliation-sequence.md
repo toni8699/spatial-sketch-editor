@@ -25,7 +25,7 @@ P24 reconciliation
 
 P24 implementation still depends on the accepted P23 minimum useful Build set. Any P24 decision touching coordinates, placement ownership, selection routing, Plan projection or Scene/Camera migration must consume the coordinate/ownership model accepted through P23, not assume the earlier Room-local baseline remains permanent.
 
-P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code. P23 F0 closed on 2026-09-10. The R0 post-F0 delta refresh below is complete; selected P24 placement, selection, support-query and persistence integration seams still carry explicit R9 rechecks before the minimum can freeze.
+P23.0a → P23.8 → P23.0b implementation has landed, including world-local compatibility/cutover code. P23 F0 closed on 2026-09-10. The R0 post-F0 delta refresh below is complete; selected P24 placement, selection, support-query and capability-specific asset/runtime seams still carry explicit R9 rechecks before the minimum can freeze.
 
 ## Authority and evidence order
 
@@ -158,18 +158,17 @@ The refresh also exposes a narrower truth than “F0 made Stage world-local”: 
 | Layout compiler + query geometry (`layout-geometry.ts`, `layout-geometry-types.ts`, `plan-hit.ts`) | Legacy and wall-first compiler entries converge through the shared compiler core. `CompiledLayoutGeometry.queries` remains the render-neutral point/span/polygon/AABB query contract; wall-first physical-wall identity comes from canonical wall-first inputs | **STABLE compiler/query core** | P24 support placement must consume this seam rather than create another geometry/query system. Recheck exact floor/wall/support metadata needed by selected placement operations because current Stage placement does not use it yet |
 | Camera records inside Scene | Nodes, path anchors/waypoints and view keyframes participate in the same one-time world-local conversion; runtime graph builds after compatible preparation | **STABLE for P24** | Pure topology/Sequence/motion stays outside P24. Do not introduce a second route or motion system; only recheck if a selected P24 capability directly touches shared Scene persistence |
 | Canonical project writer / compatible decode (`wall-first-project.ts`, `project-compat.ts`) | F0 now has a canonical wall-first + world-local project writer and explicit compatible decode/migration matrix | **STABLE library boundary** | P24 persistence must use this meaning; no fallback to guessed Room frames |
-| Live editor cloud Save/Load (`EditorApp.svelte`, `project-codec.ts`) | Live `captureValidatedSaveSnapshot()` and `loadProject()` still call legacy `validateProject`; `createEmptyProject()` also boots the legacy project shape. This is distinct from the new canonical writer/compat runtime | **NOT CLOSED** | Before P24 world-local authoring freezes: reconcile live Save/Load with compatible decode + canonical wall-first/world-local persistence, while preserving project/asset readiness and save guards. Package manifest/versioning stays a separate reviewed seam |
+| Live editor cloud Save/Load (`EditorApp.svelte`, `project-codec.ts`) | At the R0 audit baseline, live `captureValidatedSaveSnapshot()` and `loadProject()` called `validateProject` while that strict codec did not yet accept wall-first Layout | **SUPERSEDED BY P23.1** | P23.1 widened the shared codec to accept explicit wall-first Layout + world-local Scene; live Save/Load already uses that shared codec. Basic format persistence is no longer a P24A blocker; real capability round-trip acceptance remains required |
 | Preview + P22 cold visitor (`compat-runtime.ts`, `preview-coordinator.ts`, `visitor-cold-runtime.ts`) | Both now open through shared `prepareCompatibleRuntime()`: decode compatibly, compile through the single shared geometry core, resolve legacy frames at most once, then operate on one runtime/world representation. F0 parity tests pin wall-first Preview/cold-visitor equality | **STABLE coordinate/runtime seam** | Only capability-specific P24 parity remains: model registry/retention, added materials/lights/environment and asset resolution if selected. No coordinate migration re-open |
 | Visitor/editor isolation | Shared compatibility work lives in visitor-safe project/runtime packages; Preview and cold visitor consume canonical data/runtime meaning rather than editor selection/history/gizmo/session state | **STABLE boundary** | P24 helpers, proxies, selection, gizmos and acquisition UI remain editor-only; verify new selected capabilities do not leak them into cold visitor bundles |
 
-**R0 conclusion:** F0 has stabilized the canonical coordinate model, Layout/Scene ownership, shared compiler/query core, Plan transform/projection math, history architecture, and Preview/cold-visitor coordinate/runtime preparation. P24 no longer waits on those semantics. The remaining post-F0 blockers are narrower and concrete:
+**R0 conclusion:** F0 has stabilized the canonical coordinate model, Layout/Scene ownership, shared compiler/query core, Plan transform/projection math, history architecture, and Preview/cold-visitor coordinate/runtime preparation. P23.1 subsequently closed the basic strict-codec wall-first/world-local Save/Load format-acceptance gap. The remaining post-F0 blockers are narrower and concrete:
 
 1. **Stage authoring Room coupling:** placement/selectability and workspace-selection context still assume Room ownership even though canonical world-local Scene forbids `roomId`.
-2. **Live persistence cutover:** canonical writer/compatible decode exist, but editor cloud Save/Load still routes through legacy `validateProject`.
-3. **Support/surface integration:** the compiled Layout query core is stable, but current Scene grounding/placement still uses rendered tagged floors and has no explicit stacked/support resolver.
-4. **Capability-specific asset/runtime parity:** P24A model registry/pinning and any selected material/light/environment additions still need Save/Load + cold-visitor acceptance, without reopening the now-stable coordinate runtime.
+2. **Support/surface integration:** the compiled Layout query core is stable, but current Scene grounding/placement still uses rendered tagged floors and has no explicit stacked/support resolver.
+3. **Capability-specific asset/runtime parity:** P24A static-model source authority and any selected material/light/environment additions still need real Save/Load + cold-visitor acceptance, without reopening the now-stable coordinate runtime.
 
-These are R9 inputs, not authorization to implement them in R0. R2/R5–R8 remain dated pre-F0 evidence where labeled; when they conflict with this refresh, this 2026-09-10 R0 result wins.
+These are R9 inputs, not authorization to implement them in R0. R2/R5–R8 remain dated pre-F0 evidence where labeled; when they conflict with this refresh or the P23.1 addendum above, the newer evidence wins.
 
 ## R1 — P24A implementation-readiness reconciliation
 
@@ -199,10 +198,31 @@ Closed now (pipeline-side evidence, no runtime changes):
 - `generated-obb`: recovers the piano 1.48 × 1.59 box, reports canonical X/Z bounds for rotated outlines, rejects non-finite input, ~50ms on a 100k-point cloud; round + thin-leg oracle archetypes benchmarked (real Kenney/SH3F corpus acquisition is P24A.3 execution, not readiness).
 - Proof set frozen (12, from the manifest — rest is backlog): Poly `ArmChair_01`, `round_wooden_table_01`, `Shelf_01`, `painted_wooden_table`, `folding_wooden_stool`; Kenney `chair`, `loungeDesignChair`, `table`, `cabinetBedDrawer`; SH3D `Mid-century-chair`, `Cafe-table`, `Futon-couch` (attribution-survival proof). Covers round + irregular, top-down oracle, planIcon, OBB + silhouette, CC0 + CC-BY-3.0.
 - Supply pointers (no new survey): 42 material rows + 9 HDRI rows in `museum-editor-phase2-acquisition-manifest.json`, all CC0 with source URLs; bytes acquired at P24A.3+ execution.
-- Registry decision: Wave-1 ships static-only via the shipped-static compat path first (registry appends + retention proof per asset); `kind: 'model'` P20/R2 + P22 pinning extension is designed but implemented after F0 — `scene-codec` is in active P23.0b flux.
+- Registry decision: Wave-1 remains static-only through the append-only shipped-static compatibility path first. Dynamic project/upload/provider GLB support through P20/R2 + P22 release pinning is a deferred depth path, not the P24A minimum. The remaining static runtime gap is narrower: visitor model loading must take its production source from shipped-static authority rather than validating there and then resolving from the mutable live catalogue.
 - `gltfpack` disposition: **DEFER** — Meshopt decode already runs at runtime (`useMeshopt`); encode-side size wins are unmeasured and unnecessary for the minimum. Revisit as **BENCHMARK FIRST during P24A.3** if derivative sizes demand it. `meshoptimizer` stays transitively available; no new dependency.
 
-Open items requiring the post-F0 recheck (R9): placement/proxy seams against world-local Scene, Save/Load + cold-visitor model resolution, P22 model pinning. Annex stays `seed — evidence pending` until that recheck; flipping it is an R9-gate decision, not this track.
+### R1 post-F0 closeout — 2026-09-10
+
+**R1 COMPLETE.** The P24A annex advances to `evidence complete — reconciliation pending`; R9 still owns minimum freeze and implementation-ready child-plan creation.
+
+Closed architecture/readiness decisions:
+
+- `SceneModelEntity.assetId` remains the authored model identity; PlanProxy/`AssetFootprint` remains asset-definition metadata, never a second per-placement record;
+- canonical world-local Plan projection already uses the identity frame when `roomId` is absent; legacy Room transforms remain compatibility-only;
+- the `furniture-floor` normalization recipe establishes a zero floor-contact offset for that normalized recipe only; broader wall/ceiling/stacked support metadata is not inferred;
+- static-first is the P24A minimum: accepted Wave-1 GLBs use stable shipped-static identities + retention; generic project/upload/provider GLB ingestion is deferred unless R9 explicitly promotes it;
+- P23.1 closes basic wall-first/world-local project format acceptance in the shared codec used by live cloud Save/Load; no model-specific serializer or separate P24A persistence system is needed;
+- future dynamic models, if later selected, must extend the existing P20/R2 + P22 release path with model kind/MIME/validation/hash-pinning rather than create a parallel registry;
+- normalization, rights gate, proof-set selection, material/HDRI supply pointers and `gltfpack` benchmark-first disposition remain accepted from the dry run.
+
+Remaining implementation/reconciliation blockers before implementation-ready P24A children freeze:
+
+1. shared Stage placement/selectability must stop requiring legacy Room ownership for canonical world-local Scene entities;
+2. cold static-model rendering must resolve the production source from shipped-static compatibility authority rather than the mutable live catalogue;
+3. selected floor/support placement still needs the shared Layout-query Y/ambiguity contract; normalized floor pivot metadata does not replace support resolution;
+4. P24A.3–P24A.6 execution must run the frozen corpus and bounded material/HDRI supply through real Save/Load + cold-visitor acceptance.
+
+No broad research remains for R1. Dynamic uploaded/provider GLB support does **not** block the static-first P24A minimum.
 
 ### Three conformance additions — conditional on the selected runtime/corpus
 
@@ -240,7 +260,7 @@ Dated pre-F0 baseline matrix (coordinate/room observations require the current-s
 | Environment | fixed ambient + directional rig; Threlte AgX + sRGB; no authored exposure/HDRI/IBL state | Scene intent + renderer resources | asset resolution, semantic mapping, lifecycle and parity remain; native Three environment/PMREM primitives exist | Three harvest + R7 | Global architecture ratified conditionally; minimum inclusion R9, schema/runtime gate still open |
 | Outliner / Inspector | single-select panels; multi has Duplicate/Delete + prefs only | existing editor surfaces | no bulk transform/material edit; commit-only sync by design | code for baseline | POLISH bulk + sync |
 | History integration | single stack, 1-gesture-1-entry, `documentsMatch` no-op guard | canonical history | cross-view fixture pins missing | code only | KEEP; fixtures per R3/R4 |
-| Editor-only vs visitor + asset-resolution boundary | zero editor imports in `apps/museum`; P20/P22 texture-only; models shipped-catalogue | P20 registry / P22 resolver / visitor isolation | GLB ingest absent (confirmed P24A.4 gap) | code only | KEEP boundary; P24A extends registry |
+| Editor-only vs visitor + asset-resolution boundary | zero editor imports in `apps/museum`; P20 project bytes remain image/procedural-only; built-in models use shipped-static compatibility | P20 registry / P22 resolver / visitor isolation | cold static-model loading still resolves its URL through live catalogue; dynamic GLB ingest absent | code only | KEEP boundary; DEEPEN shipped-static model source authority; dynamic project GLB FOLLOW-UP |
 
 R2 answers what exists and where the gap is. Exact ship scope is decided in R5/R6/R7 and frozen only in R9/B6.
 
@@ -441,7 +461,7 @@ Bulk transform/material multi-edit, Scene/asset integrity diagnostics surface, a
 - Align/distribute reference-frame behavior; duplicate re-ground support source; cluster/workspace Room-context removal for canonical world-local Scene.
 - Plan projection/transform integration with the world-local identity-frame path; retain inverse-resolve only for explicit legacy compatibility rather than treating its removal as a goal.
 - Canonical Scene placement/selectability against wall-first Layout support/surface queries; no persistent Layout/Scene support dependency by default.
-- P24A import consumption; live Save/Load compatible/canonical cutover; P22 model resolution/pinning and selected-capability cold-visitor parity (R1 open items).
+- P24A import consumption; cold static-model source authority; selected-capability cold-visitor parity (R1). P23.1 shared project codec now accepts wall-first/world-local, so there is no separate P24A persistence-format cutover blocker.
 
 ### C. R9 inclusion decisions (not F0-dependent; include-in-minimum vs depth tail at freeze)
 
@@ -470,8 +490,8 @@ instruction to run them all or automatically adopt its numerical budgets.
 3. Final maturity matrix — R2 baseline done; final pass at freeze.
 4. Operation/history ownership per capability — open.
 5. Plan/3D acceptance — themes + R3/R4/R8 rules done; fixtures at freeze.
-6. Save/Load + P22 acceptance — open; R0 now names live legacy-codec cutover + capability-specific visitor/asset parity as the remaining work.
-7. Post-F0 seam recheck — **R0 delta refresh complete 2026-09-10**; selected P24 placement/selection/support-query/persistence integration checks remain named blockers before R9 freeze.
+6. Save/Load + P22 acceptance — open as capability acceptance; basic wall-first/world-local format persistence is closed by P23.1, while static-model source authority and selected material/light/environment parity still need proof.
+7. Post-F0 seam recheck — **R0 delta refresh complete 2026-09-10; R1 complete 2026-09-10**; selected P24 placement/selection/support-query integration checks remain named blockers before R9 freeze.
 8. Renderer/dependency baseline + acceptance definition — open; conditional upgrade comparison, no r186 pin.
 9. Child plans + owner review — last.
 
@@ -499,8 +519,8 @@ Consolidates the pre-F0 packet into freeze-ready input. Legend: [F0-FREE] resolv
 | Environment | Fixed ambient+directional rig; Threlte AgX/sRGB; no authored environment; native backend primitives available | Global Scene intent ratified if included; tone mapper system-owned; caches derived; per-room blending follow-up | Inclusion + optional exposure [R9-PICK]; schema/registry/runtime [POST-F0 RECHECK / R1] |
 | Outliner / Inspector | Shared selection, commit-only numerics, single-select panels, existing density treatment | KEEP + POLISH; bulk edit | [F0-FREE]; bulk edit [R9-PICK] |
 | History | Single stack (`HISTORY_LIMIT=100`), 1-gesture-1-entry, `begin/commit/cancelDocumentTransaction` (`editor-store.svelte.ts:2813-2867`) | KEEP; cross-view fixture pins at freeze | [F0-FREE]; operation-owner tags [POST-F0 RECHECK] |
-| Editor / visitor boundary | Zero editor imports in museum; texture-only resolution; GLB ingest = P24A.4 gap | KEEP boundary; P24A extends registry | [POST-F0 RECHECK / R1] |
-| P24A supply | Proven pipeline (normalize-asset.sh determinism, rights gate, OBB, 12-proof set); static-first registry; `gltfpack` deferred | Direction closed | [F0-FREE]; registry/codec/pinning [POST-F0 RECHECK] |
+| Editor / visitor boundary | Visitor runtime excludes editor stores/history/gizmos; P20 dynamic bytes remain image/procedural-only; static models have shipped-static validation/retention | KEEP boundary; DEEPEN static model loading authority | static source resolver + capability parity [R1]; dynamic GLB FOLLOW-UP |
+| P24A supply | Proven normalization/rights/OBB evidence, frozen 12-object proof set, static-first registry direction; `gltfpack` deferred | Evidence complete; static-first minimum direction closed; dynamic GLB deferred | static-model source authority + corpus/runtime acceptance [R1]; no project-codec blocker |
 
 No broad direct-reference survey is needed. The dated R0–R8 baseline plus completed Three harvest inform these dispositions; refresh affected code evidence after F0 and run only the bounded compatibility/implementation checks required by the selected capabilities and dependency baseline.
 
@@ -520,7 +540,7 @@ One completed gesture = one history entry; cancel/no-op = none. All Scene ops ta
 | `applyMaterialPatch` / `makeMaterialInstanceUnique` | `material-resource-mutator` via `store.requestMaterialEdit` | entity/material ids + patch | One entry (confirm at freeze) | [F0-FREE] |
 | Light authoring [conceptual]; current `beginLightPlacement` / `createPendingLightAt` / `updateLightFields` seam + gallery preset op | Light mutators (`editor-lights.ts`, preset as ordinary Scene ops) | kind + props | One entry | [F0-FREE] |
 | Environment edit / selected gallery preset [conditional; conceptual, no API/schema freeze] | Scene semantic operations; registry owns referenced asset bytes | Global environment intent + optional exposure only if selected | One entry per logical authored edit/preset; cache generation/update produces none | Inclusion [R9-PICK]; schema/runtime [POST-F0 RECHECK / R1] |
-| P24A acquire / normalize / approve | Pipeline-owned lifecycle, not editor undo | source + recipe + rights evidence | Promotion gated by acceptance, never half-approved | Boundary [F0-FREE]; registry/codec [POST-F0 RECHECK] |
+| P24A acquire / normalize / approve | Pipeline-owned lifecycle, not editor undo | source + recipe + rights evidence | Promotion gated by acceptance, never half-approved | static registry/runtime acceptance [R1]; no editor history |
 
 No mixed Layout/Scene transaction and no persistent cross-document support reference without a separately specified ownership/delete/history contract (umbrella invariant; addendum entity-ownership rule).
 
@@ -535,7 +555,7 @@ No mixed Layout/Scene transaction and no persistent cross-document support refer
 - F7 duplicate-then-move: +0.5 XZ clone, collision/bounds checked, one entry; partial-cluster duplicate warns. [re-ground POST-F0 RECHECK]
 - F8 material assign + Make Unique: shared edit prompts choice; unique clone `-copy`; editor authored output, Preview and Publish resolve materials consistently on the selected renderer baseline. Review expected BRDF/PMREM differences separately if the baseline changes.
 - F9 light authoring: create point/spot → Inspector sync (explicit half-angle/degree semantics, supported range and existing out-of-range policy, `castShadow`) → visitor renders same lights with no helpers. Verify finite/unlimited range feedback and no second gizmo authority.
-- F10 Save/Load + cold visitor: staged Scene/materials/lights and, if selected, global environment/optional exposure survive round-trip; referenced assets remain retained/resolvable. Cold visitor and Preview consume the same canonical meaning with no editor-only state. [codec + resolution POST-F0 RECHECK]
+- F10 Save/Load + cold visitor: staged Scene/materials/lights and, if selected, global environment/optional exposure survive round-trip; referenced assets remain retained/resolvable. Cold visitor and Preview consume the same canonical meaning with no editor-only state. [asset resolution + selected-capability parity]
 - F11 gallery preset: one preset op yields ordinary authored Scene light/environment state selected by the preset, with one history result and no persistent rig. Verify explicit baseline/assist-light interaction and legacy appearance policy; environment remains conditional on R9 inclusion.
 - F12 explicit support choice: ambiguous stacked surface forces a visible choice; never silent `Y = 0`. [POST-F0 RECHECK]
 
@@ -551,7 +571,7 @@ Only after R0–R8 have enough evidence:
 4. define deterministic operation/history ownership for every included capability;
 5. define Plan/3D acceptance where both views participate;
 6. define Save/Load + P22 visitor acceptance;
-7. consume the completed R0 post-F0 delta refresh and close the named capability-specific placement/selection/support-query/persistence rechecks before freezing any affected child plan;
+7. consume the completed R0/R1 post-F0 refresh and close the named capability-specific placement/selection/support-query rechecks before freezing any affected child plan;
 8. select the conditional Three/types/Threlte renderer/dependency baseline and define its acceptance gate (F13); an upgrade is separately scoped, not implied by the harvest or required for already-available capabilities. Record required compatibility/visual/lifetime/performance proof as an implementation ship gate; no changed baseline enters production until it passes;
 9. then update/write implementation-ready P24 child plans and request owner review.
 
