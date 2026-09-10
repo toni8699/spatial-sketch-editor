@@ -560,6 +560,8 @@ function emitRoomQueryRecords(
 	const roomIdParts = ['room', floor.id, room.id];
 
 	for (const [segmentIndex, segment] of room.boundary.segments.entries()) {
+		const wallKey =
+			wallIdScope === 'room' ? geometryId([floor.id, room.id, segment.id]) : segment.id;
 		queryBuilder.points.push(
 			pointRecord(
 				floor.id,
@@ -568,7 +570,8 @@ function emitRoomQueryRecords(
 				'vertex',
 				segment.id,
 				segmentIndex,
-				[...segment.start] as LayoutVec2
+				[...segment.start] as LayoutVec2,
+				wallKey
 			)
 		);
 		if (segment.kind === 'auto-bezier') {
@@ -581,7 +584,8 @@ function emitRoomQueryRecords(
 						'interior-anchor',
 						anchor.id,
 						anchorIndex,
-						[...anchor.point] as LayoutVec2
+						[...anchor.point] as LayoutVec2,
+						wallKey
 					)
 				);
 			}
@@ -590,7 +594,7 @@ function emitRoomQueryRecords(
 
 	for (const wall of walls) {
 		const wallKey =
-			wallIdScope === 'room' ? `${floor.id}:${room.id}:${wall.segmentId}` : wall.segmentId;
+			wallIdScope === 'room' ? geometryId([floor.id, room.id, wall.segmentId]) : wall.segmentId;
 		for (let index = 1; index < wall.samples.length; index += 1) {
 			const start = wall.samples[index - 1]!;
 			const end = wall.samples[index]!;
@@ -760,7 +764,8 @@ function pointRecord(
 	kind: 'vertex' | 'interior-anchor',
 	sourceId: string,
 	sourceIndex: number,
-	point: LayoutVec2
+	point: LayoutVec2,
+	wallKey?: string
 ) {
 	const parts = ['query-point', floorId, roomId, segmentId, kind, sourceId];
 	return {
@@ -773,7 +778,8 @@ function pointRecord(
 		floorId,
 		roomId,
 		segmentId,
-		sourceIndex
+		sourceIndex,
+		...(wallKey ? { wallKey } : {})
 	};
 }
 

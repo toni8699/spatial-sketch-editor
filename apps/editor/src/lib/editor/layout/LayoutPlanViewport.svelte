@@ -105,6 +105,8 @@
 		LAYOUT_PLAN_GRID_STEP,
 		resolveLayoutSnap,
 		resolveOpeningDragSnap,
+		snapOwnerKey,
+		wallOwnerKey,
 		type SnapFeatureKind,
 		type SnapInputContext,
 		type SnapResolution
@@ -217,7 +219,7 @@
 		point: LayoutVec2,
 		options: {
 			allowedKinds?: SnapFeatureKind[];
-			excludeSourceIds?: ReadonlySet<string>;
+			excludeOwners?: ReadonlySet<string>;
 			excludePoints?: readonly LayoutVec2[];
 		} = {}
 	): LayoutVec2 {
@@ -227,7 +229,7 @@
 		}
 		const input: SnapInputContext = {};
 		if (options.allowedKinds) input.allowedKinds = options.allowedKinds;
-		if (options.excludeSourceIds) input.excludeSourceIds = options.excludeSourceIds;
+		if (options.excludeOwners) input.excludeOwners = options.excludeOwners;
 		if (options.excludePoints) input.excludePoints = options.excludePoints;
 		const resolution = resolveLayoutSnap(
 			preview.geometry,
@@ -1316,7 +1318,9 @@
 			selectLayoutWall(interaction, target.roomId, target.segmentId);
 			if (!svgElement) return;
 			const projected = applyLayoutSnap(target.projection.point, {
-				excludeSourceIds: new Set([target.segmentId])
+				excludeOwners: new Set([
+					wallOwnerKey(preview.geometry, target.roomId, target.segmentId)
+				])
 			});
 			pendingWallBend = {
 				pointerId: event.pointerId,
@@ -1398,7 +1402,11 @@
 			// valid semantic targets.
 			const anchorPoint = movingInteriorAnchorPoint();
 			const next = applyLayoutSnap(point, {
-				excludeSourceIds: new Set([draggedInteriorAnchor.segmentId]),
+				// Typed, room-qualified wall ownership: moving this room's
+				// segment never suppresses another room's same-named wall.
+				excludeOwners: new Set([
+					wallOwnerKey(preview.geometry, draggedInteriorAnchor.roomId, draggedInteriorAnchor.segmentId)
+				]),
 				...(anchorPoint ? { excludePoints: [anchorPoint] } : {})
 			});
 			updateLayoutWallInteriorAnchor(
@@ -1450,7 +1458,9 @@
 				return;
 			}
 			const snapped = applyLayoutSnap(point, {
-				excludeSourceIds: new Set([interaction.objectDrag.objectId])
+				excludeOwners: new Set([
+					snapOwnerKey({ kind: 'object', id: interaction.objectDrag.objectId })
+				])
 			});
 			// The point is already snap-resolved (semantic or grid fallback);
 			// `false` stops the drag helper from re-rounding it to the grid.

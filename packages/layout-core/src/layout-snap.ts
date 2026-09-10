@@ -26,6 +26,7 @@
  */
 import type { LayoutVec2 } from './layout-types';
 import type { CompiledLayoutGeometry, CompiledQuerySpan } from './layout-geometry-types';
+import { geometryId } from './layout-geometry-types';
 import { classifyWallIntersection, type TopologySegment } from './layout-wall-topology';
 
 /** Centralized default Plan grid step in meters (P23.2 §Grid step). */
@@ -60,6 +61,51 @@ const SEMANTIC_RANK: Record<SnapFeatureKind, number> = {
 	grid: 9
 };
 
+export type SnapOwnerKind = 'object' | 'wall' | 'opening';
+
+/**
+ * Typed owner of a snap candidate, used for moving-target exclusion.
+ * Collision-safe across entity kinds AND across scopes: an object `foo`, a
+ * wall `foo`, and an opening `foo` are all legal and never suppress each
+ * other, and legacy wall owners carry their room-qualified `wallKey`, so
+ * moving room A's `wall-1` never suppresses room B's independent `wall-1`.
+ */
+export type SnapOwner = {
+	kind: SnapOwnerKind;
+	/** Object/opening id, or the qualified wall identity (`wallKey`). */
+	id: string;
+};
+
+/**
+ * Collision-safe serialized owner identity (length-prefixed tuple). All
+ * exclusion sets and candidate `ownerId`s use this encoding — plain
+ * delimiter joining would collide because ids may contain the delimiter.
+ */
+export function snapOwnerKey(owner: SnapOwner): string {
+	return geometryId([owner.kind, owner.id]);
+}
+
+/**
+ * Resolve the owner key of one wall segment from the compiled geometry.
+ * Wall-first wall ids are document-global (`wallKey === segmentId`); legacy
+ * segment ids are only unique inside their room, so the moving wall must be
+ * qualified by its room. Falls back to the bare segment id for empty or
+ * hand-built geometry.
+ */
+export function wallOwnerKey(
+	geometry: CompiledLayoutGeometry,
+	roomId: string,
+	segmentId: string
+): string {
+	for (const span of geometry.queries.spans) {
+		if (span.kind !== 'wall' || span.segmentId !== segmentId) continue;
+		const roomScoped = span.wallKey !== undefined && span.wallKey !== span.segmentId;
+		if (roomScoped && span.roomId !== roomId) continue;
+		return snapOwnerKey({ kind: 'wall', id: span.wallKey ?? span.segmentId });
+	}
+	return snapOwnerKey({ kind: 'wall', id: segmentId });
+}
+
 /** Identity of a resolved snap candidate — stable across frames. */
 export type SnapCandidate = {
 	/** Snapped world point. */
@@ -69,10 +115,12 @@ export type SnapCandidate = {
 	/** Canonical source identity for the winning candidate. */
 	sourceId: string;
 	/**
-	 * Canonical owner identity for moving-target exclusion — the object,
-	 * wall segment, or opening that owns this candidate. `sourceId` is a
-	 * composite key (`${ownerId}#start`, `${ownerId}#0:mid`, ...) so it must
-	 * never be used for exclusion; exclusion matches this field exactly.
+	 * Canonical typed owner identity for moving-target exclusion — the
+	 * `snapOwnerKey({ kind, id })` of the object, wall, or opening that owns
+	 * this candidate. `sourceId` is a composite key
+	 * (`${ownerId}#start`, `${ownerId}#0:mid`, ...) so it must never be used
+	 * for exclusion; exclusion matches this field exactly. Hand-built
+	 * candidates may predate the field and fall back to `sourceId`.
 	 */
 	ownerId?: string;
 	/** Distance from the raw pointer, in world units. */
@@ -80,8 +128,11 @@ export type SnapCandidate = {
 };
 
 export type SnapInputContext = {
-	/** Exclude candidates owned by these canonical IDs (moving targets). */
-	excludeSourceIds?: ReadonlySet<string>;
+	/**
+	 * Exclude candidates owned by these serialized owner keys
+	 * (`snapOwnerKey(...)`) — the moving targets.
+	 */
+	excludeOwners?: ReadonlySet<string>;
 	/** Exclude candidates at these exact world points (self-snapping loops). */
 	excludePoints?: readonly LayoutVec2[];
 	/** Only candidates from these families (tool/context validity filter). */
@@ -133,9 +184,9 @@ export function snapToGridStep(point: LayoutVec2, step = LAYOUT_PLAN_GRID_STEP):
 }
 
 function excluded(candidate: SnapCandidate, context: SnapInputContext): boolean {
-	// Exclusion is by canonical owner (`ownerId`), falling back to the raw
-	// sourceId only for hand-built candidates that predate the field.
-	if (context.excludeSourceIds?.has(candidate.ownerId ?? candidate.sourceId)) return true;
+	// Exclusion is by canonical typed owner (`ownerId`), falling back to the
+	// raw sourceId only for hand-built candidates that predate the field.
+	if (context.excludeOwners?.has(candidate.ownerId ?? candidate.sourceId)) return true;
 	if (context.excludePoints) {
 		for (const point of context.excludePoints) {
 			if (point[0] === candidate.point[0] && point[1] === candidate.point[1]) return true;
@@ -262,7 +313,7 @@ export function openingEdgeSnapCandidates(
 				point: [candidatePoint[0], candidatePoint[1]],
 				kind: 'opening-edge',
 				sourceId: `${span.openingId}#${key}`,
-				ownerId: span.openingId,
+				ownerId: snapOwnerKey({ kind: 'opening', id: span.openingId }),
 				distance
 			});
 		}
@@ -299,7 +350,7 @@ export function objectBoundsSnapCandidates(
 				point: [candidatePoint[0], candidatePoint[1]],
 				kind: 'object-bounds-edge',
 				sourceId: `${objectId}#${key}`,
-				ownerId: objectId,
+				ownerId: snapOwnerKey({ kind: 'object', id: objectId }),
 				distance
 			});
 		}
@@ -317,7 +368,7 @@ export function objectBoundsSnapCandidates(
 			point: [center[0], center[1]],
 			kind: 'object-bounds-center',
 			sourceId: objectId,
-			ownerId: objectId,
+			ownerId: snapOwnerKey({ kind: 'object', id: objectId }),
 			distance: centerDistance
 		});
 	}
@@ -409,7 +460,7 @@ export function wallIntersectionSnapCandidates(
 				point: [intersectionPoint[0], intersectionPoint[1]],
 				kind: 'wall-intersection',
 				sourceId: `${a.id}~${b.id}`,
-				ownerId: `${a.id}~${b.id}`,
+				ownerId: snapOwnerKey({ kind: 'wall', id: `${a.id}~${b.id}` }),
 				distance
 			});
 		}
@@ -445,7 +496,7 @@ export function resolveLayoutSnap(
 			point: [queryPoint.point[0], queryPoint.point[1]],
 			kind: 'junction',
 			sourceId: queryPoint.sourceId,
-			ownerId: queryPoint.segmentId,
+			ownerId: snapOwnerKey({ kind: 'wall', id: queryPoint.wallKey ?? queryPoint.segmentId }),
 			distance
 		});
 	}
@@ -458,6 +509,7 @@ export function resolveLayoutSnap(
 	// curve must never masquerade as the wall, and P23.2 midpoint semantics
 	// are straight-wall-scoped.
 	const wallMerges = dedupeWallSpans(geometry.queries.spans.filter((span) => span.kind === 'wall'));
+	const wallOwner = (key: string): string => snapOwnerKey({ kind: 'wall', id: key });
 	for (const merge of wallMerges) {
 		if (merge.straight) {
 			candidates.push(
@@ -465,22 +517,22 @@ export function resolveLayoutSnap(
 					{ id: merge.key, start: merge.start, end: merge.end },
 					point,
 					radius,
-					merge.segmentId
+					wallOwner(merge.key)
 				)
 			);
 			continue;
 		}
 		for (const [index, sample] of merge.samples.entries()) {
-			candidates.push(...curvedSpanNearestCandidates(sample, merge.key, index, point, radius, merge.segmentId));
+			candidates.push(...curvedSpanNearestCandidates(sample, merge.key, index, point, radius, wallOwner(merge.key)));
 		}
 	}
 	// Wall-wall intersections involve straight walls only. Intersection
-	// owners are composite (`a~b`), so an exact owner match can never
+	// owners are composite (`a~b`), so an exact owner-key match can never
 	// exclude them: walls owned by the moving target are removed before
 	// classifying instead.
-	const excludedSegmentIds = input.excludeSourceIds;
+	const excludedOwners = input.excludeOwners;
 	const intersectionSpans = wallMerges
-		.filter((merge) => merge.straight && !excludedSegmentIds?.has(merge.segmentId))
+		.filter((merge) => merge.straight && !excludedOwners?.has(wallOwner(merge.key)))
 		.map((merge) => ({ id: merge.key, start: merge.start, end: merge.end }));
 	candidates.push(...wallIntersectionSnapCandidates(intersectionSpans, point, radius));
 
@@ -784,10 +836,14 @@ export function dedupeWallSpans(
 		// would be wrong for shared walls (every room re-samples the full
 		// wall, so the summed path exceeds the chord even for straight
 		// walls); every sample endpoint must instead lie on the chord line.
+		// The 2D cross product equals chord × perpendicular deviation, so
+		// comparing it against chord² × 1e-6 enforces a RELATIVE
+		// perpendicular tolerance of 1e-6 × wall length (plus a 1e-12 m²
+		// floor that only absorbs float noise on degenerate chords).
 		const chordX = best[1][0] - best[0][0];
 		const chordZ = best[1][1] - best[0][1];
 		const chordLength = Math.hypot(chordX, chordZ);
-		const tolerance = Math.max(1e-9, chordLength * 1e-6);
+		const tolerance = Math.max(1e-12, chordLength * chordLength * 1e-6);
 		const straight = points.every(
 			([x, z]) => Math.abs(chordX * (z - best[0][1]) - chordZ * (x - best[0][0])) <= tolerance
 		);

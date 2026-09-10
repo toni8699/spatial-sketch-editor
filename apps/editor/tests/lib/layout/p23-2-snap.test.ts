@@ -3,6 +3,7 @@ import {
 	LAYOUT_PLAN_GRID_STEP,
 	LAYOUT_PLAN_SNAP_RADIUS_CSS_PX,
 	dedupeWallSpans,
+	geometryId,
 	objectBoundsSnapCandidates,
 	openingEdgeSnapCandidates,
 	orthogonalGuideCandidates,
@@ -10,9 +11,11 @@ import {
 	resolveLayoutSnap,
 	resolveOpeningDragSnap,
 	snapAcquisitionRadiusWorld,
+	snapOwnerKey,
 	snapToGridStep,
 	spanSnapCandidates,
 	wallIntersectionSnapCandidates,
+	wallOwnerKey,
 	type CompiledLayoutGeometry,
 	type CompiledQuerySpan,
 	type SnapCandidate
@@ -151,10 +154,12 @@ describe('P23.2 deterministic winner order', () => {
 		expect(forward?.sourceId).toBe('wall-a#start');
 	});
 
-	it('excludes moving-target source IDs and exact points', () => {
+	it('excludes moving-target owners and exact points (raw fallback for hand-built candidates)', () => {
 		const self: SnapCandidate = { point: [3, 3], kind: 'junction', sourceId: 'moving', distance: 0.01 };
 		const other: SnapCandidate = { point: [3.1, 3], kind: 'junction', sourceId: 'other', distance: 0.11 };
-		expect(pickSnapWinner([self, other], { excludeSourceIds: new Set(['moving']) })).toEqual(other);
+		// Hand-built candidates predate the typed-owner field and fall back
+		// to their raw sourceId.
+		expect(pickSnapWinner([self, other], { excludeOwners: new Set(['moving']) })).toEqual(other);
 		expect(pickSnapWinner([self], { excludePoints: [[3, 3]] })).toBeNull();
 	});
 
@@ -243,7 +248,7 @@ describe('P23.2 resolveLayoutSnap over compiled query geometry', () => {
 		const geometry = emptyGeometry();
 		geometry.queries.points.push(vertexAt(2, 0, 'moving-segment'));
 		const resolution = resolveLayoutSnap(geometry, [2.01, 0.01], { pixelsPerMeter: 50 }, {
-			excludeSourceIds: new Set(['moving-segment'])
+			excludeOwners: new Set([snapOwnerKey({ kind: 'wall', id: 'moving-segment' })])
 		});
 		if (resolution.kind === 'snap') {
 			expect(resolution.candidate.sourceId).not.toBe('moving-segment');
@@ -431,10 +436,10 @@ describe('P23.2 moving-target exclusion by typed owner', () => {
 		expect(unexcluded.candidate).toMatchObject({
 			kind: 'object-bounds-edge',
 			sourceId: 'obj#0:mid',
-			ownerId: 'obj'
+			ownerId: snapOwnerKey({ kind: 'object', id: 'obj' })
 		});
 		const excluded = resolveLayoutSnap(geometry, [0.5, 0.03], { pixelsPerMeter: 50 }, {
-			excludeSourceIds: new Set(['obj'])
+			excludeOwners: new Set([snapOwnerKey({ kind: 'object', id: 'obj' })])
 		});
 		expect(excluded.kind).toBe('snap');
 		if (excluded.kind !== 'snap') return;
@@ -449,7 +454,7 @@ describe('P23.2 moving-target exclusion by typed owner', () => {
 		if (unexcluded.kind !== 'snap') return;
 		expect(unexcluded.candidate).toMatchObject({ kind: 'junction', sourceId: 'w#start' });
 		const excluded = resolveLayoutSnap(geometry, [0.02, 0.01], { pixelsPerMeter: 50 }, {
-			excludeSourceIds: new Set(['w'])
+			excludeOwners: new Set([snapOwnerKey({ kind: 'wall', id: 'w' })])
 		});
 		expect(excluded.kind).toBe('snap');
 		if (excluded.kind !== 'snap') return;
@@ -468,12 +473,104 @@ describe('P23.2 moving-target exclusion by typed owner', () => {
 		// exact-match the bare exclusion id), so the crossing is removed
 		// before classification: the static wall's nearest point wins.
 		const excluded = resolveLayoutSnap(geometry, [2.03, 0.02], { pixelsPerMeter: 50 }, {
-			excludeSourceIds: new Set(['h'])
+			excludeOwners: new Set([snapOwnerKey({ kind: 'wall', id: 'h' })])
 		});
 		expect(excluded.kind).toBe('snap');
 		if (excluded.kind !== 'snap') return;
 		expect(excluded.candidate.kind).not.toBe('wall-intersection');
 		expect(excluded.candidate.kind).toBe('wall-span');
+	});
+});
+
+describe('P23.2 typed, collision-safe ownership', () => {
+	it('never lets an object exclusion suppress same-named wall candidates and vice versa', () => {
+		const geometry = emptyGeometry();
+		// Object `foo` and wall `foo` legally coexist.
+		geometry.queries.polygons.push({
+			id: 'p:foo',
+			cacheKey: 'c:foo',
+			kind: 'object-footprint',
+			polygon: [[0, 0], [1, 0], [1, 1], [0, 1]],
+			aabb: { min: [0, 0], max: [1, 1] },
+			sourceId: 'foo',
+			objectId: 'foo'
+		});
+		geometry.queries.spans.push(wallSpan('foo', [0, 0], [4, 0]));
+		// Pointer near both the wall start and the object corner.
+		const excludeObject = resolveLayoutSnap(geometry, [0.02, 0.01], { pixelsPerMeter: 50 }, {
+			excludeOwners: new Set([snapOwnerKey({ kind: 'object', id: 'foo' })])
+		});
+		expect(excludeObject.kind).toBe('snap');
+		if (excludeObject.kind !== 'snap') return;
+		// The wall junction survives: a bare-id owner would have killed it.
+		expect(excludeObject.candidate).toMatchObject({ kind: 'junction', sourceId: 'foo#start' });
+
+		const excludeWall = resolveLayoutSnap(geometry, [0.02, 0.01], { pixelsPerMeter: 50 }, {
+			excludeOwners: new Set([snapOwnerKey({ kind: 'wall', id: 'foo' })])
+		});
+		expect(excludeWall.kind).toBe('snap');
+		if (excludeWall.kind !== 'snap') return;
+		// The object bounds edge survives.
+		expect(excludeWall.candidate.kind).toBe('object-bounds-edge');
+	});
+
+	it('never lets one legacy room wall-1 exclusion suppress another room wall-1', () => {
+		const geometry = emptyGeometry();
+		geometry.queries.spans.push(
+			...negativeSlopeSpans('wall-1', 'room-a').map((span) => ({
+				...span,
+				wallKey: 'f:room-a:wall-1'
+			})),
+			...negativeSlopeSpans('wall-1', 'room-b').map((span) => ({
+				...span,
+				wallKey: 'f:room-b:wall-1'
+			}))
+		);
+		// Moving room-a's wall-1 must leave room-b's wall-1 junction intact.
+		const resolution = resolveLayoutSnap(geometry, [0.03, 3.97], { pixelsPerMeter: 50 }, {
+			excludeOwners: new Set([snapOwnerKey({ kind: 'wall', id: 'f:room-a:wall-1' })])
+		});
+		expect(resolution.kind).toBe('snap');
+		if (resolution.kind !== 'snap') return;
+		expect(resolution.candidate).toMatchObject({
+			kind: 'junction',
+			point: [0, 4],
+			sourceId: 'f:room-b:wall-1#start'
+		});
+	});
+
+	it('never merges walls whose naive id joining would collide', () => {
+		// (floor f, room 'a:b', segment 'c') and (floor f, room 'a', segment
+		// 'b:c') both naively join to 'f:a:b:c' — length-prefixed keys keep
+		// them apart, exactly like the compiler's legacy wallKey.
+		const wallA = geometryId(['f', 'a:b', 'c']);
+		const wallB = geometryId(['f', 'a', 'b:c']);
+		expect(wallA).not.toBe(wallB);
+		const spans = [
+			{ ...wallSpan('wall-1', [0, 0], [4, 0], 'a:b'), wallKey: wallA },
+			{ ...wallSpan('wall-1', [10, 0], [14, 0], 'a'), wallKey: wallB }
+		];
+		expect(dedupeWallSpans(spans)).toHaveLength(2);
+	});
+
+	it('resolves the qualified wall owner key from the compiled geometry', () => {
+		const geometry = emptyGeometry();
+		geometry.queries.spans.push({
+			...wallSpan('wall-1', [0, 0], [4, 0], 'room-a'),
+			wallKey: 'f:room-a:wall-1'
+		});
+		// Legacy: qualified by the moving room.
+		expect(wallOwnerKey(geometry, 'room-a', 'wall-1')).toBe(
+			snapOwnerKey({ kind: 'wall', id: 'f:room-a:wall-1' })
+		);
+		// Another room's same-named segment does not qualify this owner.
+		expect(wallOwnerKey(geometry, 'room-b', 'wall-1')).toBe(
+			snapOwnerKey({ kind: 'wall', id: 'wall-1' })
+		);
+		// Hand-built/empty geometry falls back to the bare segment id.
+		expect(wallOwnerKey(emptyGeometry(), 'room-a', 'wall-1')).toBe(
+			snapOwnerKey({ kind: 'wall', id: 'wall-1' })
+		);
 	});
 });
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { chopinProject } from '$lib/content/chopin-project';
 import { compileLayoutGeometry, compileWallFirstLayoutGeometry } from '$lib/layout/layout-geometry';
+import { geometryId } from '$lib/layout/layout-geometry-types';
 import { LAYOUT_WALL_FIRST_FORMAT_VERSION } from '$lib/layout/layout-compat';
 import type { LayoutDocumentWallFirst } from '$lib/layout/layout-wall-first-codec';
 import type { LayoutDocument } from '$lib/layout/layout-types';
@@ -251,12 +252,14 @@ describe('compileLayoutGeometry', () => {
 		expect(new Set(spans.map((span) => span.id)).size).toBe(spans.length);
 		// P23.2 review round 2 / B1: legacy wall identity is room-qualified —
 		// same-named segments of different rooms carry distinct wallKeys so
-		// snap/align consumers never merge them into one fake wall.
+		// snap/align consumers never merge them into one fake wall. The key
+		// is the length-prefixed tuple (delimiter joining would collide
+		// because `:` is legal inside ids).
 		const floorId = document.floors[0]!.id;
 		expect(new Set(spans.map((span) => span.wallKey))).toEqual(
 			new Set([
-				`${floorId}:room-rectangle:${sharedId}`,
-				`${floorId}:room-second:${sharedId}`
+				geometryId([floorId, 'room-rectangle', sharedId]),
+				geometryId([floorId, 'room-second', sharedId])
 			])
 		);
 	});
