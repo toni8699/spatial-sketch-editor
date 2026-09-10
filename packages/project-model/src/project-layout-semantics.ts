@@ -72,6 +72,43 @@ export function createLayoutRoomRegistry(layout: LayoutDocument): LayoutRoomRegi
     };
 }
 
+/**
+ * Empty room registry for project/world-local documents (P23.0 F0 stage 4).
+ *
+ * A wall-first Layout carries no Room frames, and a world-local Scene carries
+ * no `roomId` references (codec-enforced), so resolution never consults a
+ * frame: `point`/`getRequired` throw when called, while the `undefined`
+ * frame helpers stay identity — the same contract `resolveSceneDocument`
+ * relies on for room-less records on the legacy path.
+ */
+export function createEmptyLayoutRoomRegistry(): LayoutRoomRegistry {
+	const byId = new Map<string, LayoutRoomRegistryEntry>();
+	const getRequired = (roomId: string): LayoutRoomRegistryEntry => {
+		throw new Error(`Unknown project layout room: ${roomId}`);
+	};
+	return {
+		entries: [],
+		byId,
+		has: () => false,
+		get: () => undefined,
+		getRequired,
+		point: (roomId: string): Vec3 => {
+			throw new Error(`Unknown project layout room: ${roomId}`);
+		},
+		localPoint: (roomId: string): Vec3 => {
+			throw new Error(`Unknown project layout room: ${roomId}`);
+		},
+		pointInFrame: (roomId: string | undefined, localPoint: Vec3): Vec3 => {
+			if (roomId !== undefined) throw new Error(`Unknown project layout room: ${roomId}`);
+			return [...localPoint] as Vec3;
+		},
+		localPointInFrame: (roomId: string | undefined, worldPoint: Vec3): Vec3 => {
+			if (roomId !== undefined) throw new Error(`Unknown project layout room: ${roomId}`);
+			return [...worldPoint] as Vec3;
+		}
+	};
+}
+
 export function validateProjectSceneRooms(
 	scene: SceneDocument,
 	rooms: LayoutRoomRegistry

@@ -18,12 +18,8 @@
  *   included in the reference set.
  */
 import {
-	compileLayoutGeometry,
-	createLayoutRoomRegistry,
-	createNavigationGraph,
 	hasBlockingLayoutIssues,
-	resolveSceneDocument,
-	validateProject,
+	prepareCompatibleRuntime,
 	type CompiledLayoutGeometry,
 	type LayoutRoomRegistry,
 	type NavigationGraph,
@@ -203,24 +199,23 @@ export function composeColdReleaseBundle(input: {
 	if (!projectId) throw new Error('Project is not ready for release');
 	if (!manifest.releaseId.trim()) throw new Error('Release requires a releaseId');
 
-	const validated = validateProject(
+	const validated = prepareCompatibleRuntime(
 		{ id: projectId, name, layout, scene },
-		{ scene: COLD_SCENE_OPTIONS as never }
+		COLD_SCENE_OPTIONS as never
 	);
-	if (!validated.success) {
+	if (validated.kind === 'rejected') {
 		throw new Error(validated.issues[0]?.message ?? 'Project validation failed');
 	}
 	if (signal?.aborted) throw new Error('Release preparation was cancelled');
 
-	const compiled = compileLayoutGeometry(validated.project.layout);
-	if (hasBlockingLayoutIssues(compiled.issues)) {
-		throw new Error(compiled.issues[0]?.message ?? 'Layout geometry is invalid');
+	if (hasBlockingLayoutIssues(validated.issues)) {
+		throw new Error(validated.issues[0]?.message ?? 'Layout geometry is invalid');
 	}
 	if (signal?.aborted) throw new Error('Release preparation was cancelled');
 
-	const rooms = createLayoutRoomRegistry(validated.project.layout);
-	const runtimeScene = resolveSceneDocument(validated.project.scene, rooms, COLD_SCENE_OPTIONS as never);
-	const graph = createNavigationGraph(runtimeScene);
+	const rooms = validated.rooms;
+	const runtimeScene = validated.runtimeScene;
+	const graph = validated.graph;
 
 	const referenceIssues = validateColdReleaseReferences(
 		{
@@ -254,7 +249,7 @@ export function composeColdReleaseBundle(input: {
 		projectId,
 		projectName: name,
 		scene: runtimeScene,
-		geometry: compiled.geometry,
+		geometry: validated.geometry,
 		rooms,
 		graph,
 		textureScope,

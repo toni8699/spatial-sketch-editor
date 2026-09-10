@@ -39,7 +39,7 @@ import {
 import type { ProjectIssue } from './project-types';
 import { identifySceneFormat, type SceneFormatIdentification } from './scene-format';
 import { convertSceneDocumentToWorldLocal } from './scene-world-conversion';
-import { createLayoutRoomRegistry } from './project-layout-semantics';
+import { createLayoutRoomRegistry, validateProjectSceneRooms } from './project-layout-semantics';
 import type { SceneDocument } from './scene';
 
 /** Project payload shape shared by every success variant. */
@@ -263,8 +263,27 @@ export function decodeProjectCompatible(input: unknown): CompatibleProjectDecode
 		if (scene.kind === 'recognized-legacy') {
 			// Scene conversion happens against the *trusted legacy* registry —
 			// built from the pre-migration legacy Layout (H5 provenance rule 1),
-			// before Room frames stop being authoritative.
+			// before Room frames stop being authoritative. Dangling `roomId`
+			// references cannot convert (no frame to resolve through, and
+			// guessing is forbidden), so the project stays on the read-only
+			// compatibility path with diagnostics instead of throwing.
 			const registry = createLayoutRoomRegistry(layout.document);
+			const referenceIssues = validateProjectSceneRooms(scene.document, registry);
+			if (referenceIssues.length > 0) {
+				return {
+					kind: 'legacy-compatible',
+					project: {
+						id,
+						name,
+						layout: layout.document,
+						scene: scene.document
+					},
+					report: {
+						issues: referenceIssues
+					},
+					sceneSpace: 'legacy-room-local' as const
+				};
+			}
 			const worldScene = convertSceneDocumentToWorldLocal(scene.document, registry);
 			return {
 				kind: 'migrated',

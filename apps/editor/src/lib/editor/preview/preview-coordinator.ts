@@ -6,7 +6,7 @@
  * is irrelevant: retained local bytes render without Save/auth). Kept outside
  * the visitor import closure (imports editor stores + BinaryTextureStore).
  */
-import { validateProject } from '$lib/project/project-codec';
+import { MUSEUM_SCENE_VALIDATION_OPTIONS } from '$lib/content/scene-validation';
 import { isSafeTextureUri } from '$lib/content/texture-uri';
 import { derivePreviewBundle } from '$lib/editor/layout/layout-preview-state.svelte';
 import { hasBlockingLayoutIssues } from '$lib/layout/layout-geometry-validation';
@@ -14,9 +14,9 @@ import {
 	isPackageRewriteUri,
 	isProjectAssetUri
 } from '$lib/editor/store/project-export-store.svelte';
-import { resolveSceneDocument, createNavigationGraph } from '$lib/content/scene';
-import { createLayoutRoomRegistry } from '$lib/project/project-layout-semantics';
-import type { SceneDocument } from '$lib/content/scene';
+import { prepareCompatibleRuntime } from '$lib/project/compat-runtime';
+import type { SceneDocument, RuntimeScene, NavigationGraph } from '$lib/content/scene';
+import type { LayoutRoomRegistry } from '$lib/project/project-layout-semantics';
 import type { LayoutDocument } from '$lib/layout/layout-types';
 import type { BinaryTextureEntry } from '$lib/editor/store/binary-texture-store.svelte';
 
@@ -83,18 +83,29 @@ export function computeVisitorPreviewBlocker(input: {
 	if (!name) return 'Project name cannot be empty';
 	if (!projectId) return 'Project is not ready for preview';
 
-	const validation = validateProject({ id: projectId, name, layout, scene });
-	if (!validation.success) {
+	const validation = prepareCompatibleRuntime(
+		{ id: projectId, name, layout, scene },
+		MUSEUM_SCENE_VALIDATION_OPTIONS
+	);
+	if (validation.kind === 'rejected') {
 		return validation.issues[0]?.message ?? 'Project validation failed';
 	}
-	let bundle;
-	try {
-		bundle = derivePreviewBundle(projectId, name, layout, scene);
-	} catch (error) {
-		return error instanceof Error ? error.message : 'Could not prepare preview';
+	if (hasBlockingLayoutIssues(validation.issues)) {
+		return validation.issues[0]?.message ?? 'Layout geometry is invalid';
 	}
-	if (hasBlockingLayoutIssues(bundle.issues)) {
-		return bundle.issues[0]?.message ?? 'Layout geometry is invalid';
+	if (validation.decodeKind === 'legacy-compatible') {
+		// Legacy render-model preflight (wall-mesh build fails closed): entry
+		// still gates on the exact legacy bundle. Wall-first documents have no
+		// legacy render model until the post-F0 cutover.
+		let bundle;
+		try {
+			bundle = derivePreviewBundle(projectId, name, layout, scene);
+		} catch (error) {
+			return error instanceof Error ? error.message : 'Could not prepare preview';
+		}
+		if (hasBlockingLayoutIssues(bundle.issues)) {
+			return bundle.issues[0]?.message ?? 'Layout geometry is invalid';
+		}
 	}
 	// Texture availability: retained bytes for local/package/project-asset,
 	// loader-backed safe static otherwise. Unsupported blocks entry.
@@ -119,10 +130,10 @@ export function computeVisitorPreviewBlocker(input: {
 export type DetachedPreviewBundle = {
 	projectId: string;
 	projectName: string;
-	scene: ReturnType<typeof resolveSceneDocument>;
+	scene: RuntimeScene;
 	geometry: ReturnType<typeof derivePreviewBundle>['geometry'];
-	rooms: ReturnType<typeof createLayoutRoomRegistry>;
-	graph: ReturnType<typeof createNavigationGraph>;
+	rooms: LayoutRoomRegistry;
+	graph: NavigationGraph;
 	textures: PreviewBundleTextures;
 };
 
@@ -141,22 +152,34 @@ export function composeDetachedPreviewBundle(input: {
 }): DetachedPreviewBundle {
 	const { scene, layout, projectId, projectName, textureStore } = input;
 	const name = projectName.trim();
-	const validation = validateProject({ id: projectId, name, layout, scene });
-	if (!validation.success) {
-		throw new Error(validation.issues[0]?.message ?? 'Project validation failed');
+	const prepared = prepareCompatibleRuntime(
+		{ id: projectId, name, layout, scene },
+		MUSEUM_SCENE_VALIDATION_OPTIONS
+	);
+	if (prepared.kind === 'rejected') {
+		throw new Error(prepared.issues[0]?.message ?? 'Project validation failed');
 	}
-	const preview = derivePreviewBundle(projectId, name, layout, scene);
-	if (hasBlockingLayoutIssues(preview.issues)) {
+	if (hasBlockingLayoutIssues(prepared.issues)) {
+		throw new Error(prepared.issues[0]?.message ?? 'Layout geometry is invalid');
+	}
+	// Legacy render-model preflight preserves the exact pre-cutover bundle
+	// (mesh build fails closed). Wall-first documents compile through the
+	// shared core with no legacy render model yet.
+	const preview =
+		prepared.decodeKind === 'legacy-compatible'
+			? derivePreviewBundle(projectId, name, layout, scene)
+			: null;
+	if (preview && hasBlockingLayoutIssues(preview.issues)) {
 		throw new Error(preview.issues[0]?.message ?? 'Layout geometry is invalid');
 	}
-	const rooms = createLayoutRoomRegistry(validation.project.layout);
-	const runtimeScene = resolveSceneDocument(validation.project.scene, rooms);
-	const graph = createNavigationGraph(runtimeScene);
+	const rooms = prepared.rooms;
+	const runtimeScene = prepared.runtimeScene;
+	const graph = prepared.graph;
 
 	const bytesByUri = new Map<string, { bytes: Uint8Array; mime: string }>();
 	const urlsByUri = new Map<string, string>();
 	try {
-		for (const texture of validation.project.scene.textures) {
+		for (const texture of prepared.project.scene.textures) {
 			const uri = texture.uri;
 			if (!requiresRetainedBytes(uri)) continue;
 			const entry = textureStore.getEntry(uri);
@@ -208,7 +231,7 @@ export function composeDetachedPreviewBundle(input: {
 		projectId,
 		projectName: name,
 		scene: runtimeScene,
-		geometry: preview.geometry,
+		geometry: preview ? preview.geometry : prepared.geometry,
 		rooms,
 		graph,
 		textures: { bytesByUri, urlsByUri, resolveTexture, dispose }
