@@ -513,6 +513,32 @@ describe('P23.9 exact segment length entry', () => {
 	});
 });
 
+describe('P23.9 hover direction memory across pointerleave', () => {
+	it('hover north, leave the surface, type length → north is kept, not +X', () => {
+		const state = createLayoutInteractionState();
+		setLayoutDraftTool(state, 'wall-chain');
+		beginWallChain(state, [0, 0]);
+		updateWallChainCursor(state, [0, 4]); // hover north toward B
+		updateWallChainCursor(state, null); // pointerleave: hides rubber band only
+		expect(state.wallChainCursor).toBeNull();
+		expect(resolveWallChainEndpointAtLength(state, 4)).toEqual([0, 4]);
+	});
+
+	it('a committed segment clears stale hover so the next default is its own direction', () => {
+		const state = createLayoutInteractionState();
+		setLayoutDraftTool(state, 'wall-chain');
+		beginWallChain(state, [0, 0]);
+		updateWallChainCursor(state, [0, 4]);
+		advanceWallChainContinuation(state, { endPoint: [4, 0], endJunctionId: 'j-b', startJunctionId: 'j-a' });
+		// No fresh hover: falls back to the just-committed +X direction.
+		expect(resolveWallChainEndpointAtLength(state, 2)).toEqual([6, 0]);
+		// Fresh hover north overrides it, and survives pointerleave.
+		updateWallChainCursor(state, [4, 3]);
+		updateWallChainCursor(state, null);
+		expect(resolveWallChainEndpointAtLength(state, 3)).toEqual([4, 3]);
+	});
+});
+
 describe('P23.9 run cursor (rubber band)', () => {
 	it('tracks and clears the snapped cursor; clearLayoutDraft resets the run', () => {
 		const state = createLayoutInteractionState();

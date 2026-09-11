@@ -19,10 +19,12 @@
 		cancelLayoutPrimitiveDraft,
 		cancelRoomEdit,
 		cancelWallChainRun,
+		captureWallChainRun,
 		clearLayoutDraft,
 		clearLayoutSelection,
 		hasWallChainRun,
 		resolveWallChainEndpointAtLength,
+		restoreWallChainRun,
 		selectLayoutInteriorAnchor,
 		selectLayoutObject,
 		selectLayoutOpening,
@@ -1797,8 +1799,17 @@
 			return;
 		}
 		const start = interaction.wallChainStart!;
+		// A rejection rolls its history transaction back through snapshot
+		// restore (clearing transient state as a side effect and bumping the
+		// version), so re-install the saved run + version to keep the current
+		// start available for correction.
+		const savedRun = captureWallChainRun(interaction);
 		const result = onWallSegmentCommit([...start], [...snapped]);
-		if (!result.success) return; // rejection preserves the current start for correction
+		if (!result.success) {
+			if (savedRun) restoreWallChainRun(interaction, savedRun);
+			draftedVersion = preview.previewVersion;
+			return;
+		}
 		if (result.startJunctionId === undefined || result.endJunctionId === undefined) {
 			cancelWallChainRun(interaction);
 			return;
@@ -1845,8 +1856,13 @@
 		const endpoint = resolveWallChainEndpointAtLength(interaction, length);
 		if (!endpoint) return;
 		const start = interaction.wallChainStart!;
+		const savedRun = captureWallChainRun(interaction);
 		const result = onWallSegmentCommit([...start], [...endpoint]);
-		if (!result.success) return;
+		if (!result.success) {
+			if (savedRun) restoreWallChainRun(interaction, savedRun);
+			draftedVersion = preview.previewVersion;
+			return;
+		}
 		if (result.startJunctionId === undefined || result.endJunctionId === undefined) {
 			cancelWallChainRun(interaction);
 			return;

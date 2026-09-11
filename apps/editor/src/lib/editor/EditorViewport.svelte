@@ -292,6 +292,7 @@
 				model={layoutPreview.model}
 				geometry={layoutPreview.geometry}
 				wallMeshesByRoom={layoutPreview.wallMeshesByRoom}
+				wallMeshesByWall={layoutPreview.wallMeshesByWall}
 				interaction={layoutInteraction}
 				showCeilings={layoutPreview.showCeilings}
 				floorColor={store.floorColor}

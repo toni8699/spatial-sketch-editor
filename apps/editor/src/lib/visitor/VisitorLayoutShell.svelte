@@ -5,7 +5,7 @@
 	import type { CompiledLayoutGeometry, LayoutBounds3 } from '$lib/layout/layout-geometry-types';
 	import type { VisitorRoomPresentation } from './room-presentation';
 	import { neutralVisitorRoomPresentation } from './room-presentation';
-	import { buildRoomWallMesh } from '$lib/layout/wall-mesh-builder';
+	import { buildRoomWallMesh, buildStandaloneWallMesh } from '$lib/layout/wall-mesh-builder';
 	import { sphereRenderScale } from '$lib/layout/layout-geometry-objects';
 	import { toWallBufferGeometry } from '$lib/render/wall-geometry-adapter';
 	import { createVisitorWallMaterialFactory } from '$lib/museum/layout/wall-material-factory';
@@ -49,21 +49,55 @@
 		  }
 		| { roomId: string; ok: false; bounds: LayoutBounds3 };
 
+	type AdaptedWall =
+		| {
+				wallId: string;
+				floorElevation: number;
+				ok: true;
+				geometry: BufferGeometry;
+				materials: Material[];
+				dispose: () => void;
+		  }
+		| { wallId: string; floorElevation: number; ok: false; bounds: LayoutBounds3 };
+
 	let adaptedRooms = $state<AdaptedRoom[]>([]);
+	let adaptedWalls = $state<AdaptedWall[]>([]);
 
 	$effect(() => {
 		const materials = createVisitorWallMaterialFactory((roomId) => roomPresentation(roomId).color);
-		const built: AdaptedRoom[] = geometry.rooms.map((room) => {
+		// Wall-first canonical rooms carry no wall detail (their Walls render
+		// below); legacy rooms always carry walls, so this skips nothing there.
+		const built: AdaptedRoom[] = geometry.rooms.flatMap((room) => {
+			if (room.walls.length === 0) return [];
 			const result = buildRoomWallMesh(room, { classifySurface: () => 'wall' });
 			if (!result.mesh) {
-				return { roomId: room.roomId, ok: false, bounds: room.bounds3 };
+				return [{ roomId: room.roomId, ok: false, bounds: room.bounds3 } as AdaptedRoom];
 			}
 			const adapted = toWallBufferGeometry(result.mesh, materials.factory);
-			return { roomId: room.roomId, ok: true, ...adapted };
+			return [{ roomId: room.roomId, ok: true, ...adapted } as AdaptedRoom];
 		});
+		// P23.9 canonical physical Walls (wall-first only; empty for legacy):
+		// standalone meshes with no Room ownership. Legacy rooms keep their
+		// room meshes above, so nothing renders twice.
+		const floorFrameById = new Map(
+			geometry.floors.map((floor) => [floor.floorId, { elevation: floor.elevation, height: floor.height }] as const)
+		);
+		const walls: AdaptedWall[] = [];
+		for (const wall of geometry.walls ?? []) {
+			const frame = floorFrameById.get(wall.floorId) ?? { elevation: 0, height: 3 };
+			const result = buildStandaloneWallMesh(wall, frame.elevation, frame.elevation + frame.height, { classifySurface: () => 'wall' });
+			if (!result.mesh) {
+				walls.push({ wallId: wall.wallId, floorElevation: frame.elevation, ok: false, bounds: wall.bounds3 });
+				continue;
+			}
+			const adapted = toWallBufferGeometry(result.mesh, materials.factory);
+			walls.push({ wallId: wall.wallId, floorElevation: frame.elevation, ok: true, ...adapted });
+		}
 		adaptedRooms = built;
+		adaptedWalls = walls;
 		return () => {
 			for (const room of built) if (room.ok) room.dispose();
+			for (const wall of walls) if (wall.ok) wall.dispose();
 			materials.dispose();
 		};
 	});
@@ -142,6 +176,35 @@
 				{/each}
 			{/each}
 		</T.Group>
+	{/each}
+	{#each geometry.walls ?? [] as wall (wall.wallId)}
+		{@const adaptedWall = adaptedWalls.find((candidate) => candidate.wallId === wall.wallId)}
+		{#if adaptedWall?.ok}
+			<T.Mesh
+				name={`VisitorPhysicalWall:${wall.wallId}`}
+				geometry={adaptedWall.geometry}
+				material={adaptedWall.materials}
+				castShadow
+				receiveShadow
+			/>
+		{:else if adaptedWall && !adaptedWall.ok}
+			<T.Mesh
+				name={`VisitorPhysicalWallFailure:${wall.wallId}`}
+				position={failureBox(adaptedWall.bounds).position}
+			>
+				<T.BoxGeometry args={failureBox(adaptedWall.bounds).size} />
+				<T.MeshBasicMaterial color="#ff2fd4" wireframe />
+			</T.Mesh>
+		{/if}
+		{#each wall.openings.filter((opening) => opening.kind === 'door') as opening (opening.openingId)}
+			<RoomPortal
+				position={[opening.center.point[0], adaptedWall?.floorElevation ?? 0, opening.center.point[1]]}
+				rotation={[0, opening.center.yaw, 0]}
+				width={opening.width}
+				height={opening.height}
+				color={neutralVisitorRoomPresentation.accentColor}
+			/>
+		{/each}
 	{/each}
 	{#each geometry.objects as object (object.objectId)}
 		<T.Group

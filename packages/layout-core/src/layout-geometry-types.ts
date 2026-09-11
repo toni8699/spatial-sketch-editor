@@ -235,12 +235,13 @@ export type CompiledLayoutGeometry = {
 	rooms: CompiledRoom[];
 	/**
 	 * Canonical physical Walls independent of Room ownership (wall-first
-	 * only; empty for legacy). Each document-global Wall appears once,
-	 * keyed by `wallId`. Room floor/ceiling semantics stay Room-derived.
-	 * Roomless Walls are included here so Plan/3D/query consumers see
-	 * authored architecture without a Room. Never invent fake `roomId`
-	 * ownership for these records — query spans/points for physical Walls
-	 * carry no `roomId`.
+	 * only; empty for legacy). Each document-global Wall appears exactly
+	 * once, keyed by `wallId` — including Walls referenced by Rooms.
+	 * Wall-first Rooms keep identity + floor/ceiling semantics + floor
+	 * polygons with empty `walls`/`openings`; Plan/3D/query consumers read
+	 * physical Walls here, never per-Room duplicates. Never invent fake
+	 * `roomId` ownership for these records — query spans/points for
+	 * physical Walls carry no `roomId`.
 	 */
 	walls: CompiledPhysicalWall[];
 	objects: CompiledLayoutObject[];

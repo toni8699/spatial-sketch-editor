@@ -264,9 +264,11 @@ describe('compileLayoutGeometry', () => {
 		);
 	});
 
-	// P23.2 review round 2 / B1: wall-first wall ids are document-global, so
-	// shared walls keep one wallKey across every room that references them.
-	it('keeps wall-first wall identity document-global across shared rooms', () => {
+	// P23.9 canonical physical Walls: every document Wall compiles exactly
+	// once (wall-start frame, document-global ID, no fake roomId), so a wall
+	// shared by two Rooms has one physical/query representation, not one per
+	// incident Room. Rooms keep floor polygons + floor/ceiling semantics only.
+	it('emits each wall-first Wall once with no per-Room wall duplication', () => {
 		const document: LayoutDocumentWallFirst = {
 			units: 'meters',
 			formatVersion: LAYOUT_WALL_FIRST_FORMAT_VERSION,
@@ -314,13 +316,20 @@ describe('compileLayoutGeometry', () => {
 			objects: []
 		};
 		const { geometry } = compileWallFirstLayoutGeometry(document);
+		// One canonical wall per document Wall, unique IDs covering all four.
+		expect(geometry.walls.map((wall) => wall.wallId).sort()).toEqual(['wall-a', 'wall-b', 'wall-c', 'wall-d']);
+		// Rooms keep identity + floor semantics with empty wall detail.
+		for (const room of geometry.rooms) {
+			expect(room.walls).toEqual([]);
+			expect(room.openings).toEqual([]);
+			expect(room.floorPolygon).toHaveLength(4);
+		}
 		const wallASpans = geometry.queries.spans.filter(
 			(span) => span.kind === 'wall' && span.segmentId === 'wall-a'
 		);
 		expect(wallASpans.length).toBeGreaterThan(0);
-		expect(new Set(wallASpans.map((span) => span.roomId))).toEqual(
-			new Set(['room-main', 'room-second'])
-		);
+		// Exactly one query representation: no fake room ownership, one wallKey.
+		for (const span of wallASpans) expect(span.roomId).toBeUndefined();
 		expect(new Set(wallASpans.map((span) => span.wallKey))).toEqual(new Set(['wall-a']));
 	});
 

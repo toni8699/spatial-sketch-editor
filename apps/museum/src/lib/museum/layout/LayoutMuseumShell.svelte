@@ -5,7 +5,7 @@
   import type { CompiledLayoutGeometry, LayoutBounds3 } from '$lib/layout/layout-geometry-types';
   import type { ChopinRoomPresentation } from '$lib/content/chopin-room-presentation';
   import { neutralRoomPresentation } from '$lib/content/chopin-room-presentation';
-  import { buildRoomWallMesh } from '$lib/layout/wall-mesh-builder';
+  import { buildRoomWallMesh, buildStandaloneWallMesh } from '$lib/layout/wall-mesh-builder';
   import { toWallBufferGeometry } from '$lib/render/wall-geometry-adapter';
   import { createVisitorWallMaterialFactory } from './wall-material-factory';
   import MuseumMaterial from '../materials/MuseumMaterial.svelte';
@@ -46,7 +46,18 @@
       }
     | { roomId: string; ok: false; bounds: LayoutBounds3 };
 
+  type AdaptedWall =
+    | {
+        wallId: string;
+        ok: true;
+        geometry: BufferGeometry;
+        materials: Material[];
+        dispose: () => void;
+      }
+    | { wallId: string; ok: false; bounds: LayoutBounds3 };
+
   let adaptedRooms = $state<AdaptedRoom[]>([]);
+  let adaptedWalls = $state<AdaptedWall[]>([]);
 
   // Build one watertight room wall mesh per room, reusing materials per tint.
   // Bespoke rooms are filtered BEFORE `buildRoomWallMesh` (not just hidden by
@@ -56,19 +67,38 @@
   // geometry and the per-run material cache.
   $effect(() => {
     const materials = createVisitorWallMaterialFactory((roomId) => roomPresentation(roomId).color);
-    const built: AdaptedRoom[] = geometry.rooms
-      .filter((room) => !excludedRoomIds.includes(room.roomId))
-      .map((room) => {
+    // Wall-first canonical rooms carry no wall detail (their Walls render
+    // below); legacy rooms always carry walls, so this skips nothing there.
+    const built: AdaptedRoom[] = geometry.rooms.flatMap((room) => {
+      if (excludedRoomIds.includes(room.roomId)) return [];
+      if (room.walls.length === 0) return [];
       const result = buildRoomWallMesh(room, { classifySurface: () => 'wall' });
       if (!result.mesh) {
-        return { roomId: room.roomId, ok: false, bounds: room.bounds3 };
+        return [{ roomId: room.roomId, ok: false, bounds: room.bounds3 } as AdaptedRoom];
       }
       const adapted = toWallBufferGeometry(result.mesh, materials.factory);
-      return { roomId: room.roomId, ok: true, ...adapted };
+      return [{ roomId: room.roomId, ok: true, ...adapted } as AdaptedRoom];
     });
+    // P23.9 canonical physical Walls (wall-first only; empty for legacy).
+    const floorFrameById = new Map(
+      geometry.floors.map((floor) => [floor.floorId, { elevation: floor.elevation, height: floor.height }] as const)
+    );
+    const walls: AdaptedWall[] = [];
+    for (const wall of geometry.walls ?? []) {
+      const frame = floorFrameById.get(wall.floorId) ?? { elevation: 0, height: 3 };
+      const result = buildStandaloneWallMesh(wall, frame.elevation, frame.elevation + frame.height, { classifySurface: () => 'wall' });
+      if (!result.mesh) {
+        walls.push({ wallId: wall.wallId, ok: false, bounds: wall.bounds3 });
+        continue;
+      }
+      const adapted = toWallBufferGeometry(result.mesh, materials.factory);
+      walls.push({ wallId: wall.wallId, ok: true, ...adapted });
+    }
     adaptedRooms = built;
+    adaptedWalls = walls;
     return () => {
       for (const room of built) if (room.ok) room.dispose();
+      for (const wall of walls) if (wall.ok) wall.dispose();
       materials.dispose();
     };
   });
@@ -150,5 +180,35 @@
         {/each}
       </T.Group>
     {/if}
+  {/each}
+  {#each geometry.walls ?? [] as wall (wall.wallId)}
+    {@const adaptedWall = adaptedWalls.find((candidate) => candidate.wallId === wall.wallId)}
+    {#if adaptedWall?.ok}
+      <T.Mesh
+        name={`LayoutPhysicalWall:${wall.wallId}`}
+        geometry={adaptedWall.geometry}
+        material={adaptedWall.materials}
+        castShadow
+        receiveShadow
+      />
+    {:else if adaptedWall && !adaptedWall.ok}
+      <T.Mesh
+        name={`LayoutPhysicalWallFailure:${wall.wallId}`}
+        position={failureBox(adaptedWall.bounds).position}
+      >
+        <T.BoxGeometry args={failureBox(adaptedWall.bounds).size} />
+        <T.MeshBasicMaterial color="#ff2fd4" wireframe />
+      </T.Mesh>
+    {/if}
+    {#each wall.openings.filter((opening) => opening.kind === 'door') as opening (opening.openingId)}
+      {@const wallFloor = geometry.floors.find((floor) => floor.floorId === wall.floorId)}
+      <RoomPortal
+        position={[opening.center.point[0], wallFloor?.elevation ?? 0, opening.center.point[1]]}
+        rotation={[0, opening.center.yaw, 0]}
+        width={opening.width}
+        height={opening.height}
+        color={neutralRoomPresentation.accentColor}
+      />
+    {/each}
   {/each}
 </T.Group>

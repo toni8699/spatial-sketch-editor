@@ -59,6 +59,7 @@
 	import { useEditorShellBoot } from '$lib/editor/hooks/editor-shell-boot.svelte';
 	import { initTheme } from '$lib/editor/theme.svelte';
 	import {
+		cancelWallChainRun,
 		clearLayoutSelection,
 		createLayoutInteractionState,
 		reconcileLayoutSelection,
@@ -251,7 +252,13 @@
 	setContext(ACTIVE_EDITOR_SELECTION_KEY, activeSelection);
 	store.registerLayoutHistory({
 		capture: () => captureLayoutPreviewSnapshot(layoutPreview),
-		replace: (snapshot) => restoreLayoutPreviewSnapshot(layoutPreview, snapshot as ReturnType<typeof captureLayoutPreviewSnapshot>),
+		replace: (snapshot) => {
+			// P23.9 segment-first: Undo/Redo clears the transient continuation
+			// first, then installs history — a run never survives document
+			// replacement and is never reconstructed from history.
+			cancelWallChainRun(layoutInteraction);
+			restoreLayoutPreviewSnapshot(layoutPreview, snapshot as ReturnType<typeof captureLayoutPreviewSnapshot>);
+		},
 		matches: (a, b) => JSON.stringify((a as { project: { layout: unknown } }).project.layout) === JSON.stringify((b as { project: { layout: unknown } }).project.layout)
 	});
 	// P23.0 F0 stage 1 — point the central format-dispatch guard at the live

@@ -40,7 +40,7 @@
 	// empty or from an imported project.
 	import { chopinProject, chopinRuntime, sceneDocument } from '$lib/content/chopin-project';
 	import { useEditorShellBoot } from './hooks/editor-shell-boot.svelte';
-	import { createLayoutInteractionState } from './layout/layout-interaction';
+	import { cancelWallChainRun, createLayoutInteractionState } from './layout/layout-interaction';
 	import { initTheme } from './theme.svelte';
 
 	let { relic = false }: { relic?: boolean } = $props();
@@ -64,7 +64,12 @@
 	if (!untrack(() => relic)) {
 		store.registerLayoutHistory({
 			capture: () => captureLayoutPreviewSnapshot(layoutPreview),
-			replace: (snapshot) => restoreLayoutPreviewSnapshot(layoutPreview, snapshot as ReturnType<typeof captureLayoutPreviewSnapshot>),
+			replace: (snapshot) => {
+				// P23.9 segment-first: Undo/Redo clears the transient continuation
+				// first, then installs history.
+				cancelWallChainRun(layoutInteraction);
+				restoreLayoutPreviewSnapshot(layoutPreview, snapshot as ReturnType<typeof captureLayoutPreviewSnapshot>);
+			},
 			matches: (a, b) => JSON.stringify((a as { project: { layout: unknown } }).project.layout) === JSON.stringify((b as { project: { layout: unknown } }).project.layout)
 		});
 	}

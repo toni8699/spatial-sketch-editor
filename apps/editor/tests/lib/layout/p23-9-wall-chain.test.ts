@@ -565,6 +565,39 @@ describe('P23.9 segment-first boundary (ratified 2026-09-11)', () => {
 		expect(divider.createdWallIds).toContain(divider.authoredWallIds[0]);
 	});
 
+	it('1→2 divider: every Wall has exactly one physical/query representation', () => {
+		const empty = baseDocument();
+		const enclosure = planWallChain({ baseline: empty, points: [p(0, 0), p(4, 0), p(4, 3), p(0, 3)], close: true, role: 'boundary' });
+		if (enclosure.kind !== 'success') throw new Error('enclosure failed');
+		const divider = planWallSegment({ baseline: enclosure.document, start: p(2, 0), end: p(2, 3), role: 'boundary' });
+		if (divider.kind !== 'success') throw new Error('divider failed');
+		expect(divider.document.rooms).toHaveLength(2);
+		const compiled = compileWallFirstLayoutGeometry(divider.document);
+		// Canonical walls cover every document Wall exactly once.
+		const documentWallIds = [...divider.document.walls.map((wall) => wall.id)].sort();
+		expect(compiled.geometry.walls.map((wall) => wall.wallId).sort()).toEqual(documentWallIds);
+		// Query spans group to one wallKey per Wall with no fake roomId.
+		const wallSpans = compiled.geometry.queries.spans.filter((span) => span.kind === 'wall');
+		const byWall = new Map<string, typeof wallSpans>();
+		for (const span of wallSpans) {
+			expect(span.roomId).toBeUndefined();
+			const key = span.wallKey ?? span.segmentId;
+			const list = byWall.get(key) ?? [];
+			list.push(span);
+			byWall.set(key, list);
+		}
+		expect([...byWall.keys()].sort()).toEqual(documentWallIds);
+		// The shared divider Wall exists once although two Rooms reference it.
+		const dividerId = divider.authoredWallIds[0]!;
+		expect(byWall.has(dividerId)).toBe(true);
+		const dividerWall = divider.document.walls.find((wall) => wall.id === dividerId)!;
+		const referencingRooms = divider.document.rooms.filter((room) =>
+			room.boundary.some((ref) => ref.wallId === dividerId)
+		);
+		expect(referencingRooms).toHaveLength(2);
+		expect(dividerWall).toBeDefined();
+	});
+
 	it('partition segments never split Rooms', () => {
 		const empty = baseDocument();
 		const enclosure = planWallChain({ baseline: empty, points: [p(0, 0), p(4, 0), p(4, 3), p(0, 3)], close: true, role: 'boundary' });

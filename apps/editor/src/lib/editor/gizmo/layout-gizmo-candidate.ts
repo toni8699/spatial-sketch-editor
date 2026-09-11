@@ -51,6 +51,8 @@ export type LayoutGizmoCandidateBundle = {
 	model: LayoutPreviewModel;
 	geometry: CompiledLayoutGeometry;
 	wallMeshesByRoom: ReadonlyMap<string, IndexedWallMesh>;
+	/** Canonical wall meshes (P23.9); absent on legacy-only bundles. */
+	wallMeshesByWall?: ReadonlyMap<string, IndexedWallMesh>;
 	layout3dPickIndexByRoom: ReadonlyMap<string, Layout3dPickIndex>;
 	issues: LayoutGeometryIssue[];
 	bounds: LayoutPreviewBounds | null;
@@ -311,6 +313,7 @@ export function deriveLayoutCandidate(
 				model: preview.model,
 				geometry: preview.geometry,
 				wallMeshesByRoom: preview.wallMeshesByRoom,
+				wallMeshesByWall: preview.wallMeshesByWall,
 				layout3dPickIndexByRoom: preview.layout3dPickIndexByRoom,
 				issues: preview.issues,
 				bounds: preview.bounds,

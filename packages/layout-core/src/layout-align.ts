@@ -101,9 +101,18 @@ function referenceBounds(
 		return null;
 	}
 	if (reference.kind === 'room') {
+		// Legacy/hand-built room spans carry roomId; wall-first canonical
+		// spans carry none, so fall back to the room-floor polygon (which
+		// retains roomId in every generation).
 		const roomSpans = geometry.queries.spans.filter((span) => span.kind === 'wall' && span.roomId === reference.id);
-		const bounds = spansAabb(roomSpans);
-		return bounds ? { bounds } : null;
+		const spanBounds = spansAabb(roomSpans);
+		if (spanBounds) return { bounds: spanBounds };
+		for (const polygon of geometry.queries.polygons) {
+			if (polygon.kind !== 'room-floor' || polygon.roomId !== reference.id) continue;
+			const bounds = footprintAabb(polygon.polygon);
+			return bounds ? { bounds } : null;
+		}
+		return null;
 	}
 	// Wall reference: the compiled wall spans for this segment (wall) ID.
 	// Wall-first wall ids are document-global; legacy segment ids are only

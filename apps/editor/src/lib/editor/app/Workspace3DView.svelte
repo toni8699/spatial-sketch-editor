@@ -392,6 +392,7 @@ import EditorCameraLabelProjector from '$lib/editor/camera/EditorCameraLabelProj
 			model={layoutPreview.model}
 			geometry={layoutPreview.geometry}
 			wallMeshesByRoom={layoutPreview.wallMeshesByRoom}
+			wallMeshesByWall={layoutPreview.wallMeshesByWall}
 			interaction={layoutInteraction}
 			showCeilings={layoutPreview.showCeilings}
 			transient={layoutTransient}

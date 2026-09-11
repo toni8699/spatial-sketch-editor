@@ -205,12 +205,16 @@ export function compileWallFirstLayoutGeometry(
 
 /**
  * Wall-first compile with canonical physical-Wall output (P23.9 compiler
- * prerequisite, acceptance-blocking). Room-derived walls compile through the
- * shared core exactly as before; Walls no Room references are compiled
- * independently into top-level `geometry.walls` (each once, keyed by
- * document-global Wall ID) with query records that carry no fake `roomId`.
- * Room floor/ceiling semantics stay Room-derived. One compiler, not a second
- * geometry system.
+ * prerequisite, acceptance-blocking). Every document Wall compiles exactly
+ * once into top-level `geometry.walls` (canonical, wall-start frame, keyed
+ * by document-global Wall ID, no fake `roomId`). Room-derived walls are NOT
+ * re-emitted: wall-first `CompiledRoom` records keep identity + floor/ceiling
+ * semantics + floor polygons (fills, containment, room hits) with empty
+ * `walls`/`openings`, and wall/opening span+point+AABB query records come
+ * solely from the canonical path. Room-floor polygons, room AABBs, and all
+ * validation/issues/floor logic are unchanged. One compiler, not a second
+ * geometry system. Legacy documents never enter this function, so the legacy
+ * contract stays byte-identical.
  */
 function compileWallFirstWithPhysicalWalls(
 	document: LayoutDocumentWallFirst,
@@ -222,16 +226,18 @@ function compileWallFirstWithPhysicalWalls(
 	const floorElevation = floor.elevation;
 	const ceilingElevation = floor.elevation + floor.height;
 
-	const referencedWallIds = new Set<string>();
-	for (const room of document.rooms) {
-		for (const ref of room.boundary) referencedWallIds.add(ref.wallId);
-	}
 	const pointById = new Map(document.junctions.map((junction) => [junction.id, junction.point]));
 	const queryBuilder: QueryGeometryBuilder = {
-		points: [...geometry.queries.points],
-		spans: [...geometry.queries.spans],
+		// Room path keeps floor polygons + room/floor/object/document AABBs
+		// only; wall/opening span+point and wall/opening AABB records are
+		// dropped below so each physical Wall has exactly one query
+		// representation (canonical, no roomId).
+		points: [],
+		spans: [],
 		polygons: [...geometry.queries.polygons],
-		aabbs: [...geometry.queries.aabbs]
+		aabbs: geometry.queries.aabbs.filter(
+			(aabb) => aabb.kind !== 'wall' && aabb.kind !== 'opening'
+		)
 	};
 	const physicalWalls: CompiledPhysicalWall[] = [];
 	let documentMin: Vec3 | null = geometry.bounds ? [...geometry.bounds.min] as Vec3 : null;
@@ -246,7 +252,6 @@ function compileWallFirstWithPhysicalWalls(
 	};
 
 	for (const wall of document.walls) {
-		if (referencedWallIds.has(wall.id)) continue;
 		const start = pointById.get(wall.startJunctionId);
 		const end = pointById.get(wall.endJunctionId);
 		if (!start || !end) continue;
@@ -285,16 +290,22 @@ function compileWallFirstWithPhysicalWalls(
 			bounds3: wallBounds3Value
 		};
 		physicalWalls.push(compiled);
-		emitPhysicalWallQueryRecords(queryBuilder, floor, wall, sampled, compiledOpenings);
+		emitPhysicalWallQueryRecords(queryBuilder, floor, wall, sampled, compiledOpenings, solidSpans);
 		queryBuilder.aabbs.push(aabbRecord('wall', wall.id, ['wall', floor.id, wall.id], wallBounds3Value.min, wallBounds3Value.max));
 		includePhysicalBounds(wallBounds3Value.min, wallBounds3Value.max);
 	}
 
 	physicalWalls.sort((a, b) => (a.wallId < b.wallId ? -1 : a.wallId > b.wallId ? 1 : 0));
 	const bounds = documentMin && documentMax ? finiteBounds3(documentMin, documentMax) : null;
+	// Strip room-path wall detail for wall-first documents: rooms keep
+	// identity, floor/ceiling semantics, floor polygons and bounds, but their
+	// `walls`/`openings` are views the canonical collection now owns. Every
+	// physical Wall therefore has exactly one compiled + query representation.
+	const rooms = geometry.rooms.map((room) => ({ ...room, walls: [], openings: [] }));
 	return {
 		geometry: {
 			...geometry,
+			rooms,
 			walls: physicalWalls,
 			queries: {
 				points: queryBuilder.points,
@@ -308,13 +319,14 @@ function compileWallFirstWithPhysicalWalls(
 	};
 }
 
-/** Query records for one roomless physical Wall — no fake `roomId`. */
+/** Query records for one canonical physical Wall — no fake `roomId`. */
 function emitPhysicalWallQueryRecords(
 	queryBuilder: QueryGeometryBuilder,
 	floor: CompilerFloorSource,
 	wall: LayoutDocumentWallFirst['walls'][number],
 	sampled: SampledSegment,
-	openings: readonly CompiledOpening[]
+	openings: readonly CompiledOpening[],
+	solidSpans: readonly CompiledSolidSpan[]
 ): void {
 	const wallKey = wall.id;
 	queryBuilder.points.push(
@@ -357,6 +369,28 @@ function emitPhysicalWallQueryRecords(
 				floor.id,
 				wall.id,
 				opening.openingId
+			)
+		);
+		queryBuilder.aabbs.push(
+			aabb2Record('opening', opening.openingId, ['opening', floor.id, opening.openingId], opening.bounds2)
+		);
+	}
+	for (const [index, span] of solidSpans.entries()) {
+		queryBuilder.spans.push(
+			spanRecordPhysical(
+				'solid',
+				['solid-span', floor.id, wall.id, String(index)],
+				span.start,
+				span.end,
+				span.startDistance,
+				span.endDistance,
+				wall.id,
+				floor.id,
+				wall.id,
+				undefined,
+				undefined,
+				undefined,
+				wallKey
 			)
 		);
 	}

@@ -143,6 +143,13 @@ export type LayoutInteractionState = {
 	wallChainRunStartJunctionId: string | null;
 	/** Last committed segment direction (for exact-length defaulting). */
 	wallChainLastDirection: LayoutVec2 | null;
+	/**
+	 * Last valid start→cursor hover direction (P23.9 exact-length memory).
+	 * Updated on every cursor move; `pointerleave` clears only the visual
+	 * cursor/snap preview, never this — moving to the Length input must not
+	 * erase the direction typed precision uses.
+	 */
+	wallChainHoverDirection: LayoutVec2 | null;
 	/** P23.9 — snapped cursor the pending segment is drawn to (rubber band). */
 	wallChainCursor: LayoutVec2 | null;
 	rectangleStart: LayoutVec2 | null;
@@ -175,6 +182,7 @@ export function createLayoutInteractionState(): LayoutInteractionState {
 		wallChainStartJunctionId: null,
 		wallChainRunStartJunctionId: null,
 		wallChainLastDirection: null,
+		wallChainHoverDirection: null,
 		wallChainCursor: null,
 		rectangleStart: null,
 		rectangleCurrent: null,
@@ -395,11 +403,17 @@ export function beginWallChain(state: LayoutInteractionState, point: LayoutVec2)
 	state.wallChainStartJunctionId = null;
 	state.wallChainRunStartJunctionId = null;
 	state.wallChainLastDirection = null;
+	state.wallChainHoverDirection = null;
 	state.wallChainCursor = null;
 }
 
 /** P23.9 — pending segment preview: the snapped cursor the run is drawn to. */
 export function updateWallChainCursor(state: LayoutInteractionState, point: LayoutVec2 | null): void {
+	if (point && state.wallChainStart) {
+		const dx = point[0] - state.wallChainStart[0];
+		const dz = point[1] - state.wallChainStart[1];
+		if (Math.hypot(dx, dz) > 1e-9) state.wallChainHoverDirection = [dx, dz];
+	}
 	state.wallChainCursor = point ? [...point] : null;
 }
 
@@ -430,6 +444,7 @@ export function advanceWallChainContinuation(
 		state.wallChainRunStartJunctionId = result.startJunctionId;
 	}
 	state.wallChainCursor = null;
+	state.wallChainHoverDirection = null;
 }
 
 /** P23.9 — cancel only the active continuation preview/run (Escape). Committed Walls remain. */
@@ -438,14 +453,55 @@ export function cancelWallChainRun(state: LayoutInteractionState): void {
 	state.wallChainStartJunctionId = null;
 	state.wallChainRunStartJunctionId = null;
 	state.wallChainLastDirection = null;
+	state.wallChainHoverDirection = null;
 	state.wallChainCursor = null;
+}
+
+export type WallChainRunSnapshot = {
+	start: LayoutVec2;
+	startJunctionId: string | null;
+	runStartJunctionId: string | null;
+	lastDirection: LayoutVec2 | null;
+	hoverDirection: LayoutVec2 | null;
+	cursor: LayoutVec2 | null;
+};
+
+/**
+ * P23.9 — capture the active continuation for rejection retry. A rejected
+ * segment rolls its history transaction back through snapshot restore (which
+ * clears transient state as a side effect), so the caller re-installs the
+ * saved run to keep the current start available for correction. Returns
+ * `null` when no run is active. Never persisted.
+ */
+export function captureWallChainRun(state: LayoutInteractionState): WallChainRunSnapshot | null {
+	if (!state.wallChainStart) return null;
+	return {
+		start: [...state.wallChainStart],
+		startJunctionId: state.wallChainStartJunctionId,
+		runStartJunctionId: state.wallChainRunStartJunctionId,
+		lastDirection: state.wallChainLastDirection ? [...state.wallChainLastDirection] : null,
+		hoverDirection: state.wallChainHoverDirection ? [...state.wallChainHoverDirection] : null,
+		cursor: state.wallChainCursor ? [...state.wallChainCursor] : null
+	};
+}
+
+/** P23.9 — re-install a run saved by `captureWallChainRun` (rejection retry). */
+export function restoreWallChainRun(state: LayoutInteractionState, snapshot: WallChainRunSnapshot): void {
+	state.wallChainStart = [...snapshot.start];
+	state.wallChainStartJunctionId = snapshot.startJunctionId;
+	state.wallChainRunStartJunctionId = snapshot.runStartJunctionId;
+	state.wallChainLastDirection = snapshot.lastDirection ? [...snapshot.lastDirection] : null;
+	state.wallChainHoverDirection = snapshot.hoverDirection ? [...snapshot.hoverDirection] : null;
+	state.wallChainCursor = snapshot.cursor ? [...snapshot.cursor] : null;
 }
 
 /**
  * P23.9 — direction a typed-length segment follows: the live cursor
- * direction when the pointer indicates one, otherwise the last committed
- * segment's direction, otherwise +X. Exact entry is a precision aid, not a
- * constraint solver.
+ * direction when the pointer indicates one, otherwise the last hovered
+ * direction (retained across `pointerleave`, which clears only the visual
+ * cursor — the Length form lives outside the SVG), otherwise the last
+ * committed segment's direction, otherwise +X. Exact entry is a precision
+ * aid, not a constraint solver.
  */
 export function wallChainPendingDirection(state: LayoutInteractionState): LayoutVec2 {
 	const start = state.wallChainStart;
@@ -453,6 +509,10 @@ export function wallChainPendingDirection(state: LayoutInteractionState): Layout
 	if (start && cursor) {
 		const dx = cursor[0] - start[0];
 		const dz = cursor[1] - start[1];
+		if (Math.hypot(dx, dz) > 1e-9) return [dx, dz];
+	}
+	if (state.wallChainHoverDirection) {
+		const [dx, dz] = state.wallChainHoverDirection;
 		if (Math.hypot(dx, dz) > 1e-9) return [dx, dz];
 	}
 	if (state.wallChainLastDirection) {

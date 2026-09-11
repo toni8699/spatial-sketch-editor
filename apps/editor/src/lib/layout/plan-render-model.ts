@@ -492,9 +492,11 @@ export function buildPlanRenderModel(
 	}
 
 	// P23.9 — canonical physical Walls independent of Room ownership.
-	// Roomless Walls never reach `room.walls`, so they render here exactly
-	// once from `compiled.walls` (room-referenced Walls stay room-derived —
-	// no double rendering, no fake `roomId` ownership for hit/selection).
+	// Wall-first Rooms carry no wall detail (their `walls`/`openings` are
+	// empty by compiler contract), so every wall-first Wall renders here
+	// exactly once from `compiled.walls`. Legacy documents keep room-derived
+	// rendering with an empty canonical collection — no double rendering in
+	// either generation, no fake `roomId` ownership for hit/selection.
 	for (const wall of compiled.walls ?? []) {
 		wall.solidCenterlinePolylines.forEach((polyline, index) => {
 			walls.push({
