@@ -238,6 +238,28 @@ export function layoutPreviewCanonicalJson(state: LayoutPreviewState): string {
 }
 
 /**
+ * P23.9 segment-first — does an incoming history snapshot carry the
+ * already-live layout? `HistoryController.commitLayout()` re-installs the
+ * just-committed snapshot through `host.replace()` on every successful
+ * transaction, so an unconditional clear would destroy the continuous run
+ * after each segment (reseeding `runStart` from the current leg and losing
+ * `wallChainLastDirection`, which breaks `DA→A` closure). Only a genuinely
+ * different layout — Undo/Redo/cancel/external replacement — terminates the
+ * run. Same JSON comparison as the history `matches` predicate so the two
+ * decisions can never diverge.
+ */
+export function layoutPreviewSnapshotMatchesLive(
+	state: LayoutPreviewState,
+	snapshot: LayoutPreviewSnapshot
+): boolean {
+	try {
+		return JSON.stringify(state.project.layout) === JSON.stringify(snapshot.project.layout);
+	} catch {
+		return false;
+	}
+}
+
+/**
  * Preflight the procedural wall meshes for every compiled room plus every
  * canonical physical Wall. Rooms with empty wall detail are wall-first
  * canonical rooms (their Walls render via `wallMeshesByWall`); they build

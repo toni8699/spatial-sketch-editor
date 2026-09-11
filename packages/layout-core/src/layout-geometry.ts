@@ -212,7 +212,9 @@ export function compileWallFirstLayoutGeometry(
  * semantics + floor polygons (fills, containment, room hits) with empty
  * `walls`/`openings`, and wall/opening span+point+AABB query records come
  * solely from the canonical path. Room-floor polygons, room AABBs, and all
- * validation/issues/floor logic are unchanged. One compiler, not a second
+ * validation/issues/floor logic are unchanged, except the aggregate
+ * `floors[].bounds3` and `floor`/`document` query AABBs expand to include
+ * canonical physical Walls (roomless Walls otherwise leave them stale). One compiler, not a second
  * geometry system. Legacy documents never enter this function, so the legacy
  * contract stays byte-identical.
  */
@@ -302,16 +304,78 @@ function compileWallFirstWithPhysicalWalls(
 	// `walls`/`openings` are views the canonical collection now owns. Every
 	// physical Wall therefore has exactly one compiled + query representation.
 	const rooms = geometry.rooms.map((room) => ({ ...room, walls: [], openings: [] }));
+	// Aggregate bounds must include canonical physical Walls too: the shared
+	// core derives `floors[].bounds3` and the `floor`/`document` query AABBs
+	// from Rooms + objects only, so a roomless open Wall would otherwise
+	// leave them null/stale while top-level `bounds` already includes it.
+	// Seed from the compiled floor bounds (rooms + objects carry over), then
+	// expand by every physical Wall; rebuild the floor record (bounds +
+	// cacheKey, same components as the core) and the two aggregate AABBs.
+	let floorMin: Vec3 | null = null;
+	let floorMax: Vec3 | null = null;
+	const existingFloor = geometry.floors.find((candidate) => candidate.floorId === floor.id);
+	if (existingFloor?.bounds3) {
+		floorMin = [...existingFloor.bounds3.min] as Vec3;
+		floorMax = [...existingFloor.bounds3.max] as Vec3;
+	}
+	const includeFloorBounds = (min: Vec3, max: Vec3): void => {
+		if (!floorMin || !floorMax) {
+			floorMin = [...min] as Vec3;
+			floorMax = [...max] as Vec3;
+			return;
+		}
+		includeBounds3(floorMin, floorMax, min, max);
+	};
+	for (const wall of physicalWalls) includeFloorBounds(wall.bounds3.min, wall.bounds3.max);
+	const floorBounds = floorMin && floorMax ? finiteBounds3(floorMin, floorMax) : null;
+	const floors =
+		geometry.floors.some((candidate) => candidate.floorId === floor.id)
+			? geometry.floors.map((candidate) =>
+					candidate.floorId !== floor.id
+						? candidate
+						: {
+								...candidate,
+								bounds3: floorBounds,
+								cacheKey: cacheKeyOf([
+									'floor',
+									floor.id,
+									candidate.elevation,
+									candidate.height,
+									candidate.roomIds,
+									floorBounds
+								])
+							}
+				)
+			: [
+					...geometry.floors,
+					{
+						id: geometryId(['floor', floor.id]),
+						cacheKey: cacheKeyOf(['floor', floor.id, floorElevation, floor.height, [], floorBounds]),
+						floorId: floor.id,
+						elevation: floorElevation,
+						height: floor.height,
+						roomIds: [],
+						bounds3: floorBounds
+					}
+				];
+	const aabbs = queryBuilder.aabbs.filter((aabb) => aabb.kind !== 'floor' && aabb.kind !== 'document');
+	if (floorBounds) {
+		aabbs.push(aabbRecord('floor', floor.id, ['floor', floor.id], floorBounds.min, floorBounds.max));
+	}
+	if (bounds) {
+		aabbs.push(aabbRecord('document', 'document', ['document'], bounds.min, bounds.max));
+	}
 	return {
 		geometry: {
 			...geometry,
+			floors,
 			rooms,
 			walls: physicalWalls,
 			queries: {
 				points: queryBuilder.points,
 				spans: queryBuilder.spans,
 				polygons: queryBuilder.polygons,
-				aabbs: queryBuilder.aabbs
+				aabbs
 			},
 			bounds
 		},

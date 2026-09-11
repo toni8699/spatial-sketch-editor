@@ -52,6 +52,7 @@
 		installLayoutPreviewBundle,
 		layoutPreviewCanonicalJson,
 		layoutPreviewIsDirty,
+		layoutPreviewSnapshotMatchesLive,
 		markLayoutPreviewSaved,
 		restoreLayoutPreviewSnapshot
 	} from '$lib/editor/layout/layout-preview-state.svelte';
@@ -253,11 +254,16 @@
 	store.registerLayoutHistory({
 		capture: () => captureLayoutPreviewSnapshot(layoutPreview),
 		replace: (snapshot) => {
-			// P23.9 segment-first: Undo/Redo clears the transient continuation
-			// first, then installs history — a run never survives document
-			// replacement and is never reconstructed from history.
-			cancelWallChainRun(layoutInteraction);
-			restoreLayoutPreviewSnapshot(layoutPreview, snapshot as ReturnType<typeof captureLayoutPreviewSnapshot>);
+			// P23.9 segment-first: only a genuinely different layout terminates
+			// the transient run. Successful commits re-install the already-live
+			// snapshot through this same entry point — clearing there would
+			// reseed `runStart` from the current leg and break DA→A closure.
+			// Undo/Redo/cancel/external installs a different layout → clear.
+			const typed = snapshot as ReturnType<typeof captureLayoutPreviewSnapshot>;
+			if (!layoutPreviewSnapshotMatchesLive(layoutPreview, typed)) {
+				cancelWallChainRun(layoutInteraction);
+			}
+			restoreLayoutPreviewSnapshot(layoutPreview, typed);
 		},
 		matches: (a, b) => JSON.stringify((a as { project: { layout: unknown } }).project.layout) === JSON.stringify((b as { project: { layout: unknown } }).project.layout)
 	});

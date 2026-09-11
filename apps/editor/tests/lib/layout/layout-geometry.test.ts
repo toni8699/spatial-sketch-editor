@@ -333,6 +333,51 @@ describe('compileLayoutGeometry', () => {
 		expect(new Set(wallASpans.map((span) => span.wallKey))).toEqual(new Set(['wall-a']));
 	});
 
+	it('roomless physical Walls expand floor bounds and floor/document query AABBs', () => {
+		const document: LayoutDocumentWallFirst = {
+			units: 'meters',
+			formatVersion: LAYOUT_WALL_FIRST_FORMAT_VERSION,
+			floor: { id: 'floor-1', name: 'Floor 1', elevation: 0, height: 3 },
+			junctions: [
+				{ id: 'j-a', point: [0, 0] },
+				{ id: 'j-b', point: [4, 0] }
+			],
+			walls: [
+				{ id: 'wall-a', startJunctionId: 'j-a', endJunctionId: 'j-b', role: 'boundary', thickness: 0.2, height: 3 }
+			],
+			rooms: [],
+			openings: [],
+			objects: []
+		};
+		const { geometry } = compileWallFirstLayoutGeometry(document);
+		expect(geometry.walls).toHaveLength(1);
+		const wall = geometry.walls[0]!;
+		// Top-level bounds include the wall.
+		expect(geometry.bounds).not.toBeNull();
+		// The aggregate floor record includes the wall (previously null/stale
+		// for roomless documents: the shared core only sees Rooms + objects).
+		expect(geometry.floors).toHaveLength(1);
+		const compiledFloor = geometry.floors[0]!;
+		expect(compiledFloor.bounds3).not.toBeNull();
+		for (const axis of [0, 1, 2] as const) {
+			expect(compiledFloor.bounds3!.min[axis]).toBeLessThanOrEqual(wall.bounds3.min[axis]);
+			expect(compiledFloor.bounds3!.max[axis]).toBeGreaterThanOrEqual(wall.bounds3.max[axis]);
+			expect(geometry.bounds!.min[axis]).toBeLessThanOrEqual(wall.bounds3.min[axis]);
+			expect(geometry.bounds!.max[axis]).toBeGreaterThanOrEqual(wall.bounds3.max[axis]);
+		}
+		// Aggregate query AABBs exist and span the wall footprint — exactly
+		// one each (recomputed, never a stale duplicate).
+		const floorAabbs = geometry.queries.aabbs.filter((aabb) => aabb.kind === 'floor');
+		const documentAabbs = geometry.queries.aabbs.filter((aabb) => aabb.kind === 'document');
+		expect(floorAabbs).toHaveLength(1);
+		expect(documentAabbs).toHaveLength(1);
+		expect(floorAabbs[0]!.sourceId).toBe('floor-1');
+		for (const aabb of [floorAabbs[0]!, documentAabbs[0]!]) {
+			expect(aabb.aabb.min[0]).toBeLessThanOrEqual(0);
+			expect(aabb.aabb.max[0]).toBeGreaterThanOrEqual(4);
+		}
+	});
+
 	// P23 review round 1 / B1: the compiler cutover briefly compiled only
 	// floors[0]; multi-floor legacy documents must compile every floor with
 	// its own elevation frame.

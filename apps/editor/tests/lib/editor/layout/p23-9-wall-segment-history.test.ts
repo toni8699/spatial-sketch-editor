@@ -21,6 +21,7 @@ import {
 	createEmptyLayoutPreviewState,
 	importLayoutPreviewJson,
 	layoutPreviewDocument,
+	layoutPreviewSnapshotMatchesLive,
 	restoreLayoutPreviewSnapshot
 } from '$lib/editor/layout/layout-preview-state.svelte';
 import {
@@ -48,14 +49,14 @@ function makeStore() {
 	const layoutInteraction = createLayoutInteractionState();
 	store.registerLayoutHistory({
 		capture: () => captureLayoutPreviewSnapshot(layoutPreview),
-		// P23.9 segment-first: Undo/Redo clears the transient continuation
-		// first, then installs history (mirrors EditorApp/MuseumEditorApp).
+		// Mirrors EditorApp/MuseumEditorApp: only a genuinely different
+		// layout clears the run; successful commits re-install live state.
 		replace: (snapshot) => {
-			cancelWallChainRun(layoutInteraction);
-			restoreLayoutPreviewSnapshot(
-				layoutPreview,
-				snapshot as ReturnType<typeof captureLayoutPreviewSnapshot>
-			);
+			const typed = snapshot as ReturnType<typeof captureLayoutPreviewSnapshot>;
+			if (!layoutPreviewSnapshotMatchesLive(layoutPreview, typed)) {
+				cancelWallChainRun(layoutInteraction);
+			}
+			restoreLayoutPreviewSnapshot(layoutPreview, typed);
 		},
 		matches: (a, b) =>
 			JSON.stringify((a as { project: { layout: unknown } }).project.layout) ===
@@ -215,8 +216,84 @@ describe('P23.9 segment history through Layout history (reviewer acceptance)', (
 		expect(bc.wallIds[0]).not.toBe(ab.wallIds[0]);
 	});
 
-	it('Rectangle commits four Walls plus Room birth as one atomic history entry', () => {
+	it('continuous AB→BC→CD→DA run survives successful history commits and closes on canonical A', () => {
 		const context = makeStore();
+		const { store, layoutPreview, layoutInteraction } = context;
+		// Mirror the viewport: first click establishes the transient start,
+		// each committed end seeds the next start via advanceWallChainContinuation.
+		beginWallChain(layoutInteraction, [0, 0]);
+		const legs: Array<{ end: LayoutVec2; direction: LayoutVec2 }> = [
+			{ end: [4, 0], direction: [4, 0] },
+			{ end: [4, 3], direction: [0, 3] },
+			{ end: [0, 3], direction: [-4, 0] }
+		];
+		let runStart: string | null = null;
+		const endJunctionIds: string[] = [];
+		for (const [index, leg] of legs.entries()) {
+			const expectedStart = index === 0 ? [0, 0] : legs[index - 1]!.end;
+			expect(layoutInteraction.wallChainStart).toEqual(expectedStart);
+			const runStartBefore = layoutInteraction.wallChainRunStartJunctionId;
+			const start = [...layoutInteraction.wallChainStart!] as LayoutVec2;
+			const outcome = runLayoutMutation(
+				layoutMutationRunnerFor(store, layoutPreview),
+				() => commitWallSegment(layoutPreview, start, leg.end, 'boundary'),
+				(result) => result.success
+			);
+			expect(outcome.kind).toBe('committed');
+			if (outcome.kind !== 'committed') throw new Error('segment commit failed');
+			const result = outcome.result;
+			if (!result.success || result.operation !== 'wall-segment-commit') {
+				throw new Error('unexpected commit result');
+			}
+			if (index === 0) runStart = result.startJunctionId;
+			// Mirror PlanWorkspace closure detection: run-start captured
+			// before the transaction, never re-derived after it.
+			const effectiveRunStart = runStartBefore ?? result.startJunctionId;
+			expect(result.endJunctionId === effectiveRunStart).toBe(false);
+			endJunctionIds.push(result.endJunctionId);
+			const document = wallFirstDocument(layoutPreview);
+			advanceWallChainContinuation(layoutInteraction, {
+				endPoint: junctionPoint(document, result.endJunctionId),
+				endJunctionId: result.endJunctionId,
+				startJunctionId: result.startJunctionId
+			});
+			// The history commit's host.replace() must NOT reseed the run:
+			// run-start stays the canonical A and direction survives.
+			expect(layoutInteraction.wallChainRunStartJunctionId).toBe(runStart);
+			expect(layoutInteraction.wallChainStart).toEqual(leg.end);
+			expect(layoutInteraction.wallChainLastDirection).toEqual(leg.direction);
+		}
+		expect(wallFirstDocument(layoutPreview).rooms).toHaveLength(0);
+		// Closing leg DA back to the canonical run-start Junction.
+		const runStartBefore = layoutInteraction.wallChainRunStartJunctionId;
+		expect(runStartBefore).toBe(runStart);
+		const beforeClose = wallFirstDocument(layoutPreview);
+		const dPoint = junctionPoint(beforeClose, endJunctionIds[2]!);
+		const aPoint = junctionPoint(beforeClose, runStart!);
+		const start = [...layoutInteraction.wallChainStart!] as LayoutVec2;
+		expect(start).toEqual([0, 3]);
+		const outcome = runLayoutMutation(
+			layoutMutationRunnerFor(store, layoutPreview),
+			() => commitWallSegment(layoutPreview, start, aPoint, 'boundary'),
+			(result) => result.success
+		);
+		expect(outcome.kind).toBe('committed');
+		if (outcome.kind !== 'committed') throw new Error('closing segment commit failed');
+		const result = outcome.result;
+		if (!result.success || result.operation !== 'wall-segment-commit') {
+			throw new Error('unexpected close result');
+		}
+		const effectiveRunStart = runStartBefore ?? result.startJunctionId;
+		expect(result.endJunctionId).toBe(effectiveRunStart);
+		expect(dPoint).toEqual([0, 3]);
+		expect(wallFirstDocument(layoutPreview).rooms).toHaveLength(1);
+		expect(wallFirstDocument(layoutPreview).walls).toHaveLength(4);
+		// Mirror the viewport: a closed boundary run ends the continuation.
+		cancelWallChainRun(layoutInteraction);
+		expect(hasWallChainRun(layoutInteraction)).toBe(false);
+	});
+
+	it('Rectangle commits four Walls plus Room birth as one atomic history entry', () => {		const context = makeStore();
 		const { store, layoutPreview } = context;
 		const outcome = runLayoutMutation(
 			layoutMutationRunnerFor(store, layoutPreview),

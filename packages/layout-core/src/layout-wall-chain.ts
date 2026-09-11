@@ -1,14 +1,21 @@
 /**
  * `layout-wall-chain.ts` — P23.9 wall/partition chain sketch planner.
  *
- * A sketched chain (open or closed) is one explicit-intent authoring
- * operation: the caller submits the raw draft points and the planner builds
- * the **complete candidate document** through the P23.8 engine — junction
- * reuse by coordinate, endpoint-on-interior T noding, proper-crossing X
- * noding, collinear-overlap rejection, then the canonical
- * validate → reconcile → compile gates — so a Finish/Close commits **one**
- * history entry and an invalid candidate commits nothing. Nothing here
- * mutates its inputs.
+ * Two authoring surfaces share this engine:
+ * - `planWallSegment()` owns continuous Wall/Partition authoring: one
+ *   completed straight segment = one Wall command and one Layout
+ *   transaction, with continuation driven by canonical Junction identity.
+ * - `planWallChain()` (this file's multi-point entry) remains the bounded
+ *   Rectangle/Polygon helper: the caller submits the complete draft points
+ *   and the planner builds the complete candidate document below, so one
+ *   bounded tool commits one atomic history entry.
+ *
+ * Either way the planner builds the **complete candidate document** through
+ * the P23.8 engine — junction reuse by coordinate, endpoint-on-interior T
+ * noding, proper-crossing X noding, collinear-overlap rejection, then the
+ * canonical validate → reconcile → compile gates — so one bounded tool
+ * commits **one** history entry and an invalid candidate commits nothing.
+ * Nothing here mutates its inputs.
  *
  * Semantics ratified by the P23.9 plan:
  * - open chains are valid architecture and commit without producing a Room;
