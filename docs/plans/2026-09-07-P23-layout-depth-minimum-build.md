@@ -6,7 +6,7 @@
 **Depends on:** P22 complete, including hosted cold-visitor acceptance.  
 **Owner reconciliation ratified:** 2026-09-09.  
 **Evidence basis:** completed `P23-H1`, `P23-H2`, `P23-H3`, `P23-H5`, current Museum Editor code, and the staging wall-first proposal.  
-**Implementation status:** Foundation Gate shipped — P23.0/P23.8 F0 acceptance passed 2026-09-10 and the stage-6 flip (branch `p23-stage6-flip`) enabled wall-first writes; legacy room-owned behavior persists only as the compatibility read path. The Build-set slices below (P23.1 → P23.2 → P23.9 → P23.3 → P23.4/P23.5 → P23.6 → P23.7) are the live implementation order; P23.1 and P23.2 are merged on `main` (PRs #9 and #13); **P23.9 in review** (branch `p23.9`); **current slice: P23.3**.
+**Implementation status:** Foundation Gate shipped — P23.0/P23.8 F0 acceptance passed 2026-09-10 and the stage-6 flip (branch `p23-stage6-flip`) enabled wall-first writes; legacy room-owned behavior persists only as the compatibility read path. The Build-set slices below (P23.1 → P23.2 → P23.9 → P23.3 → P23.4/P23.5 → P23.6 → P23.7) are the live implementation order; P23.1 and P23.2 are merged on `main` (PRs #9 and #13); **P23.9 in review via PR #18** (branch `p23.9`); **current slice: P23.3**.
 
 This is the reconciled P23 umbrella. The accepted reconciliation — informed by the harvests — supersedes conflicting earlier P23 and North-Star direction. Harvest artifacts remain evidence, not implementation authority.
 
@@ -448,7 +448,7 @@ Keep H2's deterministic snap/acquisition/guide model and map it to Junctions, Wa
 
 [Child plan](2026-09-09-P23.9-wall-partition-sketching.md)
 
-**Status:** `in progress` — review PR open; **current slice: P23.3** (P23.3 unblocked by P23.9 wall authoring, pending merge).
+**Status:** `in progress` — review PR #18 open; **current slice: P23.3** (P23.3 unblocked by P23.9 wall authoring, pending merge).
 
 Primary architectural authoring workflow: continuous Wall/Partition chains, ephemeral draft, Backspace, Finish/Close, Escape, H2 snap/precision integration, and Rectangle/Polygon convenience tools that produce the same canonical Walls/Junctions. Valid open chains need not create Rooms.
 
