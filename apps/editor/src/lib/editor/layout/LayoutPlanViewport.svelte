@@ -131,12 +131,12 @@
 	} from './plan-overlays';
 	import {
 		LAYOUT_PLAN_GRID_STEP,
-		OPENING_EDGE_SNAP_WIDTH,
 		resolveLayoutSnap,
 		resolveOpeningDragSnap,
 		resolveOpeningDragSnapUseMode,
 		snapOwnerKey,
 		wallOwnerKey,
+		type OpeningDragAnchor,
 		type SnapFeatureKind,
 		type SnapInputContext,
 		type SnapResolution
@@ -1185,8 +1185,11 @@
 	 */
 	function resolveWallOpeningDragUpdate(drag: LayoutWallOpeningDrag, rawOffset: number, wallLength: number) {
 		const span = physicalWallSpan(model, drag.wallId);
-		const snapWidth = drag.mode === 'body' ? drag.baselineWidth : OPENING_EDGE_SNAP_WIDTH;
-		const fitWidth = drag.mode === 'body' ? drag.baselineWidth : 0;
+		// P23.3 — body drags resolve in opening-center space; a width handle
+		// resolves the moving edge directly in edge space (the snap candidate IS
+		// the edge coordinate), never through a surrogate width.
+		const anchor: OpeningDragAnchor =
+			drag.mode === 'body' ? { kind: 'center', width: drag.baselineWidth } : { kind: 'edge' };
 		const useMode =
 			interaction.planView.snapEnabled && span
 				? resolveOpeningDragSnapUseMode(
@@ -1195,8 +1198,7 @@
 						drag.openingId,
 						rawOffset,
 						{
-							snapWidth,
-							fitWidth,
+							anchor,
 							context: {
 								pixelsPerMeter: interaction.planView.pixelsPerMeter,
 								gridStep: LAYOUT_PLAN_GRID_STEP

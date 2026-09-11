@@ -103,6 +103,41 @@ describe('P23.3 wall-first room drafting stays reachable', () => {
 	});
 });
 
+/**
+ * P23.3 requires `Escape / pointer-cancel → restore baseline, no history` for
+ * the canonical Opening drag, plus wall/room draft Escape and Delete. Those
+ * handlers live on the Plan SVG's `onkeydown`, so the keydown has to survive
+ * its way to that element: the shared context-menu shell registers a
+ * window-CAPTURE Escape listener for the whole session, and stopping
+ * propagation there swallowed the key before any element handler (downstream
+ * of window capture) could see it — every Plan shortcut looked wired in the
+ * source and was dead in the app.
+ */
+describe('P23.3 Plan keyboard routing reaches the focused surface', () => {
+	const viewport = readLibSource('editor/layout/LayoutPlanViewport.svelte');
+	const menu = readLibSource('editor/context-menu/ContextMenu.svelte');
+
+	it('never swallows Escape globally while the context menu is closed', () => {
+		const keydown = functionBody(menu, 'onWindowKeydown');
+		expect(keydown).not.toBe('');
+		const guard = keydown.indexOf('if (!menuElement) return;');
+		expect(guard).toBeGreaterThan(-1);
+		// The guard must precede the actual swallow, not just appear somewhere.
+		expect(guard).toBeLessThan(keydown.indexOf('event.stopPropagation();'));
+	});
+
+	it('keeps the Plan SVG the keyboard owner that claims focus on pointerdown', () => {
+		expect(viewport).toMatch(/<svg[\s\S]{0,500}tabindex="0"[\s\S]{0,300}onkeydown=\{onKeyDown\}/);
+		expect(viewport).toContain('svgElement?.focus();');
+	});
+
+	it('keeps Escape wired to cancel the canonical Opening drag and the wall draft', () => {
+		const keyDown = functionBody(viewport, 'onKeyDown');
+		expect(keyDown).toContain('if (interaction.wallOpeningDrag) {');
+		expect(keyDown).toContain('clearLayoutDraft(interaction)');
+	});
+});
+
 describe('P23.3 opening dimension inputs sit on the step grid', () => {
 	const inspector = readLibSource('editor/EditorInspector.svelte');
 

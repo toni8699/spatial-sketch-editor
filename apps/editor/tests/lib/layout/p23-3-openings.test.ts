@@ -38,7 +38,7 @@ import { createEmptySceneDocument } from '$lib/content/scene';
 import { createEmptyLayoutDocument } from '$lib/layout/layout-codec';
 import { createLayoutRoomRegistry } from '$lib/project/project-layout-semantics';
 import {
-	OPENING_EDGE_SNAP_WIDTH,
+	resolveOpeningDragEdgeSnap,
 	resolveOpeningDragRawValidity,
 	resolveOpeningDragSnap,
 	resolveOpeningDragSnapUseMode
@@ -487,8 +487,7 @@ describe('P23.3 drag use-mode — clamping never converts an invalid drag into a
 		expect(bare.candidate.offset).toBeCloseTo(3.1, 9);
 		// The P23.3 use-mode refuses to treat it as validity.
 		const useMode = resolveOpeningDragSnapUseMode(geometry, HOST_SPAN, 'opening:door:1', 5.05, {
-			snapWidth: 0.9,
-			fitWidth: 0.9,
+			anchor: { kind: 'center' as const, width: 0.9 },
 			context: SNAP_CONTEXT
 		});
 		expect(useMode.snappedOffset).toBeNull();
@@ -501,8 +500,7 @@ describe('P23.3 drag use-mode — clamping never converts an invalid drag into a
 		const document = withDoor();
 		const geometry = compiledWallFirst(document).geometry;
 		const useMode = resolveOpeningDragSnapUseMode(geometry, HOST_SPAN, 'opening:door:1', 3.95, {
-			snapWidth: 0.9,
-			fitWidth: 0.9,
+			anchor: { kind: 'center' as const, width: 0.9 },
 			context: SNAP_CONTEXT
 		});
 		expect(useMode.rawValid).toBe(false);
@@ -515,8 +513,7 @@ describe('P23.3 drag use-mode — clamping never converts an invalid drag into a
 		const document = withDoor();
 		const geometry = compiledWallFirst(document).geometry;
 		const useMode = resolveOpeningDragSnapUseMode(geometry, HOST_SPAN, 'opening:door:1', 2, {
-			snapWidth: 0.9,
-			fitWidth: 0.9,
+			anchor: { kind: 'center' as const, width: 0.9 },
 			context: SNAP_CONTEXT
 		});
 		expect(useMode.snappedKind).toBe('wall-midpoint');
@@ -525,17 +522,76 @@ describe('P23.3 drag use-mode — clamping never converts an invalid drag into a
 		expect(useMode.candidateValid).toBe(true);
 	});
 
-	it('resolves width-handle drags in edge space (edge reaches the Wall end)', () => {
+	it('resolves width-handle drags in true edge space — flush at the Wall end, exactly', () => {
 		const document = withDoor();
 		const geometry = compiledWallFirst(document).geometry;
 		const useMode = resolveOpeningDragSnapUseMode(geometry, HOST_SPAN, 'opening:door:1', 3.95, {
-			snapWidth: OPENING_EDGE_SNAP_WIDTH,
-			fitWidth: 0,
+			anchor: { kind: 'edge' },
 			context: SNAP_CONTEXT
 		});
 		expect(useMode.snappedKind).toBe('junction');
-		expect(useMode.snappedOffset ?? 0).toBeCloseTo(4, 2);
+		// Exact (`toBe`), not “close to”: a surrogate-width edge resolver stopped
+		// 1 mm short of the Wall end and 0.5 mm short of every other target, with
+		// results that depended on the approach side.
+		expect(useMode.snappedOffset).toBe(4);
 		expect(useMode.candidateValid).toBe(true);
+	});
+
+	it('lands the moving edge exactly on the Wall start and the Wall midpoint', () => {
+		const geometry = compiledWallFirst(withDoor()).geometry;
+		const atStart = resolveOpeningDragEdgeSnap(geometry, HOST_SPAN, 'opening:door:1', 0.04, SNAP_CONTEXT);
+		expect(atStart.kind === 'snap' && atStart.candidate.offset).toBe(0);
+		const atMid = resolveOpeningDragSnapUseMode(geometry, HOST_SPAN, 'opening:door:1', 1.99, {
+			anchor: { kind: 'edge' },
+			context: SNAP_CONTEXT
+		});
+		expect(atMid.snappedKind).toBe('wall-midpoint');
+		expect(atMid.snappedOffset).toBe(2);
+	});
+
+	it('aligns a moving edge on another Opening’s edge identically from both approach sides', () => {
+		const document = success(
+			planCreateWallFirstOpening(withDoor(), { wallId: 'wall-e', kind: 'window', offset: 2.5 })
+		).document;
+		const geometry = compiledWallFirst(document).geometry;
+		const reference = geometry.queries.spans.find((span) => span.openingId === 'opening:window:1')!;
+		const fromLeft = resolveOpeningDragEdgeSnap(geometry, HOST_SPAN, 'opening:door:1', 2.4, SNAP_CONTEXT);
+		const fromRight = resolveOpeningDragEdgeSnap(geometry, HOST_SPAN, 'opening:door:1', 2.6, SNAP_CONTEXT);
+		expect(fromLeft.kind === 'snap' && fromLeft.candidate.sourceId).toBe('opening:window:1#start');
+		expect(fromRight.kind === 'snap' && fromRight.candidate.sourceId).toBe('opening:window:1#start');
+		expect(fromLeft.kind === 'snap' && fromLeft.candidate.offset).toBe(reference.start[1]);
+		expect(fromRight.kind === 'snap' && fromRight.candidate.offset).toBe(reference.start[1]);
+		// The center-anchored body drag keeps its different, documented semantic
+		// (nearest-edge: the approaching edge lands on the reference edge).
+		const body = resolveOpeningDragSnap(geometry, HOST_SPAN, 'opening:door:1', 2, 0.9, SNAP_CONTEXT);
+		expect(body.kind === 'snap' && body.candidate.kind).toBe('opening-edge');
+		expect(body.kind === 'snap' && body.candidate.offset).toBeCloseTo(1.6, 9);
+	});
+
+	it('snaps the moving edge to the grid step in edge space', () => {
+		const geometry = compiledWallFirst(withDoor()).geometry;
+		const useMode = resolveOpeningDragSnapUseMode(geometry, HOST_SPAN, 'opening:door:1', 3.24, {
+			anchor: { kind: 'edge' },
+			context: SNAP_CONTEXT
+		});
+		expect(useMode.snappedKind).toBe('grid');
+		expect(useMode.snappedOffset).toBe(3.25);
+		expect(useMode.rawValid).toBe(true);
+	});
+
+	it('does not honor an edge clamp that only reaches the Wall end by clamping', () => {
+		const geometry = compiledWallFirst(withDoor()).geometry;
+		// The bare resolver still offers the clamped end placement — the hazard.
+		const bare = resolveOpeningDragEdgeSnap(geometry, HOST_SPAN, 'opening:door:1', 6.05, SNAP_CONTEXT);
+		expect(bare.kind === 'snap' && bare.candidate.offset).toBe(4);
+		const useMode = resolveOpeningDragSnapUseMode(geometry, HOST_SPAN, 'opening:door:1', 6.05, {
+			anchor: { kind: 'edge' },
+			context: SNAP_CONTEXT
+		});
+		expect(useMode.snappedOffset).toBeNull();
+		expect(useMode.rawOffset).toBe(6.05);
+		expect(useMode.rawValid).toBe(false);
+		expect(useMode.candidateValid).toBe(false);
 	});
 
 	it('projects a clamped candidate honestly through the pure validity projection', () => {
@@ -546,8 +602,7 @@ describe('P23.3 drag use-mode — clamping never converts an invalid drag into a
 		const far = resolveOpeningDragRawValidity(clamped, {
 			hostSpan: { start: [0, 0], end: [0, 4] },
 			pointerOffset: 5.05,
-			snapWidth: 0.9,
-			fitWidth: 0.9,
+			anchor: { kind: 'center' as const, width: 0.9 },
 			context: SNAP_CONTEXT
 		});
 		expect(far.snappedOffset).toBeNull();
@@ -560,8 +615,7 @@ describe('P23.3 drag use-mode — clamping never converts an invalid drag into a
 		const near = resolveOpeningDragRawValidity(endpointClearance, {
 			hostSpan: { start: [0, 0], end: [0, 4] },
 			pointerOffset: 3.95,
-			snapWidth: 0.9,
-			fitWidth: 0.9,
+			anchor: { kind: 'center' as const, width: 0.9 },
 			context: SNAP_CONTEXT
 		});
 		expect(near.snappedOffset).toBeCloseTo(3.1, 9);

@@ -36,10 +36,15 @@
 	}
 
 	function onWindowKeydown(event: KeyboardEvent) {
-		if (event.key === 'Escape') {
-			event.stopPropagation();
-			store.close();
-		}
+		// This listener lives on `window` in the CAPTURE phase for the whole
+		// session, so it must only ever consume Escape while the menu is actually
+		// open: an unconditional `stopPropagation()` swallowed every Escape in the
+		// app (Plan draft cancel, opening-drag cancel, Delete …) because no
+		// element-level keydown handler is downstream of window capture.
+		if (!menuElement) return;
+		if (event.key !== 'Escape') return;
+		event.stopPropagation();
+		store.close();
 	}
 
 	function runItem(run: () => void) {
