@@ -758,6 +758,138 @@ export function resolveOpeningDragSnap(
 }
 
 /**
+ * P23.3 drag width sentinel: width-handle drags snap the **moving edge**, so
+ * the resolver runs in edge space (center-aligned candidates with a
+ * negligible width). Body drags pass the authored opening width instead.
+ */
+export const OPENING_EDGE_SNAP_WIDTH = 1e-3;
+
+/** Fit tolerance for raw drag validity (matches the compiler epsilon order). */
+const OPENING_DRAG_EPSILON = 1e-6;
+
+/**
+ * P23.3 — raw drag candidate validity, kept **separate** from the bounded
+ * P23.2 snap result.
+ *
+ * `resolveOpeningDragSnap` clamps every candidate into `[0, length - width]`,
+ * which is correct as a *suggestion* but must never be laundered into
+ * validity: a drag 2 m past the Wall end would otherwise commit as an
+ * end-flush placement. This use-mode therefore returns the unclamped raw
+ * candidate (and its own fit result) next to an optional **honored** snap win:
+ *
+ * ```text
+ * raw candidate outside fit bounds        → rawValid false, candidate invalid
+ *                                            (transient invalid preview, reject)
+ * snap win inside the acquisition radius  → committable snapped candidate
+ * snap win only reachable by clamping far → NOT honored (raw candidate stands)
+ * ```
+ *
+ * `snapWidth` centers pointer candidates in snap space (authored opening width
+ * for body drags, `OPENING_EDGE_SNAP_WIDTH` for edge/width-handle drags);
+ * `fitWidth` is the interval width used for raw fit validity (the fixed
+ * opening width for body drags, `0` for edge drags). Neither value is
+ * clamped or repaired.
+ */
+export type OpeningDragRawResolution = {
+	/** Raw pointer projection in the caller's frame (unclamped). */
+	rawPointerOffset: number;
+	/** Raw candidate start/edge offset derived from the pointer (unclamped). */
+	rawOffset: number;
+	/** Raw candidate fit against the host Wall — never snap-derived. */
+	rawValid: boolean;
+	/** Honored in-fit snap win's offset, or `null` when the raw candidate stands. */
+	snappedOffset: number | null;
+	snappedKind: OpeningDragSnapCandidate['kind'] | null;
+	snappedSourceId: string | null;
+	/** The candidate a commit would use (`snappedOffset ?? rawOffset`). */
+	candidateOffset: number;
+	/** Whether that candidate may commit (one history entry) or must reject. */
+	candidateValid: boolean;
+};
+
+export function resolveOpeningDragSnapUseMode(
+	geometry: CompiledLayoutGeometry,
+	hostSpan: { segmentId: string; roomId?: string; start: LayoutVec2; end: LayoutVec2 },
+	draggedOpeningId: string,
+	pointerOffset: number,
+	options: { snapWidth: number; fitWidth: number; context: SnapQueryContext }
+): OpeningDragRawResolution {
+	const resolution = resolveOpeningDragSnap(
+		geometry,
+		hostSpan,
+		draggedOpeningId,
+		pointerOffset,
+		options.snapWidth,
+		options.context
+	);
+	return resolveOpeningDragRawValidity(resolution, {
+		hostSpan,
+		pointerOffset,
+		snapWidth: options.snapWidth,
+		fitWidth: options.fitWidth,
+		context: options.context
+	});
+}
+
+/**
+ * Pure projection of a (already resolved) snap result into the P23.3 raw
+ * validity pair. Splitting this from `resolveOpeningDragSnapUseMode` keeps the
+ * contract unit-testable without geometry fixtures.
+ */
+export function resolveOpeningDragRawValidity(
+	resolution: OpeningDragSnapResolution,
+	options: {
+		hostSpan: { start: LayoutVec2; end: LayoutVec2 };
+		pointerOffset: number;
+		snapWidth: number;
+		fitWidth: number;
+		context: SnapQueryContext;
+	}
+): OpeningDragRawResolution {
+	const { hostSpan, pointerOffset, snapWidth, fitWidth, context } = options;
+	const length = Math.hypot(
+		hostSpan.end[0] - hostSpan.start[0],
+		hostSpan.end[1] - hostSpan.start[1]
+	);
+	const rawOffset = pointerOffset - snapWidth / 2;
+	const fits = (offset: number): boolean =>
+		offset >= -OPENING_DRAG_EPSILON &&
+		offset + fitWidth <= length + OPENING_DRAG_EPSILON;
+	const rawValid = fits(rawOffset);
+
+	const radius = snapAcquisitionRadiusWorld(context);
+	const maxSnapOffset = Math.max(0, length - snapWidth);
+	// A candidate strictly inside the fit range cannot have been produced by
+	// the endpoint clamp; one sitting exactly on a clamp boundary may have
+	// been. Only the `junction` family is *meant* to be flushed to a Wall end
+	// (that is the endpoint-clearance snap the plan ratifies), and only while
+	// the pointer is inside its own acquisition radius.
+	const strictlyInside =
+		resolution.kind === 'snap' &&
+		resolution.candidate.offset > OPENING_DRAG_EPSILON &&
+		resolution.candidate.offset < maxSnapOffset - OPENING_DRAG_EPSILON;
+	const snapHonored =
+		resolution.kind === 'snap' &&
+		radius > 0 &&
+		resolution.candidate.distance <= radius &&
+		fits(resolution.candidate.offset) &&
+		(resolution.candidate.kind === 'junction' || strictlyInside);
+
+	const snappedOffset = snapHonored ? resolution.candidate.offset : null;
+	return {
+		rawPointerOffset: pointerOffset,
+		rawOffset,
+		rawValid,
+		snappedOffset,
+		snappedKind: snappedOffset === null ? null : resolution.kind === 'snap' ? resolution.candidate.kind : null,
+		snappedSourceId:
+			snappedOffset === null ? null : resolution.kind === 'snap' ? resolution.candidate.sourceId : null,
+		candidateOffset: snappedOffset ?? rawOffset,
+		candidateValid: snappedOffset === null ? rawValid : true
+	};
+}
+
+/**
  * One wall's span set after per-wall deduplication. `straight` gates which
  * semantics consumers may use: midpoint/endpoint families are straight-wall
  * only, curved walls snap via per-sample nearest-point candidates.

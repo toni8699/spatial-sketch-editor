@@ -18,6 +18,7 @@
  */
 
 import type { LayoutDocument } from '$lib/layout/layout-types';
+import type { LayoutDocumentWallFirst } from '$lib/layout/layout-wall-first-types';
 import type { SceneDocument } from '$lib/content/scene';
 import type { CameraConnectionDirection } from '$lib/types/scene';
 import type { LayoutSelection, PlanViewMode } from './layout/layout-interaction';
@@ -97,23 +98,52 @@ export type UnifiedTreeCameraTour = {
 	freeNodeIds: string[];
 };
 
+/**
+ * P23.3 — one canonical wall-first Room.
+ *
+ * Deliberately NOT a `UnifiedTreeRoom`: those rows carry the legacy
+ * `(roomId, segmentId)` identity, and a wall-first Room's boundary references
+ * document-global Walls by `wallId`. Reusing the legacy rows would have
+ * fabricated a segment id for a canonical Wall, which is exactly the fake
+ * identity the wall-first schema removes. The bucket stays read-only until the
+ * canonical tree rows are cut over.
+ */
+export type UnifiedWallFirstRoom = {
+	roomId: string;
+	name: string;
+	/** Document-global Wall IDs on this Room's boundary, in boundary order. */
+	wallIds: string[];
+	/** Canonical Openings hosted by those Walls. */
+	openingIds: string[];
+};
+
 export type UnifiedProjectTreeModel = {
 	rooms: UnifiedTreeRoom[];
+	wallFirstRooms: UnifiedWallFirstRoom[];
 	cameraTour: UnifiedTreeCameraTour;
 };
 
 /**
  * Build the tree model. Rooms come from the layout in **document order**
- * (floors flatMap rooms). Scene clusters/entities nest under the room whose
- * explicit `roomId` matches; content whose `roomId` names no layout room is
- * left out of every room — never silently attached (the umbrella's "geometry
- * never guesses ownership"). Layout objects nest under their explicit
- * `roomId`; unowned objects are not shown in the tree (the inspector's object
- * list still reaches them). Camera nodes stay under the Camera Tour root
- * (guided chain in order + free nodes) — never nested under rooms.
+ * (floors flatMap rooms for legacy; top-level `rooms` for wall-first). Scene
+ * clusters/entities nest under the room whose explicit `roomId` matches;
+ * content whose `roomId` names no layout room is left out of every room —
+ * never silently attached (the umbrella's "geometry never guesses
+ * ownership"). Layout objects nest under their explicit `roomId`; unowned
+ * objects are not shown in the tree (the inspector's object list still reaches
+ * them). Camera nodes stay under the Camera Tour root (guided chain in order +
+ * free nodes) — never nested under rooms.
+ *
+ * Wall-first documents fill `wallFirstRooms` instead of `rooms`: the sidebar
+ * must count and list canonical Rooms (a new project boots wall-first, so
+ * reporting zero Rooms for a document that has them is simply wrong), while
+ * the canonical Walls/Openings keep their `wallId` identity rather than being
+ * squeezed into the legacy `segmentId` rows.
  */
 export function buildUnifiedProjectTreeModel(input: {
-		layout: LayoutDocument;
+		// Both document formats reach this pure builder; `'formatVersion' in
+		// layout` is the discriminator (same rule the codecs dispatch on).
+		layout: LayoutDocument | LayoutDocumentWallFirst;
 		scene: SceneDocument;
 		guidedTourNodeIds: string[];
 	}): UnifiedProjectTreeModel {
@@ -125,10 +155,32 @@ export function buildUnifiedProjectTreeModel(input: {
 				.map((node) => node.id)
 				.filter((nodeId) => !guided.has(nodeId))
 		};
-		// Wall-first Rooms/Junctions/Walls are surfaced by the exact authoring
-		// inspector. The legacy hierarchy below remains intentionally read-only
-		// for this schema until the canonical tree rows are cut over.
-		if ('formatVersion' in layout) return { rooms: [], cameraTour };
+		// P23.3 — canonical wall-first Rooms, keyed by document-global Wall/
+		// Opening ids. Read-only rows until the canonical tree cutover.
+		if ('formatVersion' in layout) {
+			const openingIdsByWall = new Map<string, string[]>();
+			for (const opening of layout.openings) {
+				const hosted = openingIdsByWall.get(opening.wallId);
+				if (hosted) hosted.push(opening.id);
+				else openingIdsByWall.set(opening.wallId, [opening.id]);
+			}
+			const wallIdsInDocument = new Set(layout.walls.map((wall) => wall.id));
+			const wallFirstRooms: UnifiedWallFirstRoom[] = layout.rooms.map((room) => {
+				// `boundary` is a flat list of directed Wall refs (no Path wrapper);
+				// a ref may dangle while a topology edit is mid-flight, so surface
+				// only Walls that still exist.
+				const wallIds = room.boundary
+					.map((ref) => ref.wallId)
+					.filter((wallId) => wallIdsInDocument.has(wallId));
+				return {
+					roomId: room.id,
+					name: room.name,
+					wallIds,
+					openingIds: wallIds.flatMap((wallId) => openingIdsByWall.get(wallId) ?? [])
+				};
+			});
+			return { rooms: [], wallFirstRooms, cameraTour };
+		}
 
 		const rooms: UnifiedTreeRoom[] = layout.floors.flatMap((floor) =>
 		floor.rooms.map((room): UnifiedTreeRoom => ({
@@ -169,7 +221,7 @@ export function buildUnifiedProjectTreeModel(input: {
 		}))
 	);
 
-	return { rooms, cameraTour };
+	return { rooms, wallFirstRooms: [], cameraTour };
 }
 
 /**
@@ -236,7 +288,16 @@ export function filterUnifiedProjectTreeModel(
 		})
 		.filter((room): room is UnifiedTreeRoom => room !== null);
 
-	return { rooms, cameraTour: model.cameraTour };
+	// Canonical Rooms match on their own name/id, or on any boundary Wall or
+	// hosted Opening they own — so a Wall/Opening hit keeps them reachable.
+	const wallFirstRooms = model.wallFirstRooms.filter(
+		(room) =>
+			matches(room.name, room.roomId) ||
+			room.wallIds.some((wallId) => matches(wallId)) ||
+			room.openingIds.some((openingId) => matches(openingId))
+	);
+
+	return { rooms, wallFirstRooms, cameraTour: model.cameraTour };
 }
 
 /**
@@ -444,6 +505,8 @@ export function layoutSelectionAncestorRoomId(
 			return (
 				layout.objects.find((object) => object.id === selection.objectId)?.roomId ?? null
 			);
+		// P23.3 canonical wall-first Opening selection has no Room ancestor.
+		case 'wallOpening':
 		case 'none':
 			return null;
 	}

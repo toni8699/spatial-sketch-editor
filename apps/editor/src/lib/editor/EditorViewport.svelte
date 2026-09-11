@@ -28,11 +28,17 @@
 		commitLayoutOpening,
 		commitWallChain,
 		commitWallSegment,
+		createWallFirstOpening,
 		deleteLayoutOpening,
-		deleteLayoutRoom
+		deleteLayoutRoom,
+		deleteWallFirstOpening
 	} from './layout/layout-preview-state.svelte';
 	import { layoutMutationRunnerFor, runLayoutMutation } from './layout/layout-mutation-runner';
-	import type { LayoutOpeningKind } from './layout/layout-opening-editing';
+	import {
+		createDefaultWallFirstOpeningIntent,
+		type LayoutOpeningKind
+	} from './layout/layout-opening-editing';
+	import { wallFirstWallLength } from '$lib/layout/layout-wall-openings';
 	import type { EditorStore } from './editor-store.svelte';
 	import { resolveEditorPlacementScale } from './scale-vector';
 	import type { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
@@ -191,6 +197,61 @@
 		store.setStatusMessage(outcome.result.success ? `Created ${kind} opening` : `Opening rejected: ${outcome.result.message}`);
 	}
 
+	/** P23.3 — canonical Opening create/delete (see PlanWorkspace; relic parity). */
+	function createWallOpening(wallId: string, kind: LayoutOpeningKind, clickOffset: number) {
+		const layout = layoutPreview.project.layout;
+		if (!('formatVersion' in layout)) return;
+		const wallLength = wallFirstWallLength(
+			layout as unknown as Parameters<typeof wallFirstWallLength>[0],
+			wallId
+		);
+		if (wallLength === undefined) {
+			store.setStatusMessage('Wall no longer exists');
+			return;
+		}
+		const intent = createDefaultWallFirstOpeningIntent({
+			wallId,
+			kind,
+			clickOffset,
+			wallLength,
+			snapEnabled: layoutInteraction.planView.snapEnabled
+		});
+		const outcome = runLayoutMutationGuarded(
+			() => createWallFirstOpening(layoutPreview, intent),
+			(result) => result.success
+		);
+		if (outcome.kind === 'skipped') {
+			store.setStatusMessage('Finish the current layout interaction first');
+			return;
+		}
+		const result = outcome.result;
+		if (result.success) {
+			layoutInteraction.selection = {
+				kind: 'wallOpening',
+				wallId,
+				openingId: result.openingId
+			};
+		}
+		store.setStatusMessage(result.success ? `Created ${kind} opening` : `Opening rejected: ${result.message}`);
+	}
+
+	function deleteWallOpening(openingId: string) {
+		const selection = layoutInteraction.selection;
+		const outcome = runLayoutMutationGuarded(
+			() => deleteWallFirstOpening(layoutPreview, openingId),
+			(result) => result.success
+		);
+		if (outcome.kind === 'skipped') {
+			store.setStatusMessage('Finish the current layout interaction first');
+			return;
+		}
+		const result = outcome.result;
+		if (result.success && selection.kind === 'wallOpening' && selection.openingId === openingId) {
+			layoutInteraction.selection = { kind: 'none' };
+		}
+		store.setStatusMessage(result.success ? 'Deleted opening' : `Opening delete failed: ${result.message}`);
+	}
+
 	function beginLayoutTransaction(): boolean {
 		return store.beginLayoutTransaction();
 	}
@@ -311,6 +372,8 @@
 				onWallSegmentCommit={commitDraftWallSegment}
 				onOpeningCreate={createOpening}
 				onOpeningDelete={deleteOpening}
+				onWallOpeningCreate={createWallOpening}
+				onWallOpeningDelete={deleteWallOpening}
 				onRoomDelete={deleteRoom}
 				onLayoutTransactionBegin={beginLayoutTransaction}
 				onLayoutTransactionCommit={commitLayoutTransaction}

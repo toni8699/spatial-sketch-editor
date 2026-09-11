@@ -25,11 +25,15 @@
 		hasWallChainRun,
 		resolveWallChainEndpointAtLength,
 		restoreWallChainRun,
+		beginLayoutWallOpeningDrag,
+		cancelLayoutWallOpeningDrag,
 		selectLayoutInteriorAnchor,
 		selectLayoutObject,
 		selectLayoutOpening,
 		selectLayoutRoom,
 		selectLayoutWall,
+		selectLayoutWallOpening,
+		updateLayoutWallOpeningDrag,
 		setArrangeOwner,
 		setLayoutDraftTool,
 		type LayoutDraftTool,
@@ -46,7 +50,9 @@
 		deriveArrangeTarget,
 		primitiveDraftCenter,
 		rectanglePoints,
-		type LayoutInteractionState
+		type LayoutInteractionState,
+		type LayoutWallOpeningDrag,
+		type LayoutWallOpeningDragMode
 	} from './layout-interaction';
 	import type { LayoutPreviewState } from './layout-preview-state.svelte';
 	import {
@@ -56,12 +62,15 @@
 		previewLayoutRoomUnit,
 		deleteLayoutObject,
 		deleteLayoutWallInteriorAnchor,
+		deleteWallFirstOpening,
 		insertLayoutWallInteriorAnchor,
 		restoreLayoutPreviewSnapshot,
 		updateLayoutObjectFields,
 		updateLayoutRoomFields,
 		updateLayoutWallInteriorAnchor,
 		updateLayoutOpeningFields,
+		updateWallFirstOpening,
+		createWallFirstOpening,
 		type LayoutPreviewSnapshot
 	} from './layout-preview-state.svelte';
 	import {
@@ -69,7 +78,14 @@
 		LAYOUT_PLAN_HIT_RADIUS_PX,
 		type LayoutOpeningKind
 	} from './layout-opening-editing';
-	import { compiledWallLength, findPlanHitRoom, projectPointToWall, resolvePlanHit } from './plan-hit';
+	import {
+		compiledPhysicalWallLength,
+		compiledWallLength,
+		findPlanHitRoom,
+		projectPointToPhysicalWall,
+		projectPointToWall,
+		resolvePlanHit
+	} from './plan-hit';
 	import {
 		constrainToAngle,
 		framePlanViewport,
@@ -79,6 +95,7 @@
 		zoomPlanViewport
 	} from './layout-plan-transform';
 	import type { LayoutRoom, LayoutVec2 } from '$lib/layout/layout-types';
+	import type { LayoutDocumentWallFirst } from '$lib/layout/layout-wall-first-types';
 	import { layoutRoomUnitPivot } from './layout-room-transform';
 	import { buildPlanRenderModel } from '$lib/layout/plan-render-model';
 	import { buildPlanSceneFootprintProjection } from './plan-scene-footprint';
@@ -102,8 +119,10 @@
 	import type { PlanViewMode } from './layout-interaction';
 	import {
 		buildPlanInteractionProjection,
+		physicalWallSpan,
 		planHandleScreenPoints,
 		rotationHandleScreenPoint,
+		wallOpeningEdgeWorldPoints,
 		withArrangeHoverOutline,
 		withLayoutSnapFeedback,
 		withPlanObjectRotationHandle,
@@ -112,14 +131,17 @@
 	} from './plan-overlays';
 	import {
 		LAYOUT_PLAN_GRID_STEP,
+		OPENING_EDGE_SNAP_WIDTH,
 		resolveLayoutSnap,
 		resolveOpeningDragSnap,
+		resolveOpeningDragSnapUseMode,
 		snapOwnerKey,
 		wallOwnerKey,
 		type SnapFeatureKind,
 		type SnapInputContext,
 		type SnapResolution
 	} from '@portfolio/layout-core';
+	import { wallFirstWallLength } from '$lib/layout/layout-wall-openings';
 	import { planCameraProjectionForProject } from './plan-camera-projection';
 	import PlanSvg from './PlanSvg.svelte';
 	import PlanCanvasChrome from './PlanCanvasChrome.svelte';
@@ -147,6 +169,8 @@
 		onWallSegmentCommit,
 		onOpeningCreate,
 		onOpeningDelete,
+		onWallOpeningCreate,
+		onWallOpeningDelete,
 		onRoomDelete,
 		onLayoutTransactionBegin,
 		onLayoutTransactionCommit,
@@ -180,6 +204,10 @@
 	onWallSegmentCommit: (start: LayoutVec2, end: LayoutVec2) => { success: boolean; startJunctionId?: string; endJunctionId?: string; closedRun?: boolean };
 		onOpeningCreate: (roomId: string, segmentId: string, kind: LayoutOpeningKind, clickOffset: number) => void;
 		onOpeningDelete: (roomId: string, openingId: string) => void;
+		/** P23.3 — canonical create on a document-global `wallId` (no `roomId`). */
+		onWallOpeningCreate?: (wallId: string, kind: LayoutOpeningKind, clickOffset: number) => void;
+		/** P23.3 — delete the selected canonical Opening by `openingId`. */
+		onWallOpeningDelete?: (openingId: string) => void;
 		onRoomDelete: (roomId: string) => boolean;
 		onLayoutTransactionBegin: () => boolean;
 		onLayoutTransactionCommit: () => boolean;
@@ -1079,6 +1107,7 @@
 		draggedInteriorAnchor = null;
 		pendingWallBend = null;
 		openingDrag = null;
+		cancelLayoutWallOpeningDrag(interaction);
 		dragSnapshot = null;
 		roomUnitSnapshot = null;
 		rotationHoverScreen = null;
@@ -1107,6 +1136,106 @@
 		if (!room) return null;
 		const handle = rotationHandleScreenPoint(interaction.planView, interactionProjection);
 		return handle && distance(handle, screen) <= LAYOUT_PLAN_HIT_RADIUS_PX ? room : null;
+	}
+
+	/** Canonical wall-first Layout document, or null when the preview is legacy. */
+	function wallFirstLayoutDocument(): LayoutDocumentWallFirst | null {
+		const layout = preview.project.layout;
+		return 'formatVersion' in layout ? (layout as unknown as LayoutDocumentWallFirst) : null;
+	}
+
+	/** Document-exact canonical Wall length (meters from the Wall start). */
+	function wallFirstWallLengthFor(wallId: string): number | null {
+		const layout = wallFirstLayoutDocument();
+		if (!layout) return null;
+		return wallFirstWallLength(layout, wallId) ?? null;
+	}
+
+	/** The authored canonical Opening record, or null. */
+	function wallFirstOpeningById(openingId: string) {
+		return wallFirstLayoutDocument()?.openings.find((opening) => opening.id === openingId) ?? null;
+	}
+
+	/**
+	 * P23.3 — screen positions of the selected canonical Opening's two width
+	 * handles. ONE source (plan-overlays) for the rendered handles and this hit
+	 * test, so the affordance and its hit region can never drift apart.
+	 */
+	function wallOpeningHandleScreenPoints(): { start: LayoutVec2; end: LayoutVec2 } | null {
+		const selection = interaction.selection;
+		if (selection.kind !== 'wallOpening') return null;
+		const edges = wallOpeningEdgeWorldPoints(model, selection.openingId);
+		if (!edges) return null;
+		const screen = planHandleScreenPoints(interaction.planView, edges.start, edges.end);
+		return { start: screen.pivot, end: screen.handle };
+	}
+
+	function wallOpeningHandleHit(screen: LayoutVec2): 'start-edge' | 'end-edge' | null {
+		const handles = wallOpeningHandleScreenPoints();
+		if (!handles) return null;
+		if (distance(handles.start, screen) <= LAYOUT_PLAN_HIT_RADIUS_PX) return 'start-edge';
+		if (distance(handles.end, screen) <= LAYOUT_PLAN_HIT_RADIUS_PX) return 'end-edge';
+		return null;
+	}
+
+	/**
+	 * P23.3 — resolve one drag update through the P23.2 offset-space candidates
+	 * and the raw-validity use-mode. A snap win is honored only when it was
+	 * reachable without clamping; otherwise the raw candidate stands.
+	 */
+	function resolveWallOpeningDragUpdate(drag: LayoutWallOpeningDrag, rawOffset: number, wallLength: number) {
+		const span = physicalWallSpan(model, drag.wallId);
+		const snapWidth = drag.mode === 'body' ? drag.baselineWidth : OPENING_EDGE_SNAP_WIDTH;
+		const fitWidth = drag.mode === 'body' ? drag.baselineWidth : 0;
+		const useMode =
+			interaction.planView.snapEnabled && span
+				? resolveOpeningDragSnapUseMode(
+						preview.geometry,
+						{ segmentId: drag.wallId, start: span.start, end: span.end },
+						drag.openingId,
+						rawOffset,
+						{
+							snapWidth,
+							fitWidth,
+							context: {
+								pixelsPerMeter: interaction.planView.pixelsPerMeter,
+								gridStep: LAYOUT_PLAN_GRID_STEP
+							}
+						}
+					)
+				: null;
+		return updateLayoutWallOpeningDrag(interaction, {
+			rawPointerOffset: rawOffset,
+			snapOffset: useMode?.snappedOffset ?? null,
+			wallLength
+		});
+	}
+
+	/**
+	 * P23.3 — one canonical Opening gesture: begin → (transient previews only)
+	 * → validate once → commit once, or cancel with no history. The document is
+	 * never written during the gesture.
+	 */
+	function beginWallOpeningDrag(
+		event: PointerEvent,
+		opening: { id: string; wallId: string; offset: number; width: number },
+		mode: LayoutWallOpeningDragMode,
+		wallLength: number
+	): boolean {
+		if (!svgElement || !onLayoutTransactionBegin()) return false;
+		dragSnapshot = captureLayoutPreviewSnapshot(preview);
+		selectLayoutWallOpening(interaction, opening.wallId, opening.id);
+		beginLayoutWallOpeningDrag(interaction, {
+			mode,
+			wallId: opening.wallId,
+			openingId: opening.id,
+			offset: opening.offset,
+			width: opening.width,
+			wallLength
+		});
+		pointerId = event.pointerId;
+		svgElement.setPointerCapture(event.pointerId);
+		return true;
 	}
 
 	function beginPendingWallBend(event: PointerEvent) {
@@ -1280,8 +1409,25 @@
 		}
 
 		if (interaction.tool === 'door' || interaction.tool === 'window') {
-			if ('formatVersion' in preview.project.layout) return;
-			const target = resolvePlanHit(model.queries, point, LAYOUT_PLAN_HIT_RADIUS_PX / interaction.planView.pixelsPerMeter);
+			const target = resolvePlanHit(
+				model.queries,
+				point,
+				LAYOUT_PLAN_HIT_RADIUS_PX / interaction.planView.pixelsPerMeter
+			);
+			if (wallFirstLayoutDocument()) {
+				// P23.3 — canonical authoring resolves the hosting Wall by
+				// document-global `wallId` (no `roomId`, no `segmentId`).
+				if (target?.kind === 'wallOpening') {
+					selectLayoutWallOpening(interaction, target.wallId, target.openingId);
+					setLayoutDraftTool(interaction, 'select');
+					return;
+				}
+				if (target?.kind === 'physicalWall') {
+					onWallOpeningCreate?.(target.wallId, interaction.tool, target.projection.offset);
+					setLayoutDraftTool(interaction, 'select');
+				}
+				return;
+			}
 			if (target?.kind === 'opening') {
 				selectLayoutOpening(interaction, target.roomId, target.segmentId, target.openingId);
 				setLayoutDraftTool(interaction, 'select');
@@ -1319,6 +1465,21 @@
 		if (target.kind === 'interiorAnchor') {
 			if (!onLayoutTransactionBegin()) return;
 			beginInteriorAnchorDrag(event, target.roomId, target.segmentId, target.anchorId);
+			return;
+		}
+		if (target.kind === 'wallOpening') {
+			// P23.3 — canonical opening select/drag: body drag centers on the
+			// pointer, width handles move one edge with the opposite edge fixed.
+			const opening = wallFirstOpeningById(target.openingId);
+			const wallLength = wallFirstWallLengthFor(target.wallId);
+			if (!opening || wallLength === null) return;
+			const handleEdge =
+				interaction.selection.kind === 'wallOpening' &&
+				interaction.selection.openingId === target.openingId
+					? wallOpeningHandleHit(screen)
+					: null;
+			if (beginWallOpeningDrag(event, opening, handleEdge ?? 'body', wallLength)) return;
+			selectLayoutWallOpening(interaction, target.wallId, target.openingId);
 			return;
 		}
 		if (target.kind === 'opening') {
@@ -1369,6 +1530,9 @@
 			return;
 		}
 
+		// A canonical physical-Wall hit has no Room-unit target (and no canonical
+		// wall selection target until the P23.6/P23.7 cutover).
+		if (target.kind !== 'room') return;
 		const room = findLayoutRoom(rooms, target.roomId);
 		if (!room) return;
 		selectLayoutRoom(interaction, target.roomId);
@@ -1520,6 +1684,20 @@
 			);
 			return;
 		}
+		if (interaction.wallOpeningDrag) {
+			// P23.3 — transient only: the pointer resolves a raw candidate (plus an
+			// optional honest snap win); nothing is written to the document here.
+			const point = worldPoint(event);
+			if (!point) return;
+			const drag = interaction.wallOpeningDrag;
+			const projection = projectPointToPhysicalWall(model.queries, drag.wallId, point);
+			if (!projection) return;
+			const wallLength =
+				wallFirstWallLengthFor(drag.wallId) ??
+				compiledPhysicalWallLength(model.queries, drag.wallId);
+			resolveWallOpeningDragUpdate(drag, projection.offset, wallLength);
+			return;
+		}
 		if (openingDrag) {
 			const point = worldPoint(event);
 			if (!point) return;
@@ -1562,7 +1740,11 @@
 			return;
 		}
 		if (interaction.tool === 'rectangle') {
-			if ('formatVersion' in preview.project.layout) return;
+			// P23.9/P23.3 — the rectangle drag updates the opposite corner on BOTH
+			// document formats; only the commit path differs (canonical four-Wall
+			// chain vs the legacy Room polygon). Skipping the update on a
+			// wall-first document left `rectanglePoints` degenerate, so the drag
+			// never drew anything and pointer-up committed nothing.
 			const point = draftPoint(event, interaction.rectangleStart);
 			if (point) updateRectangle(interaction, point);
 			return;
@@ -1690,6 +1872,37 @@
 			svgElement?.releasePointerCapture(event.pointerId);
 			return;
 		}
+		if (interaction.wallOpeningDrag) {
+			// Validate once → commit once. An invalid raw candidate (e.g. a drag
+			// past the Wall end) rejects with no history — it never becomes an
+			// end-flush placement, because clamping is not validity.
+			const drag = interaction.wallOpeningDrag;
+			if (!drag.valid) {
+				preview.statusMessage = 'Opening does not fit on this wall';
+				onLayoutTransactionCancel();
+			} else {
+				const result = updateWallFirstOpening(
+					preview,
+					drag.openingId,
+					drag.mode === 'body'
+						? { offset: drag.candidateOffset }
+						: { offset: drag.candidateOffset, width: drag.candidateWidth }
+				);
+				if (result.success) {
+					onLayoutTransactionCommit();
+					preview.statusMessage =
+						drag.mode === 'body' ? 'Moved opening' : 'Resized opening';
+				} else {
+					onLayoutTransactionCancel();
+					preview.statusMessage = result.message;
+				}
+			}
+			cancelLayoutWallOpeningDrag(interaction);
+			dragSnapshot = null;
+			pointerId = null;
+			svgElement?.releasePointerCapture(event.pointerId);
+			return;
+		}
 		if (openingDrag) {
 			onLayoutTransactionCommit();
 			openingDrag = null;
@@ -1748,7 +1961,11 @@
 			cancelLayoutObjectDrag(interaction);
 			pointerId = null;
 		}
-		if (interiorAnchorPointerId === event.pointerId || (openingDrag && pointerId === event.pointerId)) {
+		if (
+			interiorAnchorPointerId === event.pointerId ||
+			(openingDrag && pointerId === event.pointerId) ||
+			(interaction.wallOpeningDrag && pointerId === event.pointerId)
+		) {
 			cancelActiveLayoutDrag();
 		}
 		if (interaction.editing && pointerId === event.pointerId) {
@@ -1929,6 +2146,15 @@
 				pointerId = null;
 				return;
 			}
+			// P23.3 — Escape during a canonical Opening gesture restores the
+			// baseline with no history (the document was never written).
+			if (interaction.wallOpeningDrag) {
+				onLayoutTransactionCancel();
+				cancelLayoutWallOpeningDrag(interaction);
+				dragSnapshot = null;
+				pointerId = null;
+				return;
+			}
 			if (interaction.tool === 'door' || interaction.tool === 'window') {
 				setLayoutDraftTool(interaction, 'select');
 				return;
@@ -1986,6 +2212,11 @@
 		if ((event.key === 'Delete' || event.key === 'Backspace') && interaction.tool === 'select' && interaction.selection.kind === 'opening') {
 			event.preventDefault();
 			onOpeningDelete(interaction.selection.roomId, interaction.selection.openingId);
+			return;
+		}
+		if ((event.key === 'Delete' || event.key === 'Backspace') && interaction.tool === 'select' && interaction.selection.kind === 'wallOpening') {
+			event.preventDefault();
+			onWallOpeningDelete?.(interaction.selection.openingId);
 			return;
 		}
 		if (

@@ -17,6 +17,7 @@ import { LAYOUT_GEOMETRY_EPSILON } from './layout-geometry-openings';
 import type { LayoutGeometryIssue } from './layout-geometry-types';
 import { hasBlockingLayoutIssues } from './layout-geometry-validation';
 import { validateWallFirstLayoutDocument } from './layout-wall-first-codec';
+import { validateWallFirstOpeningSet } from './layout-opening-set';
 import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall } from './layout-wall-first-types';
 import {
 	planWallSplit,
@@ -467,30 +468,17 @@ function validatePrecisionTopology(document: LayoutDocumentWallFirst): LayoutGeo
 		if (previousEnd !== firstStart) return topologyFailure(room.id, undefined, `Room '${room.id}' boundary is not closed`);
 	}
 
-	const openingsByWall = new Map<string, typeof document.openings>();
-	for (const opening of document.openings) {
-		const wall = wallById.get(opening.wallId);
-		if (!wall) continue;
-		const endpoints = wallEndpoints(document, wall)!;
-		if (opening.offset + opening.width > endpoints.length + POINT_EPSILON) {
-			return topologyFailure(opening.id, opening.wallId, `Opening '${opening.id}' does not fit on Wall '${opening.wallId}'`);
-		}
-		if (opening.sillHeight + opening.height > document.floor.height + POINT_EPSILON) {
-			return topologyFailure(opening.id, opening.wallId, `Opening '${opening.id}' exceeds the floor height`);
-		}
-		const list = openingsByWall.get(opening.wallId) ?? [];
-		list.push(opening);
-		openingsByWall.set(opening.wallId, list);
-	}
-	for (const [wallId, openings] of openingsByWall) {
-		const sorted = [...openings].sort((a, b) => a.offset - b.offset || a.id.localeCompare(b.id));
-		for (let index = 1; index < sorted.length; index += 1) {
-			const previous = sorted[index - 1]!;
-			const current = sorted[index]!;
-			if (current.offset < previous.offset + previous.width - POINT_EPSILON) {
-				return topologyFailure(previous.id, wallId, `Openings '${previous.id}' and '${current.id}' overlap on Wall '${wallId}'`);
-			}
-		}
+	// Whole-hosting-Wall opening set: ONE canonical validator shared with the
+	// P23.3 opening create/edit/drag/resize paths
+	// (`layout-opening-set.ts`). Do not duplicate fit/overlap/vertical checks
+	// here — this gate only translates the first canonical issue.
+	const openingIssue = validateWallFirstOpeningSet(document)[0];
+	if (openingIssue) {
+		return topologyFailure(
+			openingIssue.openingId,
+			openingIssue.wallId,
+			openingIssue.message
+		);
 	}
 	return undefined;
 }

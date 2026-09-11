@@ -397,6 +397,24 @@ export function createEmptySceneDocument(): SceneDocument {
 	};
 }
 
+/**
+ * Authoring-empty WORLD-LOCAL scene document (`formatVersion: 1`) — the Scene
+ * half of the canonical new-project boot.
+ *
+ * P23.0 moves the two discriminators together: `validateProject` rejects a
+ * wall-first Layout (`formatVersion: 4`) that carries the recognized legacy
+ * room-local Scene (`scene_not_world_local`), so a project cannot adopt the
+ * wall-first Layout and keep the legacy Scene. `createEmptySceneDocument`
+ * keeps returning the legacy shape — it stays the compatibility/legacy-
+ * fixture constructor, not the new-project boot.
+ */
+export function createEmptyWorldLocalSceneDocument(): SceneDocument {
+	return {
+		formatVersion: SCENE_WORLD_LOCAL_FORMAT_VERSION,
+		...createEmptySceneDocument()
+	};
+}
+
 export type SceneDocument = {
   /**
    * P23.0b format discriminator. Absent on recognized legacy (room-local)

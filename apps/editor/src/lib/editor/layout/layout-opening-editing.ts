@@ -1,6 +1,7 @@
 import type { DraftSegment, LayoutOpening, LayoutRoom } from '$lib/layout/layout-types';
 import { segmentLength } from '$lib/layout/layout-geometry-curve';
 import { LAYOUT_PLAN_GRID_STEP } from '$lib/layout/layout-wall-first-precision';
+import { WALL_OPENING_DEFAULTS } from '$lib/layout/layout-wall-openings';
 
 export type LayoutOpeningKind = LayoutOpening['kind'];
 
@@ -49,6 +50,55 @@ export function createDefaultOpening(options: {
 	const snappedClickOffset = options.snapEnabled === false ? clamp(options.clickOffset, 0, segmentLengthValue) : snapSegmentOffset(options.clickOffset, segmentLengthValue);
 	const offset = clamp(snappedClickOffset - width / 2, 0, Math.max(0, segmentLengthValue - width));
 	return { id: options.id, segmentId: options.segment.id, kind: options.kind, offset, width, height: defaults.height, sillHeight: defaults.sillHeight, profile: 'rectangular' };
+}
+
+/**
+ * P23.3 wall-first creation candidate: tool-click positioning only.
+ *
+ * Creation is the **only** place a clamp is allowed (legacy parity: a click
+ * near a Wall end places the default-width opening flush). The returned intent
+ * is then committed through the canonical `planCreateWallFirstOpening`, which
+ * never clamps: if the creation candidate still does not fit (e.g. the Wall is
+ * shorter than the default width) the commit rejects with no history.
+ *
+ * Drag/edit paths must not reuse this helper — a drag past the Wall end has to
+ * reject, never become an end-flush placement.
+ */
+export type WallFirstOpeningCreateIntent = {
+	wallId: string;
+	kind: LayoutOpeningKind;
+	offset: number;
+	width: number;
+	height: number;
+	sillHeight: number;
+};
+
+export function createDefaultWallFirstOpeningIntent(options: {
+	wallId: string;
+	kind: LayoutOpeningKind;
+	clickOffset: number;
+	wallLength: number;
+	snapEnabled?: boolean;
+}): WallFirstOpeningCreateIntent {
+	const defaults = WALL_OPENING_DEFAULTS[options.kind];
+	const width = Math.min(defaults.width, options.wallLength);
+	const clickOffset =
+		options.snapEnabled === false
+			? clamp(options.clickOffset, 0, options.wallLength)
+			: snapSegmentOffset(options.clickOffset, options.wallLength);
+	const offset = clamp(
+		clickOffset - width / 2,
+		0,
+		Math.max(0, options.wallLength - width)
+	);
+	return {
+		wallId: options.wallId,
+		kind: options.kind,
+		offset,
+		width,
+		height: defaults.height,
+		sillHeight: defaults.sillHeight
+	};
 }
 
 export function replaceRoomOpening(room: LayoutRoom, nextOpening: LayoutOpening): LayoutRoom {

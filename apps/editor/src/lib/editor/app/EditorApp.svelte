@@ -31,7 +31,7 @@
 	import { createEditorStore } from '$lib/editor/editor-store.svelte';
 	import type { TakeoverObserverState } from '$lib/editor/editor-store.svelte';
 	import {
-		createEmptyProject,
+		createEmptyWallFirstProject,
 		validateProject
 	} from '$lib/project/project-codec';
 	import type { ProjectDocument } from '$lib/project/project-types';
@@ -47,7 +47,7 @@
 	} from '$lib/editor/store/project-export-store.svelte';
 	import {
 		captureLayoutPreviewSnapshot,
-		createEmptyLayoutPreviewState,
+		createEmptyWallFirstLayoutPreviewState,
 		derivePreviewBundle,
 		installLayoutPreviewBundle,
 		layoutPreviewCanonicalJson,
@@ -139,9 +139,13 @@
 	const configuredProjectPersistence = untrack(() => projectPersistence);
 	const initialProjectId = untrack(() => routeProjectId || 'project:untitled');
 
-	// the editor boots blank on every load: one canonical empty project
-	// seeds both the scene-only store and the layout-only preview surface.
-	const bootProject = createEmptyProject({
+	// the editor boots blank on every load: one canonical empty WALL-FIRST
+	// project (wall-first Layout + world-local Scene) seeds both the scene-only
+	// store and the layout-only preview surface, so the canonical
+	// Junction/Wall/Room/Opening authoring path is reachable from a new project
+	// without importing JSON. Legacy documents stay loadable through the
+	// compatible decoders.
+	const bootProject = createEmptyWallFirstProject({
 		id: initialProjectId,
 		name: 'Untitled project'
 	});
@@ -216,7 +220,7 @@
 		cloudStatus = 'ready';
 		sessionStatus = 'checking';
 	}
-	const layoutPreview = $state(createEmptyLayoutPreviewState());
+	const layoutPreview = $state(createEmptyWallFirstLayoutPreviewState());
 	const layoutInteraction = $state({ ...createLayoutInteractionState(), viewMode: 'plan' as const });
 	// Construct before the store: the selection activation hook gates its
 	// cross-domain clear through the current Scene Plan authority.

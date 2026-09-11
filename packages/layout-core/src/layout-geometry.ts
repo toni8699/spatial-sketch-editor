@@ -432,7 +432,13 @@ function emitPhysicalWallQueryRecords(
 				opening.openingId,
 				floor.id,
 				wall.id,
-				opening.openingId
+				opening.openingId,
+				undefined,
+				undefined,
+				// Canonical opening spans carry the document-global `wallKey`
+				// (`= wallId`) exactly like legacy wall/solid spans; snap/align/hit
+				// group by `wallKey ?? segmentId`, never `segmentId` alone.
+				wallKey
 			)
 		);
 		queryBuilder.aabbs.push(

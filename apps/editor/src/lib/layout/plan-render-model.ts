@@ -72,6 +72,10 @@ export type PlanStyleToken =
 	// semantic Room boundary while it is being drawn.
 	| 'draft-outline-partition'
 	| 'draft-point'
+	// P23.3 — canonical Opening width-handle affordances + transient drag preview.
+	| 'opening-handle'
+	| 'opening-drag-preview'
+	| 'opening-drag-preview-invalid'
 	| 'snap-guide'
 	| 'snap-marker'
 	| 'snap-marker-grid'
@@ -85,7 +89,14 @@ export type PlanHitIdentity =
 	| { kind: 'opening'; roomId: string; segmentId: string; openingId: string }
 	| { kind: 'object'; objectId: string }
 	| { kind: 'wall'; roomId: string; segmentId: string }
-	| { kind: 'room'; roomId: string };
+	| { kind: 'room'; roomId: string }
+	/**
+	 * P23.3 — canonical wall-first opening identity: document-global `wallId` +
+	 * `openingId` and no `roomId`. Canonical physical Walls deliberately carry
+	 * **no** hit identity until the full `wallId`/`junctionId` selection cutover
+	 * (P23.6/P23.7) — never a faked room-anchored `wall` hit.
+	 */
+	| { kind: 'wallOpening'; wallId: string; openingId: string };
 
 /**
  * Renderer-neutral selection descriptor. Mirrors the editor's selection shape
@@ -99,7 +110,9 @@ export type PlanSelection =
 	| { kind: 'wall'; roomId: string; segmentId: string }
 	| { kind: 'opening'; roomId: string; segmentId: string; openingId: string }
 	| { kind: 'interiorAnchor'; roomId: string; segmentId: string; anchorId: string }
-	| { kind: 'object'; objectId: string };
+	| { kind: 'object'; objectId: string }
+	/** P23.3 — minimal canonical wall-first opening target (`wallId` + `openingId`). */
+	| { kind: 'wallOpening'; wallId: string; openingId: string };
 
 export type PlanPolygonPrimitive = {
 	kind: 'polygon';
@@ -353,6 +366,13 @@ function selectedStyle(
 				? 'room-outline-selected'
 				: base;
 		case 'wall-line':
+			// Canonical wall-first opening selection highlights its hosting Wall the
+			// same way a legacy opening selection does.
+			if (hit.kind === 'wallOpening') {
+				return selected.kind === 'wallOpening' && selected.wallId === hit.wallId
+					? 'wall-line-opening-selected'
+					: base;
+			}
 			if (hit.kind !== 'wall') return base;
 			if (selected.kind === 'wall' && selected.roomId === hit.roomId && selected.segmentId === hit.segmentId) {
 				return 'wall-line-selected';
@@ -365,6 +385,13 @@ function selectedStyle(
 			}
 			return base;
 		case 'opening-line':
+			if (hit.kind === 'wallOpening') {
+				return selected.kind === 'wallOpening' &&
+					selected.wallId === hit.wallId &&
+					selected.openingId === hit.openingId
+					? 'opening-line-selected'
+					: base;
+			}
 			return selected.kind === 'opening' && hit.kind === 'opening' &&
 				selected.roomId === hit.roomId && selected.segmentId === hit.segmentId && selected.openingId === hit.openingId
 				? 'opening-line-selected'
@@ -498,16 +525,9 @@ export function buildPlanRenderModel(
 	// rendering with an empty canonical collection — no double rendering in
 	// either generation, no fake `roomId` ownership for hit/selection.
 	for (const wall of compiled.walls ?? []) {
-		wall.solidCenterlinePolylines.forEach((polyline, index) => {
-			walls.push({
-				kind: 'polyline',
-				key: geometryId(['plan', 'physical-wall', wall.floorId, wall.wallId, String(index)]),
-				points: polyline.map(([x, z]) => [x, z] as LayoutVec2),
-				architecture: { kind: 'wall', thicknessMeters: wall.thickness },
-				style: 'wall-line'
-			});
-		});
 		for (const opening of wall.openings) {
+			// One authored Opening renders once, with the canonical hit identity
+			// and the selection style derived from it (never per-Room duplicates).
 			openings.push({
 				kind: 'polyline',
 				key: geometryId(['plan', 'physical-opening', wall.floorId, wall.wallId, opening.openingId]),
@@ -518,9 +538,19 @@ export function buildPlanRenderModel(
 					wallThicknessMeters: wall.thickness,
 					inwardNormal: [...opening.center.normal] as LayoutVec2
 				},
-				style: 'opening-line'
+				style: 'opening-line',
+				hit: { kind: 'wallOpening', wallId: wall.wallId, openingId: opening.openingId }
 			});
 		}
+		wall.solidCenterlinePolylines.forEach((polyline, index) => {
+			walls.push({
+				kind: 'polyline',
+				key: geometryId(['plan', 'physical-wall', wall.floorId, wall.wallId, String(index)]),
+				points: polyline.map(([x, z]) => [x, z] as LayoutVec2),
+				architecture: { kind: 'wall', thicknessMeters: wall.thickness },
+				style: 'wall-line'
+			});
+		});
 	}
 
 	layers.push({ order: 1, primitives: fills });

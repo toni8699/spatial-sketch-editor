@@ -7,11 +7,17 @@
 		commitLayoutOpening,
 		commitWallChain,
 		commitWallSegment,
+		createWallFirstOpening,
 		deleteLayoutOpening,
-		deleteLayoutRoom
+		deleteLayoutRoom,
+		deleteWallFirstOpening
 	} from '$lib/editor/layout/layout-preview-state.svelte';
 	import { layoutMutationRunnerFor, runLayoutMutation } from '$lib/editor/layout/layout-mutation-runner';
-	import type { LayoutOpeningKind } from '$lib/editor/layout/layout-opening-editing';
+	import {
+		createDefaultWallFirstOpeningIntent,
+		type LayoutOpeningKind
+	} from '$lib/editor/layout/layout-opening-editing';
+	import { wallFirstWallLength } from '$lib/layout/layout-wall-openings';
 	import type { EditorStore } from '$lib/editor/editor-store.svelte';
 	import type { EditorContextMenuStore } from '$lib/editor/context-menu/context-menu-state.svelte';
 	import {
@@ -180,6 +186,69 @@
 		store.setStatusMessage(outcome.result.success ? `Created ${kind} opening` : `Opening rejected: ${outcome.result.message}`);
 	}
 
+	/**
+	 * P23.3 — create one canonical Opening on a document-global `wallId`.
+	 * Click positioning is the only clamped step (creation parity); the commit
+	 * itself validates the whole hosting-Wall set and rejects rather than
+	 * clamping.
+	 */
+	function createWallOpening(wallId: string, kind: LayoutOpeningKind, clickOffset: number) {
+		const layout = layoutPreview.project.layout;
+		if (!('formatVersion' in layout)) return;
+		const wallLength = wallFirstWallLength(
+			layout as unknown as Parameters<typeof wallFirstWallLength>[0],
+			wallId
+		);
+		if (wallLength === undefined) {
+			store.setStatusMessage('Wall no longer exists');
+			return;
+		}
+		const intent = createDefaultWallFirstOpeningIntent({
+			wallId,
+			kind,
+			clickOffset,
+			wallLength,
+			snapEnabled: layoutInteraction.planView.snapEnabled
+		});
+		const outcome = runLayoutMutationGuarded(
+			() => createWallFirstOpening(layoutPreview, intent),
+			(result) => result.success
+		);
+		if (outcome.kind === 'skipped') {
+			store.setStatusMessage('Finish the current layout interaction first');
+			return;
+		}
+		const result = outcome.result;
+		if (result.success) {
+			layoutInteraction.selection = {
+				kind: 'wallOpening',
+				wallId,
+				openingId: result.openingId
+			};
+		}
+		store.setStatusMessage(result.success ? `Created ${kind} opening` : `Opening rejected: ${result.message}`);
+	}
+
+	/** P23.3 — delete the selected canonical Opening (one history entry). */
+	function deleteWallOpening(openingId: string) {
+		const selection = layoutInteraction.selection;
+		const outcome = runLayoutMutationGuarded(
+			() => deleteWallFirstOpening(layoutPreview, openingId),
+			(result) => result.success
+		);
+		if (outcome.kind === 'skipped') {
+			store.setStatusMessage('Finish the current layout interaction first');
+			return;
+		}
+		const result = outcome.result;
+		// No canonical wall selection target yet (full cutover deferred), so a
+		// deleted opening clears rather than demoting to a fake parent.
+		if (result.success && selection.kind === 'wallOpening' && selection.openingId === openingId) {
+			layoutInteraction.selection = { kind: 'none' };
+		}
+		store.setStatusMessage(result.success ? 'Deleted opening' : `Opening delete failed: ${result.message}`);
+	}
+
 	function beginLayoutTransaction(): boolean {
 		return store.beginLayoutTransaction();
 	}
@@ -334,6 +403,8 @@
 		onWallSegmentCommit={commitDraftWallSegment}
 		onOpeningCreate={createOpening}
 		onOpeningDelete={deleteOpening}
+		onWallOpeningCreate={createWallOpening}
+		onWallOpeningDelete={deleteWallOpening}
 		onRoomDelete={deleteRoom}
 		onLayoutTransactionBegin={beginLayoutTransaction}
 		onLayoutTransactionCommit={commitLayoutTransaction}
