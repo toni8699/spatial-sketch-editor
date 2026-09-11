@@ -450,7 +450,7 @@ Keep H2's deterministic snap/acquisition/guide model and map it to Junctions, Wa
 
 **Status:** `in progress` — review PR #18 open; **current slice: P23.3** (P23.3 unblocked by P23.9 wall authoring, pending merge).
 
-Primary architectural authoring workflow: continuous Wall/Partition chains, ephemeral draft, Backspace, Finish/Close, Escape, H2 snap/precision integration, and Rectangle/Polygon convenience tools that produce the same canonical Walls/Junctions. Valid open chains need not create Rooms.
+Primary architectural authoring workflow (segment-first, ratified 2026-09-11): continuous Wall/Partition drawing where each completed segment commits immediately as one authored Wall and one Layout transaction, with only the current candidate segment transient; the committed endpoint becomes the next start without tool re-entry; Escape cancels only the active preview; H2 snap/precision integration; and Rectangle/Polygon convenience tools that produce the same canonical Walls/Junctions (Rectangle stays one bounded atomic transaction; Polygon may stay a bounded compound transient). Valid open Walls need not create Rooms.
 
 ## P23.3 — Wall-hosted openings that fit
 
