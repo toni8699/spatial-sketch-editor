@@ -118,7 +118,7 @@
 	{:else}
 		<button type="button" class:active={preview.showCeilings} aria-pressed={preview.showCeilings} onclick={() => toggleLayoutCeilings(preview)}>Ceiling</button>
 	{/if}
-	{#if interaction.planViewMode === 'layout' && (interaction.polygonPoints.length > 0 || interaction.wallChainPoints.length > 0 || interaction.rectangleStart || interaction.primitiveDraft || interaction.roomUnitDrag || interaction.tool === 'door' || interaction.tool === 'window')}
+	{#if interaction.planViewMode === 'layout' && (interaction.polygonPoints.length > 0 || interaction.wallChainStart !== null || interaction.rectangleStart || interaction.primitiveDraft || interaction.roomUnitDrag || interaction.tool === 'door' || interaction.tool === 'window')}
 		<button type="button" class="cancel" onclick={cancel}><X size={14} aria-hidden="true" /> Cancel</button>
 	{/if}
 </div>

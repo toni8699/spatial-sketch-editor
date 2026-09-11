@@ -491,6 +491,36 @@ export function buildPlanRenderModel(
 		});
 	}
 
+	// P23.9 — canonical physical Walls independent of Room ownership.
+	// Roomless Walls never reach `room.walls`, so they render here exactly
+	// once from `compiled.walls` (room-referenced Walls stay room-derived —
+	// no double rendering, no fake `roomId` ownership for hit/selection).
+	for (const wall of compiled.walls ?? []) {
+		wall.solidCenterlinePolylines.forEach((polyline, index) => {
+			walls.push({
+				kind: 'polyline',
+				key: geometryId(['plan', 'physical-wall', wall.floorId, wall.wallId, String(index)]),
+				points: polyline.map(([x, z]) => [x, z] as LayoutVec2),
+				architecture: { kind: 'wall', thicknessMeters: wall.thickness },
+				style: 'wall-line'
+			});
+		});
+		for (const opening of wall.openings) {
+			openings.push({
+				kind: 'polyline',
+				key: geometryId(['plan', 'physical-opening', wall.floorId, wall.wallId, opening.openingId]),
+				points: opening.centerPolyline.map(([x, z]) => [x, z] as LayoutVec2),
+				architecture: {
+					kind: opening.kind,
+					widthMeters: opening.width,
+					wallThicknessMeters: wall.thickness,
+					inwardNormal: [...opening.center.normal] as LayoutVec2
+				},
+				style: 'opening-line'
+			});
+		}
+	}
+
 	layers.push({ order: 1, primitives: fills });
 	layers.push({ order: 2, primitives: strokes });
 	layers.push({ order: 3, primitives: walls });

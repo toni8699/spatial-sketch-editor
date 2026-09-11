@@ -248,11 +248,12 @@ export function withArrangeHoverOutline(
 function draftPolyline(interaction: LayoutInteractionState): LayoutVec2[] | null {
 	if (interaction.tool === 'rectangle') return rectanglePoints(interaction);
 	if (wallChainRoleForTool(interaction.tool) !== null) {
-		if (interaction.wallChainPoints.length === 0) return null;
-		// P23.9 — rubber band: the pending segment follows the snapped cursor.
+		if (!interaction.wallChainStart) return null;
+		// P23.9 segment-first — only the currently previewed next segment is
+		// transient: committed Walls live in the document, never here.
 		return interaction.wallChainCursor
-			? [...interaction.wallChainPoints, interaction.wallChainCursor]
-			: interaction.wallChainPoints;
+			? [interaction.wallChainStart, interaction.wallChainCursor]
+			: [interaction.wallChainStart];
 	}
 	return interaction.polygonPoints.length > 0 ? interaction.polygonPoints : null;
 }
@@ -355,6 +356,7 @@ export function buildPlanInteractionProjection(
 
 	for (const record of model.queries.points) {
 		if (record.kind !== 'interior-anchor') continue;
+		if (record.roomId === undefined) continue;
 		handles.push({
 			kind: 'circle',
 			key: geometryId(['plan', 'overlay', 'interior-anchor', record.roomId, record.segmentId, record.sourceId]),

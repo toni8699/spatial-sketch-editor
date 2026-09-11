@@ -131,9 +131,19 @@ export type LayoutInteractionState = {
 	planViewMode: PlanViewMode;
 	tool: LayoutDraftTool;
 	polygonPoints: LayoutVec2[];
-	/** P23.9 — sketched wall-chain draft points (click order), for both chain tools. */
-	wallChainPoints: LayoutVec2[];
-	/** P23.9 — snapped cursor the pending chain segment is drawn to (rubber band). */
+	/**
+	 * P23.9 segment-first continuation state (replaces the old whole-chain
+	 * `wallChainPoints` array). Only the currently previewed next segment is
+	 * transient; committed Walls live in the document, never here.
+	 */
+	wallChainStart: LayoutVec2 | null;
+	/** Canonical start Junction after the first commit; null until then. */
+	wallChainStartJunctionId: string | null;
+	/** Canonical run-start Junction set once the first Wall commits. */
+	wallChainRunStartJunctionId: string | null;
+	/** Last committed segment direction (for exact-length defaulting). */
+	wallChainLastDirection: LayoutVec2 | null;
+	/** P23.9 — snapped cursor the pending segment is drawn to (rubber band). */
 	wallChainCursor: LayoutVec2 | null;
 	rectangleStart: LayoutVec2 | null;
 	rectangleCurrent: LayoutVec2 | null;
@@ -161,7 +171,10 @@ export function createLayoutInteractionState(): LayoutInteractionState {
 		planViewMode: 'layout',
 		tool: 'select',
 		polygonPoints: [],
-		wallChainPoints: [],
+		wallChainStart: null,
+		wallChainStartJunctionId: null,
+		wallChainRunStartJunctionId: null,
+		wallChainLastDirection: null,
 		wallChainCursor: null,
 		rectangleStart: null,
 		rectangleCurrent: null,
@@ -237,12 +250,12 @@ export function resolveArrangeScenePick(input: {
 export function hasLayoutTransientInteraction(
 	state: Pick<
 		LayoutInteractionState,
-		'polygonPoints' | 'rectangleStart' | 'primitiveDraft' | 'objectDrag' | 'roomUnitDrag' | 'editing' | 'wallChainPoints'
+		'polygonPoints' | 'rectangleStart' | 'primitiveDraft' | 'objectDrag' | 'roomUnitDrag' | 'editing' | 'wallChainStart'
 	>
 ): boolean {
 	return Boolean(
 		state.polygonPoints.length > 0 ||
-		state.wallChainPoints.length > 0 ||
+		state.wallChainStart !== null ||
 		state.rectangleStart ||
 		state.primitiveDraft ||
 		state.objectDrag ||
@@ -373,56 +386,99 @@ export function removeLastPolygonPoint(state: LayoutInteractionState): void {
 	state.polygonPoints = state.polygonPoints.slice(0, -1);
 }
 
-/** P23.9 — extend the active wall-chain draft by one clicked vertex. */
-export function addWallChainPoint(state: LayoutInteractionState, point: LayoutVec2): void {
-	state.wallChainPoints = [...state.wallChainPoints, [...point]];
+/**
+ * P23.9 segment-first — first click establishes the transient start. No
+ * document change, no history entry, no Junction allocated yet.
+ */
+export function beginWallChain(state: LayoutInteractionState, point: LayoutVec2): void {
+	state.wallChainStart = [...point];
+	state.wallChainStartJunctionId = null;
+	state.wallChainRunStartJunctionId = null;
+	state.wallChainLastDirection = null;
+	state.wallChainCursor = null;
 }
 
-/** P23.9 — pending segment preview: the snapped cursor the chain is drawn to. */
+/** P23.9 — pending segment preview: the snapped cursor the run is drawn to. */
 export function updateWallChainCursor(state: LayoutInteractionState, point: LayoutVec2 | null): void {
 	state.wallChainCursor = point ? [...point] : null;
 }
 
+/** P23.9 — true while a continuous run has a start (first click done). */
+export function hasWallChainRun(state: Pick<LayoutInteractionState, 'wallChainStart'>): boolean {
+	return state.wallChainStart !== null;
+}
+
 /**
- * P23.9 — direction a typed-length leg follows: the previous leg's direction
- * when the chain already has one, otherwise +X. Exact entry is a precision
- * aid, not a constraint solver (P23.9 precision integration).
+ * P23.9 — advance continuation from the canonical commit result. The
+ * committed end becomes the next start; the run-start is set once on the
+ * first commit. Direction remembers the just-committed segment for
+ * exact-length defaulting. Never derive from `createdWallIds`.
+ */
+export function advanceWallChainContinuation(
+	state: LayoutInteractionState,
+	result: { endPoint: LayoutVec2; endJunctionId: string; startJunctionId: string }
+): void {
+	const previousStart = state.wallChainStart;
+	if (previousStart) {
+		const dx = result.endPoint[0] - previousStart[0];
+		const dz = result.endPoint[1] - previousStart[1];
+		if (Math.hypot(dx, dz) > 1e-9) state.wallChainLastDirection = [dx, dz];
+	}
+	state.wallChainStart = [...result.endPoint];
+	state.wallChainStartJunctionId = result.endJunctionId;
+	if (state.wallChainRunStartJunctionId === null) {
+		state.wallChainRunStartJunctionId = result.startJunctionId;
+	}
+	state.wallChainCursor = null;
+}
+
+/** P23.9 — cancel only the active continuation preview/run (Escape). Committed Walls remain. */
+export function cancelWallChainRun(state: LayoutInteractionState): void {
+	state.wallChainStart = null;
+	state.wallChainStartJunctionId = null;
+	state.wallChainRunStartJunctionId = null;
+	state.wallChainLastDirection = null;
+	state.wallChainCursor = null;
+}
+
+/**
+ * P23.9 — direction a typed-length segment follows: the live cursor
+ * direction when the pointer indicates one, otherwise the last committed
+ * segment's direction, otherwise +X. Exact entry is a precision aid, not a
+ * constraint solver.
  */
 export function wallChainPendingDirection(state: LayoutInteractionState): LayoutVec2 {
-	const points = state.wallChainPoints;
-	if (points.length >= 2) {
-		const from = points[points.length - 2];
-		const to = points[points.length - 1];
-		const dx = to[0] - from[0];
-		const dz = to[1] - from[1];
-		if (Math.hypot(dx, dz) > 0) return [dx, dz];
+	const start = state.wallChainStart;
+	const cursor = state.wallChainCursor;
+	if (start && cursor) {
+		const dx = cursor[0] - start[0];
+		const dz = cursor[1] - start[1];
+		if (Math.hypot(dx, dz) > 1e-9) return [dx, dz];
+	}
+	if (state.wallChainLastDirection) {
+		const [dx, dz] = state.wallChainLastDirection;
+		if (Math.hypot(dx, dz) > 1e-9) return [dx, dz];
 	}
 	return [1, 0];
 }
 
 /**
- * P23.9 — append the next chain vertex at an exact typed meter length,
- * bypassing gesture grid snapping (`where supported`). The committed Wall
- * length therefore equals the typed value exactly.
+ * P23.9 — resolve the current candidate endpoint at an exact typed meter
+ * length, bypassing gesture grid snapping. Returns the endpoint; the caller
+ * commits one segment transaction from the current start to it.
  */
-export function appendWallChainPointAtLength(
+export function resolveWallChainEndpointAtLength(
 	state: LayoutInteractionState,
 	length: number,
 	direction?: LayoutVec2
-): boolean {
-	const last = state.wallChainPoints[state.wallChainPoints.length - 1];
-	if (!last) return false;
-	if (!Number.isFinite(length) || length <= 0) return false;
+): LayoutVec2 | null {
+	const start = state.wallChainStart;
+	if (!start) return null;
+	if (!Number.isFinite(length) || length <= 0) return null;
 	const dir = direction ?? wallChainPendingDirection(state);
 	const norm = Math.hypot(dir[0], dir[1]);
-	if (!(norm > 0)) return false;
-	addWallChainPoint(state, [last[0] + (dir[0] / norm) * length, last[1] + (dir[1] / norm) * length]);
-	return true;
-}
-
-/** P23.9 — remove the latest draft leg (Backspace), never the first point. */
-export function removeLastWallChainPoint(state: LayoutInteractionState): void {
-	state.wallChainPoints = state.wallChainPoints.slice(0, -1);
+	if (!(norm > 0)) return null;
+	return [start[0] + (dir[0] / norm) * length, start[1] + (dir[1] / norm) * length];
 }
 
 /** P23.9 — role implied by the active chain tool ('boundary' for Wall). */
@@ -628,8 +684,7 @@ export function cancelRoomEdit(state: LayoutInteractionState): void {
 
 export function clearLayoutDraft(state: LayoutInteractionState): void {
 	state.polygonPoints = [];
-	state.wallChainPoints = [];
-	state.wallChainCursor = null;
+	cancelWallChainRun(state);
 	state.rectangleStart = null;
 	state.rectangleCurrent = null;
 }

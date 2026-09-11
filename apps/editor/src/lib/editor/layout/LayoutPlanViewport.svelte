@@ -6,19 +6,23 @@
 	import type { LayoutPreviewModel } from './layout-mesh-factory';
 	import {
 		addPolygonPoint,
-		addWallChainPoint,
+		advanceWallChainContinuation,
 		beginLayoutObjectDrag,
 		beginLayoutObjectRotateDrag,
 		beginLayoutRoomUnitDrag,
 		beginLayoutPrimitiveDraft,
 		beginRectangle,
 		beginRoomEdit,
+		beginWallChain,
 		cancelLayoutObjectDrag,
 		cancelLayoutRoomUnitDrag,
 		cancelLayoutPrimitiveDraft,
 		cancelRoomEdit,
+		cancelWallChainRun,
 		clearLayoutDraft,
 		clearLayoutSelection,
+		hasWallChainRun,
+		resolveWallChainEndpointAtLength,
 		selectLayoutInteriorAnchor,
 		selectLayoutObject,
 		selectLayoutOpening,
@@ -28,8 +32,6 @@
 		setLayoutDraftTool,
 		type LayoutDraftTool,
 		removeLastPolygonPoint,
-		removeLastWallChainPoint,
-		appendWallChainPointAtLength,
 		updateWallChainCursor,
 		resolveArrangeScenePick,
 		wallChainRoleForTool,
@@ -140,7 +142,7 @@
 		onSceneGestureCancel,
 		onSceneDelete,
 		onCommit,
-		onWallChainCommit,
+		onWallSegmentCommit,
 		onOpeningCreate,
 		onOpeningDelete,
 		onRoomDelete,
@@ -172,8 +174,8 @@
 		onSceneGestureCancel?: () => boolean;
 		onSceneDelete?: () => boolean;
 		onCommit: (points: LayoutVec2[]) => boolean;
-	/** P23.9 — commit a sketched wall/partition chain (one history entry). */
-	onWallChainCommit: (points: LayoutVec2[], close: boolean) => boolean;
+	/** P23.9 segment-first — commit one Wall/Partition segment (one history entry). Returns the canonical Junctions for continuation. */
+	onWallSegmentCommit: (start: LayoutVec2, end: LayoutVec2) => { success: boolean; startJunctionId?: string; endJunctionId?: string; closedRun?: boolean };
 		onOpeningCreate: (roomId: string, segmentId: string, kind: LayoutOpeningKind, clickOffset: number) => void;
 		onOpeningDelete: (roomId: string, openingId: string) => void;
 		onRoomDelete: (roomId: string) => boolean;
@@ -357,10 +359,11 @@
 		arrangeEligibleLayoutObjectIds.size === 0 &&
 		stagingEligibleIds.size === 0
 	);
-	// P3.3 — the canonical empty-plan state: no rooms, no layout objects, and
-	// no scene entities anywhere in the document.
+	// P3.3 — the canonical empty-plan state: no rooms, no physical walls, no
+	// layout objects, and no scene entities anywhere in the document.
 	const planEmpty = $derived(
 		preview.model.rooms.length === 0 &&
+		(preview.geometry.walls ?? []).length === 0 &&
 		preview.model.objects.length === 0 &&
 		(scene?.entities.length ?? 0) === 0
 	);
@@ -559,14 +562,12 @@
 		}
 	});
 
-	// P23.9 — any document change invalidates an in-progress sketch: its draft
-	// points carry coordinates and resolved Junction IDs computed against the
-	// document that has since changed, so the draft must never survive as a
-	// hidden active interaction ("pointer loss / workspace/domain change →
-	// cancel, never leave a hidden active draft"). Every document replacement
-	// and every layout mutation bumps `previewVersion`; sketching itself never
-	// does, so this cannot fire while the chain is being drawn. Tool changes
-	// already cancel the draft through `setLayoutDraftTool`.
+	// P23.9 segment-first — a sketch run never survives document/history
+	// replacement (import/reset/undo/redo). Every replacement bumps
+	// `previewVersion`. Our own segment commits also bump it, so the commit
+	// path sets `draftedVersion` synchronously after advancing continuation —
+	// only external bumps clear the run. Tool changes already cancel via
+	// `setLayoutDraftTool`. `pointerleave` clears only cursor/snap, never the run.
 	let draftedVersion = $state<number | null>(null);
 	$effect(() => {
 		const version = preview.previewVersion;
@@ -576,7 +577,7 @@
 		}
 		if (version === draftedVersion) return;
 		draftedVersion = version;
-		if (interaction.wallChainPoints.length > 0) clearLayoutDraft(interaction);
+		if (hasWallChainRun(interaction)) cancelWallChainRun(interaction);
 	});
 
 	$effect(() => {
@@ -596,8 +597,12 @@
 	});
 
 	function frameView() {
+		const wallPoints = (preview.geometry.walls ?? []).flatMap((wall) =>
+			wall.solidCenterlinePolylines.flat()
+		);
 		const points = [
 			...model.rooms.flatMap((room) => room.floorPolygon),
+			...wallPoints,
 			...model.objects.flatMap((object) => object.planFootprint),
 			...(sceneProjection?.footprints.flatMap((footprint) => footprint.points) ?? [])
 		];
@@ -1369,10 +1374,11 @@
 	}
 
 	function onPointerMove(event: PointerEvent) {
-		// P23.9 — pending chain segment preview: the draft follows the snapped
-		// cursor so the next leg reads before it is clicked.
+		// P23.9 segment-first — pending segment preview follows the snapped
+		// cursor once a run has started. `pointerleave` clears only the
+		// cursor/snap preview, never the run (click-click needs SVG exit).
 		if (wallChainRoleForTool(interaction.tool) !== null && interaction.planViewMode === 'layout') {
-			if (interaction.wallChainPoints.length > 0) {
+			if (hasWallChainRun(interaction)) {
 				const point = worldPoint(event);
 				updateWallChainCursor(interaction, point ? applyLayoutSnap(point) : null);
 			} else if (interaction.wallChainCursor) {
@@ -1777,32 +1783,46 @@
 	}
 
 	/**
-	 * P23.9 — one click on a Wall/Partition chain: the first click starts the
-	 * draft, later clicks extend it. A click within the close distance of the
-	 * chain's start finishes and commits the closed chain; the committed chain
-	 * resolves junction reuse and noding through the P23.8 planner.
+	 * P23.9 segment-first — one click either starts a run (first click =
+	 * transient start) or completes one Wall (validate + commit immediately,
+	 * then seed the next start from the canonical end Junction). Closure is
+	 * explicit Junction identity (`endJunctionId === runStartJunctionId`),
+	 * never coordinate proximity and never "a Room appeared".
 	 */
 	function commitWallChainClick(rawPoint: LayoutVec2) {
 		const snapped = applyLayoutSnap(rawPoint);
-		const first = interaction.wallChainPoints[0];
-		const closeDistance = 14 / interaction.planView.pixelsPerMeter;
-		// Clicking the chain's start closes and commits (needs ≥ 3 vertices so a
-		// closed candidate can form an enclosed face).
-		if (first && interaction.wallChainPoints.length >= 3 && distance(first, snapped) <= closeDistance) {
-			commitWallChainDraft(true);
+		if (!hasWallChainRun(interaction)) {
+			preview.statusMessage = null;
+			beginWallChain(interaction, snapped);
 			return;
 		}
-		// a fresh click sequence retires the previous chain outcome message.
-		if (interaction.wallChainPoints.length === 0) preview.statusMessage = null;
-		addWallChainPoint(interaction, snapped);
+		const start = interaction.wallChainStart!;
+		const result = onWallSegmentCommit([...start], [...snapped]);
+		if (!result.success) return; // rejection preserves the current start for correction
+		if (result.startJunctionId === undefined || result.endJunctionId === undefined) {
+			cancelWallChainRun(interaction);
+			return;
+		}
+		const endPoint = resolveJunctionPoint(result.endJunctionId) ?? [...snapped];
+		if (result.closedRun) {
+			cancelWallChainRun(interaction);
+		} else {
+			advanceWallChainContinuation(interaction, {
+				endPoint,
+				endJunctionId: result.endJunctionId,
+				startJunctionId: result.startJunctionId
+			});
+		}
+		draftedVersion = preview.previewVersion;
 	}
 
-	/** P23.9 — Finish: commit the open chain; Close: commit the closed chain. */
-	function commitWallChainDraft(close: boolean) {
-		const points = [...interaction.wallChainPoints];
-		if (points.length < (close ? 3 : 2)) return;
-		if (!onWallChainCommit(points, close)) return; // rejection keeps the draft for correction
-		clearLayoutDraft(interaction);
+	/** Resolve a canonical Junction point from the live wall-first document. */
+	function resolveJunctionPoint(junctionId: string): LayoutVec2 | null {
+		const layout = preview.project.layout;
+		if (!('formatVersion' in layout)) return null;
+		const wallFirst = layout as unknown as { junctions: { id: string; point: LayoutVec2 }[] };
+		const junction = wallFirst.junctions.find((candidate) => candidate.id === junctionId);
+		return junction ? ([...junction.point] as LayoutVec2) : null;
 	}
 
 	function finishPolygon() {
@@ -1811,9 +1831,9 @@
 	}
 
 	/**
-	 * P23.9 — exact draft length. The typed value bypasses gesture grid snapping
-	 * and extends the chain along the pending direction, so the committed Wall
-	 * length is the authored number exactly (P23.9 precision integration).
+	 * P23.9 segment-first — exact length resolves the current candidate
+	 * endpoint (bypasses gesture grid snapping), commits exactly one segment
+	 * transaction, and makes the canonical end Junction the next start.
 	 */
 	let chainLengthDraft = $state('');
 
@@ -1821,10 +1841,28 @@
 		event.preventDefault();
 		const length = Number(chainLengthDraft);
 		if (!chainLengthDraft.trim() || !Number.isFinite(length) || length <= 0) return;
-		if (appendWallChainPointAtLength(interaction, length)) {
-			chainLengthDraft = '';
-			preview.statusMessage = null;
+		if (!hasWallChainRun(interaction)) return;
+		const endpoint = resolveWallChainEndpointAtLength(interaction, length);
+		if (!endpoint) return;
+		const start = interaction.wallChainStart!;
+		const result = onWallSegmentCommit([...start], [...endpoint]);
+		if (!result.success) return;
+		if (result.startJunctionId === undefined || result.endJunctionId === undefined) {
+			cancelWallChainRun(interaction);
+			return;
 		}
+		chainLengthDraft = '';
+		const endPoint = resolveJunctionPoint(result.endJunctionId) ?? [...endpoint];
+		if (result.closedRun) {
+			cancelWallChainRun(interaction);
+		} else {
+			advanceWallChainContinuation(interaction, {
+				endPoint,
+				endJunctionId: result.endJunctionId,
+				startJunctionId: result.startJunctionId
+			});
+		}
+		draftedVersion = preview.previewVersion;
 	}
 
 	function onWheel(event: WheelEvent) {
@@ -1877,6 +1915,13 @@
 			}
 			if (interaction.tool === 'door' || interaction.tool === 'window') {
 				setLayoutDraftTool(interaction, 'select');
+				return;
+			}
+			// P23.9 segment-first — Escape cancels only the active continuation
+			// preview/run (committed Walls remain; no history entry; tool stays
+			// selected). It must never remove committed Walls.
+			if (hasWallChainRun(interaction)) {
+				cancelWallChainRun(interaction);
 				return;
 			}
 			onLayoutTransactionCancel();
@@ -1964,16 +2009,9 @@
 			event.preventDefault();
 			removeLastPolygonPoint(interaction);
 		}
-		if (
-			event.key === 'Backspace' &&
-			wallChainRoleForTool(interaction.tool) !== null &&
-			interaction.wallChainPoints.length > 1
-		) {
-			// P23.9 — Backspace removes the latest draft leg; the first point
-			// stays so the chain (and its close affordance) remains defined.
-			event.preventDefault();
-			removeLastWallChainPoint(interaction);
-		}
+		// P23.9 segment-first — Backspace must not act as undo for committed
+		// Walls (they use normal Undo/Redo). Kept only for genuinely transient
+		// compound tools (uncommitted Polygon vertices above).
 	}
 
 	function distance(a: LayoutVec2, b: LayoutVec2): number {
@@ -2063,7 +2101,7 @@
 		<p class="plan-status" role="status">{preview.statusMessage}</p>
 	{/if}
 	<div class="plan-actions">
-		{#if wallChainRoleForTool(interaction.tool) !== null && interaction.wallChainPoints.length >= 1}
+		{#if wallChainRoleForTool(interaction.tool) !== null && hasWallChainRun(interaction)}
 			<form class="chain-length" onsubmit={addChainLengthLeg}>
 				<label for="plan-chain-length">Length</label>
 				<input
@@ -2072,23 +2110,17 @@
 					min="0.01"
 					step="0.01"
 					placeholder="m"
-					aria-label="Exact chain leg length in meters"
+					aria-label="Exact current segment length in meters"
 					value={chainLengthDraft}
 					oninput={(event) => (chainLengthDraft = event.currentTarget.value)}
 				/>
-				<button type="submit">Add leg</button>
+				<button type="submit">Commit segment</button>
 			</form>
 		{/if}
 		{#if interaction.tool === 'polygon' && interaction.polygonPoints.length >= 3}
 			<button type="button" onclick={finishPolygon}>Finish polygon</button>
 		{/if}
-		{#if wallChainRoleForTool(interaction.tool) !== null && interaction.wallChainPoints.length >= 2}
-			<button type="button" onclick={() => commitWallChainDraft(false)}>Finish {wallChainRoleForTool(interaction.tool) === 'partition' ? 'partition' : 'wall'} chain</button>
-		{/if}
-		{#if wallChainRoleForTool(interaction.tool) !== null && interaction.wallChainPoints.length >= 3}
-			<button type="button" onclick={() => commitWallChainDraft(true)}>Close chain</button>
-		{/if}
-		{#if (draftPolygon && draftPolygon.length > 0) || (wallChainRoleForTool(interaction.tool) !== null && interaction.wallChainPoints.length > 0)}
+		{#if (draftPolygon && draftPolygon.length > 0) || (wallChainRoleForTool(interaction.tool) !== null && hasWallChainRun(interaction))}
 			<button type="button" class="secondary" onclick={() => clearLayoutDraft(interaction)}>Cancel draft</button>
 		{/if}
 	</div>

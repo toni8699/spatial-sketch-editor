@@ -29,13 +29,15 @@ import { hasBlockingLayoutIssues } from './layout-geometry-validation';
 import {
 	extractBoundaryCandidateFaces,
 	pointStrictlyInsidePolygon,
+	polygonIntersectionArea,
+	type DerivedCandidateFace,
 	type TopologyDiagnostic
 } from './layout-face-extraction';
 import {
 	reconcileRooms,
-	type ComponentLineage,
-	type RoomIdAllocator
+	type ComponentLineage
 } from './layout-room-reconciliation';
+import { createAuthoringRoomAllocator } from './layout-wall-topology-ops';
 import { classifyWallIntersection, type TopologySegment } from './layout-wall-topology';
 import { planWallCrossing, planWallSplitAtPoint, type NodingIdAllocator } from './layout-wall-noding';
 import type { LayoutDocumentIssue } from './layout-codec';
@@ -81,10 +83,23 @@ export type WallChainPlan =
 			document: LayoutDocumentWallFirst;
 			/** Wall IDs created by the chain (retained split fragments keep their IDs). */
 			createdWallIds: string[];
+			/**
+			 * Authored-segment lineage: the candidate segment's own Walls and
+			 * their noding fragments. Pre-existing host fragments split by the
+			 * candidate are NOT included (they are host-derived, reported via
+			 * `createdWallIds`/`splitWallIds`). Never derive continuation or
+			 * status from `createdWallIds` — crossing/noding can turn one
+			 * candidate into several fragments.
+			 */
+			authoredWallIds: string[];
 			/** Junction IDs created by the chain or by noding (reused ones excluded). */
 			createdJunctionIds: string[];
 			/** IDs of pre-existing walls subdivided by T/X noding. */
 			splitWallIds: string[];
+			/** Canonical resolved start junction of the committed candidate. */
+			startJunctionId: string;
+			/** Canonical resolved end junction of the committed candidate. */
+			endJunctionId: string;
 			/** `created` lineage records from the P23.8 reconciliation. */
 			lineage: ReadonlyArray<{
 				faceKey: string;
@@ -285,8 +300,15 @@ export function planWallChain(options: {
 	// un-noded relationship is resolved through the P23.8 noding plans until
 	// the graph is clean; distances are always recomputed against the current
 	// candidate so a wall already fragmented by an earlier fix stays correct.
+	//
+	// Provenance: `authoredWallIds` tracks the candidate segment lineage
+	// (initial legs plus fragments of authored walls). Host fragments split
+	// off pre-existing walls stay host-derived and never enter this set —
+	// they are still reported via `createdWallIds`/`splitWallIds` but they
+	// must not participate as authored walls in later noding passes.
 	const splitWallIds = new Set<string>();
 	const nodedJunctionIds = new Set<string>();
+	const authoredWallIds = new Set<string>(createdWallIds);
 	const MAX_NODING_PASSES = 64;
 	let passes = 0;
 	for (;;) {
@@ -294,10 +316,7 @@ export function planWallChain(options: {
 		if (passes > MAX_NODING_PASSES) {
 			return reject({ code: 'noding_rejected', message: 'Chain noding did not converge' });
 		}
-		// createdWallIds grows with every noding fragment, so later passes still
-		// recognise chain-derived fragments (the original leg IDs alone go stale
-		// once the chain itself has been split by an earlier crossing).
-		const fix = nextNodingFix(candidate, createdWallIds);
+		const fix = nextNodingFix(candidate, [...authoredWallIds]);
 		if (!fix) break;
 		if (fix.kind === 'reject') return reject(fix.rejection);
 		const plan =
@@ -311,8 +330,26 @@ export function planWallChain(options: {
 		}
 		const document = plan.document as LayoutDocumentWallFirst;
 		const before = new Set(candidate.walls.map((wall) => wall.id));
-		for (const created of plan.createdWallIds) {
-			if (!before.has(created)) createdWallIds.push(created);
+		// Attribute new fragments by parent provenance: an authored parent's
+		// child inherits authored lineage; a host parent's child stays host.
+		if (fix.kind === 'crossing') {
+			const ordered = [...fix.wallIds].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+			plan.createdWallIds.forEach((created, createdIndex) => {
+				if (before.has(created)) return;
+				createdWallIds.push(created);
+				const parentId = ordered[createdIndex];
+				if (parentId !== undefined && authoredWallIds.has(parentId)) {
+					authoredWallIds.add(created);
+				}
+			});
+		} else {
+			for (const created of plan.createdWallIds) {
+				if (before.has(created)) continue;
+				createdWallIds.push(created);
+				if (authoredWallIds.has(fix.interiorWallId)) {
+					authoredWallIds.add(created);
+				}
+			}
 		}
 		for (const split of plan.splitWallIds) splitWallIds.add(split);
 		nodedJunctionIds.add(plan.junctionId);
@@ -346,19 +383,18 @@ export function planWallChain(options: {
 				predecessorPolygons.set(room.id, polygon);
 				predecessorWitnesses.set(room.id, interiorWitness(polygon));
 			}
-			// Witness correspondence (same policy as the legacy migration): a
-			// predecessor room pre-derives a candidate face exactly when its
-			// centroid witness lies strictly inside the face polygon.
-			const components: ComponentLineage[] = extraction.faces.map((face) => ({
-				candidateFaceKeys: [face.key],
-				predecessorRoomIds: options.baseline.rooms
-					.filter((room) => {
-						const witness = predecessorWitnesses.get(room.id);
-						return witness !== undefined && pointStrictlyInsidePolygon(face.polygon, witness);
-					})
-					.map((room) => room.id)
-					.sort()
-			}));
+			// True P23.8 correspondence components: connected components of
+			// the bipartite predecessor-Room ↔ candidate-face graph. An edge
+			// exists when the predecessor witness lies strictly inside the
+			// face or the predecessor polygon overlaps the face with
+			// positive area. Faces with no predecessor form independent
+			// 0→1 birth components. Never one-component-per-face.
+			const components = buildCorrespondenceComponents(
+				extraction.faces,
+				options.baseline.rooms.map((room) => room.id),
+				predecessorWitnesses,
+				predecessorPolygons
+			);
 			const result = reconcileRooms({
 				baseline: options.baseline,
 				candidateDocument: candidate,
@@ -366,7 +402,7 @@ export function planWallChain(options: {
 				components,
 				predecessorWitnesses,
 				predecessorPolygons,
-				allocator: roomAllocatorAdapter(allocator)
+				allocator: createAuthoringRoomAllocator()
 			});
 			if ('rejection' in result) {
 				return reject({
@@ -406,12 +442,22 @@ export function planWallChain(options: {
 		});
 	}
 
+	const startJunctionId = close
+		? resolved[0]!.junctionId!
+		: resolved[0]!.junctionId!;
+	const endJunctionId = close
+		? resolved[0]!.junctionId!
+		: resolved[resolved.length - 1]!.junctionId!;
+
 	return {
 		kind: 'success',
 		document: validated.document,
 		createdWallIds: [...new Set(createdWallIds)],
+		authoredWallIds: [...authoredWallIds],
 		createdJunctionIds: [...new Set([...createdJunctionIds, ...nodedJunctionIds])],
 		splitWallIds: [...splitWallIds],
+		startJunctionId,
+		endJunctionId,
 		lineage,
 		retiredRoomIds
 	};
@@ -628,21 +674,93 @@ function nodingAllocatorAdapter(allocator: WallChainIdAllocator, document: Layou
 	};
 }
 
-/** Adapt the chain allocator to the reconciliation allocator contract. */
-function roomAllocatorAdapter(allocator: WallChainIdAllocator): RoomIdAllocator {
-	let faceCounter = 0;
-	return {
-		nextRoomId(baseDocument, faceKey) {
-			faceCounter += 1;
-			const taken = new Set(baseDocument.rooms.map((room) => room.id));
-			const seed = `room.chain.${faceCounter}`;
-			return allocator.nextJunctionId(taken, seed);
-		},
-		nextRoomName(existingNames) {
-			const taken = new Set(existingNames);
-			let index = 1;
-			while (taken.has(`Draft Room ${index}`)) index += 1;
-			return `Draft Room ${index}`;
+/**
+ * True P23.8 correspondence components: connected components of the
+ * bipartite predecessor-Room ↔ candidate-face graph. An edge exists when the
+ * predecessor witness lies strictly inside the face or the predecessor
+ * polygon overlaps the face with positive area. Faces with no predecessor
+ * form independent 0→1 birth components. Groups are sorted deterministically
+ * by their smallest face key.
+ */
+function buildCorrespondenceComponents(
+	faces: readonly DerivedCandidateFace[],
+	predecessorRoomIds: readonly string[],
+	predecessorWitnesses: ReadonlyMap<string, LayoutVec2>,
+	predecessorPolygons: ReadonlyMap<string, readonly LayoutVec2[]>
+): ComponentLineage[] {
+	const faceCount = faces.length;
+	const predecessorCount = predecessorRoomIds.length;
+	const parent = Array.from({ length: predecessorCount + faceCount }, (_, index) => index);
+	const find = (value: number): number => {
+		let root = value;
+		while (parent[root] !== root) root = parent[root]!;
+		while (parent[value] !== root) {
+			const next = parent[value]!;
+			parent[value] = root;
+			value = next;
 		}
+		return root;
 	};
+	const union = (a: number, b: number): void => {
+		const rootA = find(a);
+		const rootB = find(b);
+		if (rootA !== rootB) parent[rootB] = rootA;
+	};
+	faces.forEach((face, faceIndex) => {
+		predecessorRoomIds.forEach((roomId, predIndex) => {
+			const witness = predecessorWitnesses.get(roomId);
+			const polygon = predecessorPolygons.get(roomId);
+			const inside = witness !== undefined && pointStrictlyInsidePolygon(face.polygon, witness);
+			const overlap = polygon !== undefined && polygonIntersectionArea(polygon, face.polygon) > 1e-9;
+			if (inside || overlap) union(predIndex, predecessorCount + faceIndex);
+		});
+	});
+	const groups = new Map<number, { faces: string[]; predecessors: string[] }>();
+	faces.forEach((face, faceIndex) => {
+		const root = find(predecessorCount + faceIndex);
+		let group = groups.get(root);
+		if (!group) {
+			group = { faces: [], predecessors: [] };
+			groups.set(root, group);
+		}
+		group.faces.push(face.key);
+	});
+	predecessorRoomIds.forEach((roomId, predIndex) => {
+		const root = find(predIndex);
+		const group = groups.get(root);
+		if (!group) return;
+		group.predecessors.push(roomId);
+	});
+	return [...groups.values()]
+		.map((group) => ({
+			candidateFaceKeys: [...group.faces].sort(),
+			predecessorRoomIds: [...group.predecessors].sort()
+		}))
+		.sort((a, b) => (a.candidateFaceKeys[0]! < b.candidateFaceKeys[0]! ? -1 : 1));
+}
+
+/**
+ * Segment-first canonical engine: one completed straight segment = one Wall
+ * authoring command. Thin wrapper over `planWallChain` with exactly two
+ * points and no implicit close. Callers use the returned `startJunctionId` /
+ * `endJunctionId` for continuation — never `createdWallIds`.
+ */
+export function planWallSegment(options: {
+	baseline: LayoutDocumentWallFirst;
+	start: LayoutVec2;
+	end: LayoutVec2;
+	role: LayoutWallRole;
+	thickness?: number;
+	height?: number;
+	allocator?: WallChainIdAllocator;
+}): WallChainPlan {
+	return planWallChain({
+		baseline: options.baseline,
+		points: [options.start, options.end],
+		close: false,
+		role: options.role,
+		...(options.thickness !== undefined ? { thickness: options.thickness } : {}),
+		...(options.height !== undefined ? { height: options.height } : {}),
+		...(options.allocator !== undefined ? { allocator: options.allocator } : {})
+	});
 }

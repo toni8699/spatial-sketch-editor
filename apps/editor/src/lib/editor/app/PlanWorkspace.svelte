@@ -6,6 +6,7 @@
 		commitLayoutDraftRoom,
 		commitLayoutOpening,
 		commitWallChain,
+		commitWallSegment,
 		deleteLayoutOpening,
 		deleteLayoutRoom
 	} from '$lib/editor/layout/layout-preview-state.svelte';
@@ -77,7 +78,7 @@
 		return result.success;
 	}
 
-	/** P23.9 — commit a sketched wall/partition chain (one history entry). */
+	/** P23.9 — bounded compound convenience tools (Rectangle/Polygon) commit one atomic chain. */
 	function commitDraftWallChain(points: [number, number][], close: boolean): boolean {
 		// P23.9 — boundary (Rect/Polygon close a boundary; Wall tool) vs
 		// partition is fixed at commit time, not read from the live tool, so a
@@ -97,17 +98,61 @@
 		const result = outcome.result;
 		if (result.success) {
 			const roomLabel = result.operation === 'wall-chain-commit' && result.roomIds.length > 0 ? ` + ${result.roomIds.length} room${result.roomIds.length === 1 ? '' : 's'}` : '';
-			setWallChainStatus(`Committed ${result.operation === 'wall-chain-commit' ? result.wallIds.length : 0}-wall chain${roomLabel}`);
-			// P23.9 — post-commit selection (recommended minimum): a chain that
-			// births a Room selects that Room through the existing authority; a
-			// free chain keeps the prior selection (no multi-select invented).
+			setWallChainStatus(`Committed ${result.operation === 'wall-chain-commit' ? result.wallIds.length : 0} walls${roomLabel}`);
+			// Bounded tools are atomic (not continuous runs): a birth may
+			// select through the existing authority.
 			if (result.operation === 'wall-chain-commit' && result.roomIds.length > 0) {
 				selectLayoutRoom(layoutInteraction, result.roomIds[0]);
 			}
 		} else {
-			setWallChainStatus(`Wall chain rejected: ${result.message}`);
+			setWallChainStatus(`Wall rejected: ${result.message}`);
 		}
 		return result.success;
+	}
+
+	/**
+	 * P23.9 segment-first — one completed straight segment = one Wall
+	 * authoring command and one Layout transaction. Preserves selection
+	 * throughout the continuous run (never selects newborn Rooms mid-run);
+	 * continuous drawing never depends on selection. Returns the canonical
+	 * Junctions for continuation; closure is Junction identity.
+	 */
+	function commitDraftWallSegment(
+		start: [number, number],
+		end: [number, number]
+	): { success: boolean; startJunctionId?: string; endJunctionId?: string; closedRun?: boolean } {
+		const role = wallChainRoleForTool(layoutInteraction.tool) ?? 'boundary';
+		const runStartBefore = layoutInteraction.wallChainRunStartJunctionId;
+		const outcome = runLayoutMutationGuarded(
+			() => commitWallSegment(layoutPreview, start, end, role),
+			(result) => result.success
+		);
+		if (outcome.kind === 'skipped') {
+			setWallChainStatus('Finish the current layout interaction first');
+			return { success: false };
+		}
+		const result = outcome.result;
+		if (!result.success) {
+			setWallChainStatus(`Wall rejected: ${result.message}`);
+			return { success: false };
+		}
+		if (result.operation !== 'wall-segment-commit') {
+			setWallChainStatus(`Wall rejected: unexpected commit result`);
+			return { success: false };
+		}
+		const roomLabel = result.roomIds.length > 0 ? ` + ${result.roomIds.length} room${result.roomIds.length === 1 ? '' : 's'}` : '';
+		const kindLabel = role === 'partition' ? 'partition' : 'wall';
+		setWallChainStatus(`Committed ${kindLabel}${roomLabel}`);
+		// Closure: boundary runs end when the final endpoint resolves to the
+		// canonical run-start Junction. Partitions end via Escape only.
+		const effectiveRunStart = runStartBefore ?? result.startJunctionId;
+		const closedRun = role === 'boundary' && result.endJunctionId === effectiveRunStart;
+		return {
+			success: true,
+			startJunctionId: result.startJunctionId,
+			endJunctionId: result.endJunctionId,
+			closedRun
+		};
 	}
 
 	/**
@@ -286,7 +331,7 @@
 		onSceneGestureCancel={cancelSceneGesture}
 		onSceneDelete={deleteSceneSelection}
 		onCommit={commitDraftRoom}
-		onWallChainCommit={commitDraftWallChain}
+		onWallSegmentCommit={commitDraftWallSegment}
 		onOpeningCreate={createOpening}
 		onOpeningDelete={deleteOpening}
 		onRoomDelete={deleteRoom}

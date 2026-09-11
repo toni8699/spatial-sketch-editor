@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+	compileWallFirstLayoutGeometry,
 	createEmptyWallFirstLayoutDocument,
 	planWallChain,
+	planWallSegment,
 	type LayoutDocumentWallFirst
 } from '@portfolio/layout-core';
 
@@ -423,5 +425,204 @@ describe('P23.9 convenience-tool equivalence', () => {
 		const [ax, az] = plan.document.junctions.find((j) => j.id === wall.startJunctionId)!.point;
 		const [bx, bz] = plan.document.junctions.find((j) => j.id === wall.endJunctionId)!.point;
 		expect(Math.hypot(bx - ax, bz - az)).toBeCloseTo(length, 12);
+	});
+});
+
+describe('P23.9 segment-first boundary (ratified 2026-09-11)', () => {
+	function junctionPoint(document: LayoutDocumentWallFirst, junctionId: string): [number, number] {
+		const junction = document.junctions.find((candidate) => candidate.id === junctionId);
+		if (!junction) throw new Error(`missing junction ${junctionId}`);
+		return [...junction.point] as [number, number];
+	}
+
+	it('one segment = one Wall with canonical start/end Junctions for continuation', () => {
+		const baseline = baseDocument();
+		const first = planWallSegment({ baseline, start: p(0, 0), end: p(4, 0), role: 'boundary' });
+		expect(first.kind).toBe('success');
+		if (first.kind !== 'success') return;
+		expect(first.authoredWallIds).toHaveLength(1);
+		expect(first.document.walls).toHaveLength(1);
+		expect(first.document.rooms).toHaveLength(0);
+		const startPoint = junctionPoint(first.document, first.startJunctionId);
+		const endPoint = junctionPoint(first.document, first.endJunctionId);
+		expect(startPoint).toEqual([0, 0]);
+		expect(endPoint).toEqual([4, 0]);
+
+		// Continuous drawing: the canonical end becomes the next start (exact
+		// coordinate reuse, no tool re-entry).
+		const second = planWallSegment({
+			baseline: first.document,
+			start: endPoint,
+			end: p(4, 3),
+			role: 'boundary'
+		});
+		expect(second.kind).toBe('success');
+		if (second.kind !== 'success') return;
+		expect(second.document.walls).toHaveLength(2);
+		expect(second.document.rooms).toHaveLength(0);
+		// The shared junction is reused, not duplicated.
+		expect(second.startJunctionId).toBe(first.endJunctionId);
+	});
+
+	it('room closure: AB+BC+CD then DA onto the run-start Junction births one Room atomically', () => {
+		const empty = baseDocument();
+		const ab = planWallSegment({ baseline: empty, start: p(0, 0), end: p(4, 0), role: 'boundary' });
+		if (ab.kind !== 'success') throw new Error('ab failed');
+		const bc = planWallSegment({
+			baseline: ab.document,
+			start: junctionPoint(ab.document, ab.endJunctionId),
+			end: p(4, 3),
+			role: 'boundary'
+		});
+		if (bc.kind !== 'success') throw new Error('bc failed');
+		const cd = planWallSegment({
+			baseline: bc.document,
+			start: junctionPoint(bc.document, bc.endJunctionId),
+			end: p(0, 3),
+			role: 'boundary'
+		});
+		if (cd.kind !== 'success') throw new Error('cd failed');
+		expect(cd.document.rooms).toHaveLength(0);
+		const runStart = ab.startJunctionId;
+		const da = planWallSegment({
+			baseline: cd.document,
+			start: junctionPoint(cd.document, cd.endJunctionId),
+			end: junctionPoint(cd.document, runStart),
+			role: 'boundary'
+		});
+		expect(da.kind).toBe('success');
+		if (da.kind !== 'success') return;
+		expect(da.document.rooms).toHaveLength(1);
+		expect(da.document.walls).toHaveLength(4);
+		// Closure is Junction identity: the final end is the run start.
+		expect(da.endJunctionId).toBe(runStart);
+	});
+
+	it('closure requires explicit Junction reuse; near-coordinates do not close', () => {
+		const empty = baseDocument();
+		const ab = planWallSegment({ baseline: empty, start: p(0, 0), end: p(4, 0), role: 'boundary' });
+		if (ab.kind !== 'success') throw new Error('ab failed');
+		const nearStart = junctionPoint(ab.document, ab.startJunctionId);
+		// Near-miss without exact reuse allocates a fresh Junction.
+		const near = planWallSegment({
+			baseline: ab.document,
+			start: junctionPoint(ab.document, ab.endJunctionId),
+			end: [nearStart[0] + 1e-7, nearStart[1] - 1e-7],
+			role: 'boundary'
+		});
+		expect(near.kind).toBe('success');
+		if (near.kind !== 'success') return;
+		expect(near.endJunctionId).not.toBe(ab.startJunctionId);
+		expect(near.document.rooms).toHaveLength(0);
+	});
+
+	it('rejection mutates nothing and preserves prior Walls', () => {
+		const empty = baseDocument();
+		const enclosure = planWallChain({ baseline: empty, points: [p(0, 0), p(4, 0), p(4, 3), p(0, 3)], close: true, role: 'boundary' });
+		if (enclosure.kind !== 'success') throw new Error('enclosure failed');
+		const snapshot = structuredClone(enclosure.document);
+		const rejected = planWallSegment({
+			baseline: enclosure.document,
+			start: p(0, 0),
+			end: p(4, 0),
+			role: 'boundary'
+		});
+		expect(rejected.kind).toBe('rejected');
+		if (rejected.kind !== 'rejected') return;
+		expect(rejected.rejection.code).toBe('collinear_overlap');
+		expect(enclosure.document).toEqual(snapshot);
+	});
+
+	it('a divider is a genuine 1→2 with predecessor metadata on survivor and child', () => {
+		const empty = baseDocument();
+		const enclosure = planWallChain({ baseline: empty, points: [p(0, 0), p(4, 0), p(4, 3), p(0, 3)], close: true, role: 'boundary' });
+		if (enclosure.kind !== 'success') throw new Error('enclosure failed');
+		const withMeta: LayoutDocumentWallFirst = {
+			...enclosure.document,
+			rooms: enclosure.document.rooms.map((room) => ({
+				...room,
+				name: 'Custom',
+				floorThickness: 0.2,
+				ceilingThickness: 0.3
+			}))
+		};
+		const survivorId = withMeta.rooms[0]!.id;
+		const divider = planWallSegment({ baseline: withMeta, start: p(2, 0), end: p(2, 3), role: 'boundary' });
+		expect(divider.kind).toBe('success');
+		if (divider.kind !== 'success') return;
+		expect(divider.document.rooms).toHaveLength(2);
+		const ids = divider.document.rooms.map((room) => room.id);
+		expect(ids.filter((id) => id === survivorId)).toHaveLength(1);
+		// Both children inherit non-default predecessor metadata (not birth defaults).
+		for (const room of divider.document.rooms) {
+			expect(room.floorThickness).toBe(0.2);
+			expect(room.ceilingThickness).toBe(0.3);
+		}
+		expect(divider.document.rooms.find((room) => room.id === survivorId)!.name).toBe('Custom');
+		// Authored provenance excludes host fragments.
+		expect(divider.authoredWallIds).toHaveLength(1);
+		expect(divider.splitWallIds).toHaveLength(2);
+		expect(divider.createdWallIds).toContain(divider.authoredWallIds[0]);
+	});
+
+	it('partition segments never split Rooms', () => {
+		const empty = baseDocument();
+		const enclosure = planWallChain({ baseline: empty, points: [p(0, 0), p(4, 0), p(4, 3), p(0, 3)], close: true, role: 'boundary' });
+		if (enclosure.kind !== 'success') throw new Error('enclosure failed');
+		const first = planWallSegment({
+			baseline: enclosure.document,
+			start: p(1, 1),
+			end: p(2, 1),
+			role: 'partition'
+		});
+		expect(first.kind).toBe('success');
+		if (first.kind !== 'success') return;
+		expect(first.document.rooms).toHaveLength(1);
+		const second = planWallSegment({
+			baseline: first.document,
+			start: junctionPoint(first.document, first.endJunctionId),
+			end: p(3, 1),
+			role: 'partition'
+		});
+		expect(second.kind).toBe('success');
+		if (second.kind !== 'success') return;
+		expect(second.document.rooms).toHaveLength(1);
+		expect(second.document.rooms[0]!.id).toBe(enclosure.document.rooms[0]!.id);
+	});
+
+	it('roomless Wall exists in canonical compiled/query output (acceptance-blocking)', () => {
+		const empty = baseDocument();
+		const plan = planWallSegment({ baseline: empty, start: p(0, 0), end: p(4, 0), role: 'boundary' });
+		expect(plan.kind).toBe('success');
+		if (plan.kind !== 'success') return;
+		expect(plan.document.rooms).toHaveLength(0);
+		const compiled = compileWallFirstLayoutGeometry(plan.document);
+		expect(compiled.issues.filter((issue) => issue.severity !== 'warning')).toHaveLength(0);
+		expect(compiled.geometry.walls).toHaveLength(1);
+		expect(compiled.geometry.walls[0]!.wallId).toBe(plan.authoredWallIds[0]);
+		// No fake Room ownership: roomless query records carry no roomId.
+		const spans = compiled.geometry.queries.spans.filter((span) => span.segmentId === plan.authoredWallIds[0]);
+		expect(spans.length).toBeGreaterThan(0);
+		for (const span of spans) expect(span.roomId).toBeUndefined();
+		const points = compiled.geometry.queries.points.filter((point) => point.segmentId === plan.authoredWallIds[0]);
+		expect(points.length).toBeGreaterThan(0);
+		for (const point of points) expect(point.roomId).toBeUndefined();
+	});
+
+	it('typed exact length commits exactly one segment with the authored length', () => {
+		const baseline = baseDocument();
+		const start = p(1, 1);
+		const length = 2.75;
+		const end = p(1 + length, 1);
+		const plan = planWallSegment({ baseline, start, end, role: 'boundary' });
+		expect(plan.kind).toBe('success');
+		if (plan.kind !== 'success') return;
+		expect(plan.authoredWallIds).toHaveLength(1);
+		const wall = plan.document.walls.find((candidate) => candidate.id === plan.authoredWallIds[0])!;
+		const [ax, az] = plan.document.junctions.find((j) => j.id === wall.startJunctionId)!.point;
+		const [bx, bz] = plan.document.junctions.find((j) => j.id === wall.endJunctionId)!.point;
+		expect(Math.hypot(bx - ax, bz - az)).toBeCloseTo(length, 12);
+		// The canonical end becomes the next continuation start.
+		expect(junctionPoint(plan.document, plan.endJunctionId)).toEqual([1 + length, 1]);
 	});
 });

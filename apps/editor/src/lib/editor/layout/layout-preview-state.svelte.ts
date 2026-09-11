@@ -35,7 +35,7 @@ import {
 	type PrecisionPlan
 } from '$lib/layout/layout-wall-first-precision';
 import type { NodingIdAllocator } from '$lib/layout/layout-wall-noding';
-import { planWallChain, type LayoutWallRole as ChainWallRole } from '$lib/layout/layout-wall-chain';
+import { planWallChain, planWallSegment, type LayoutWallRole as ChainWallRole } from '$lib/layout/layout-wall-chain';
 import { deleteInteriorAnchorOnSegment, insertInteriorAnchorOnSegment, pointInRoom, replaceRoomPoints, updateInteriorAnchorOnSegment } from './layout-editing';
 import {
 	appendRoomOpening,
@@ -136,6 +136,20 @@ export type WallFirstPrecisionMutationResult =
 			wallIds: string[];
 			/** Room IDs born from the chain's reconciliation (boundary chains). */
 			roomIds: string[];
+	  }
+	| {
+			success: true;
+			operation: 'wall-segment-commit';
+			/** Authored-segment Wall IDs (candidate lineage/fragments, not host fragments). */
+			wallIds: string[];
+			/** All new Wall records the transaction caused (authored + host fragments). */
+			allWallIds: string[];
+			/** Room IDs born from the segment's reconciliation (boundary segments). */
+			roomIds: string[];
+			/** Canonical resolved start Junction of the committed candidate. */
+			startJunctionId: string;
+			/** Canonical resolved end Junction (next continuation start). */
+			endJunctionId: string;
 	  }
 	| { success: false; message: string };
 
@@ -655,6 +669,7 @@ function applyWallFirstPrecisionPlan(
  * P23.9 — commit a sketched wall/partition chain as one Layout history entry.
  * The planner (P23.8 engine) resolves junction reuse, T/X noding and Room
  * reconciliation; a rejected chain leaves the document and history untouched.
+ * Kept for the bounded compound convenience tools (Rectangle/Polygon).
  */
 export function commitWallChain(
 	state: LayoutPreviewState,
@@ -685,6 +700,53 @@ export function commitWallChain(
 		return { success: true, operation: 'wall-chain-commit', wallIds: plan.createdWallIds, roomIds: plan.lineage.map((record) => record.roomId) };
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Could not commit wall chain';
+		state.lastMutationMessage = message;
+		return { success: false, message };
+	}
+}
+
+/**
+ * P23.9 segment-first — commit one straight Wall segment as one Layout
+ * history entry. Returns the canonical resolved Junctions for continuation
+ * (never derived from `createdWallIds`). Rejection mutates nothing.
+ */
+export function commitWallSegment(
+	state: LayoutPreviewState,
+	start: LayoutVec2,
+	end: LayoutVec2,
+	role: ChainWallRole
+): WallFirstPrecisionMutationResult {
+	const layout = wallFirstLayoutOrError(state);
+	if (!layout) return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
+	const plan = planWallSegment({ baseline: layout, start, end, role });
+	if (plan.kind === 'rejected') {
+		state.lastMutationMessage = plan.rejection.message;
+		return { success: false, message: plan.rejection.message };
+	}
+	try {
+		const bundle = derivePreviewBundle(
+			state.project.id,
+			state.project.name,
+			plan.document,
+			state.project.scene
+		);
+		state.source = 'draft';
+		commitPreviewBundle(state, bundle);
+		state.previewVersion += 1;
+		state.lastMutationMessage = null;
+		state.statusMessage = null;
+		state.importError = null;
+		return {
+			success: true,
+			operation: 'wall-segment-commit',
+			wallIds: [...plan.authoredWallIds],
+			allWallIds: [...plan.createdWallIds],
+			roomIds: plan.lineage.map((record) => record.roomId),
+			startJunctionId: plan.startJunctionId,
+			endJunctionId: plan.endJunctionId
+		};
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Could not commit wall segment';
 		state.lastMutationMessage = message;
 		return { success: false, message };
 	}

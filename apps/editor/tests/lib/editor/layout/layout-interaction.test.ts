@@ -1,21 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import type { LayoutDocument } from '$lib/layout/layout-types';	import {
 	addPolygonPoint,
-	addWallChainPoint,
-	appendWallChainPointAtLength,
+	advanceWallChainContinuation,
 		beginLayoutObjectDrag,
 		beginLayoutObjectRotateDrag,
 		beginLayoutRoomUnitDrag,
+		beginWallChain,
 		cancelLayoutObjectDrag,
 	cancelLayoutRoomUnitDrag,
 	cancelLayoutPrimitiveDraft,
+	cancelWallChainRun,
 	beginRectangle,
 	clearLayoutDraft,
 	createLayoutInteractionState,
+	hasWallChainRun,
 	LAYOUT_WALL_BEND_DRAG_THRESHOLD_PX,		reconcileLayoutSelection,
 		removeLastPolygonPoint,
-		removeLastWallChainPoint,
+		resolveWallChainEndpointAtLength,
 		type LayoutSelection,
+		wallChainPendingDirection,
 		wallChainRoleForTool,
 	selectLayoutInteriorAnchor,
 	selectLayoutObject,
@@ -41,31 +44,45 @@ import type { LayoutDocument } from '$lib/layout/layout-types';	import {
 	updateRectangle,
 	updateWallChainCursor
 } from '$lib/editor/layout/layout-interaction';	describe('layout interaction', () => {
-	it('P23.9 wall-chain draft: extends, backspaces, clears, and roles from tools', () => {
+	it('P23.9 segment-first run: begin, advance from canonical result, cancel, and roles from tools', () => {
 		const state = createLayoutInteractionState();
 		expect(wallChainRoleForTool('wall-chain')).toBe('boundary');
 		expect(wallChainRoleForTool('partition-chain')).toBe('partition');
 		expect(wallChainRoleForTool('select')).toBeNull();
 
 		setLayoutDraftTool(state, 'wall-chain');
-		expect(state.wallChainPoints).toHaveLength(0);
-		addWallChainPoint(state, [0, 0]);
-		addWallChainPoint(state, [4, 0]);
-		addWallChainPoint(state, [4, 3]);
-		expect(state.wallChainPoints).toHaveLength(3);
+		expect(hasWallChainRun(state)).toBe(false);
+		beginWallChain(state, [0, 0]);
+		expect(hasWallChainRun(state)).toBe(true);
+		expect(state.wallChainStart).toEqual([0, 0]);
+		expect(state.wallChainStartJunctionId).toBeNull();
+		expect(state.wallChainRunStartJunctionId).toBeNull();
 
-		// Backspace removes only the latest leg; the first point stays.
-		removeLastWallChainPoint(state);
-		expect(state.wallChainPoints).toHaveLength(2);
-		expect(state.wallChainPoints[0]).toEqual([0, 0]);
+		// First commit seeds run-start from the canonical start and moves the
+		// continuation to the canonical end (never from createdWallIds).
+		advanceWallChainContinuation(state, { endPoint: [4, 0], endJunctionId: 'j-b', startJunctionId: 'j-a' });
+		expect(state.wallChainStart).toEqual([4, 0]);
+		expect(state.wallChainStartJunctionId).toBe('j-b');
+		expect(state.wallChainRunStartJunctionId).toBe('j-a');
 
-		// Switching tools clears the chain draft; switching to a chain tool
-		// starts from an empty draft.
+		// Second commit keeps the original run-start, moves continuation.
+		advanceWallChainContinuation(state, { endPoint: [4, 3], endJunctionId: 'j-c', startJunctionId: 'j-b' });
+		expect(state.wallChainStart).toEqual([4, 3]);
+		expect(state.wallChainRunStartJunctionId).toBe('j-a');
+
+		// Escape cancels only the run (committed Walls remain, tool stays).
+		cancelWallChainRun(state);
+		expect(hasWallChainRun(state)).toBe(false);
+		expect(state.tool).toBe('wall-chain');
+
+		// Switching tools clears the run; switching to a chain tool starts empty.
+		beginWallChain(state, [1, 1]);
+		expect(hasWallChainRun(state)).toBe(true);
 		clearLayoutDraft(state);
-		expect(state.wallChainPoints).toHaveLength(0);
+		expect(hasWallChainRun(state)).toBe(false);
 		setLayoutDraftTool(state, 'partition-chain');
 		expect(state.tool).toBe('partition-chain');
-		expect(state.wallChainPoints).toHaveLength(0);
+		expect(hasWallChainRun(state)).toBe(false);
 	});
 
 	it('toggles plan viewport options through the interaction module', () => {
@@ -442,65 +459,70 @@ describe('reconcileLayoutSelection', () => {
 	});
 });
 
-describe('P23.9 exact chain length entry', () => {
-	it('appends the next vertex at the exact typed length along the pending direction', () => {
+describe('P23.9 exact segment length entry', () => {
+	it('resolves the current endpoint at the exact typed length along the cursor direction', () => {
 		const state = createLayoutInteractionState();
 		setLayoutDraftTool(state, 'wall-chain');
-		addWallChainPoint(state, [1, 2]);
-		addWallChainPoint(state, [4, 2]); // pending direction +X
-		expect(appendWallChainPointAtLength(state, 2.5)).toBe(true);
-		expect(state.wallChainPoints[2]).toEqual([6.5, 2]);
+		beginWallChain(state, [1, 2]);
+		updateWallChainCursor(state, [4, 2]); // pending direction +X via cursor
+		expect(resolveWallChainEndpointAtLength(state, 2.5)).toEqual([3.5, 2]);
 	});
 
-	it('continues along the previous leg direction (45°)', () => {
+	it('falls back to the last committed direction, then +X', () => {
 		const state = createLayoutInteractionState();
 		setLayoutDraftTool(state, 'partition-chain');
-		addWallChainPoint(state, [0, 0]);
-		addWallChainPoint(state, [1, 1]); // diagonal leg
-		expect(appendWallChainPointAtLength(state, Math.SQRT2)).toBe(true);
-		const [x, z] = state.wallChainPoints[2]!;
-		expect(x).toBeCloseTo(2, 12);
-		expect(z).toBeCloseTo(2, 12);
+		beginWallChain(state, [0, 0]);
+		advanceWallChainContinuation(state, { endPoint: [1, 1], endJunctionId: 'j-b', startJunctionId: 'j-a' });
+		// No cursor: last direction is diagonal (1,1).
+		const endpoint = resolveWallChainEndpointAtLength(state, Math.SQRT2)!;
+		expect(endpoint[0]).toBeCloseTo(2, 12);
+		expect(endpoint[1]).toBeCloseTo(2, 12);
 	});
 
-	it('first leg defaults to +X from the first point', () => {
+	it('first segment with no cursor defaults to +X from the start', () => {
 		const state = createLayoutInteractionState();
 		setLayoutDraftTool(state, 'wall-chain');
-		addWallChainPoint(state, [5, 5]);
-		expect(appendWallChainPointAtLength(state, 3)).toBe(true);
-		expect(state.wallChainPoints[1]).toEqual([8, 5]);
+		beginWallChain(state, [5, 5]);
+		expect(resolveWallChainEndpointAtLength(state, 3)).toEqual([8, 5]);
 	});
 
-	it('rejects non-positive/non-finite lengths and an empty chain', () => {
+	it('rejects non-positive/non-finite lengths and an empty run', () => {
 		const state = createLayoutInteractionState();
-		expect(appendWallChainPointAtLength(state, 2)).toBe(false);
-		addWallChainPoint(state, [0, 0]);
-		expect(appendWallChainPointAtLength(state, 0)).toBe(false);
-		expect(appendWallChainPointAtLength(state, -1)).toBe(false);
-		expect(appendWallChainPointAtLength(state, Number.NaN)).toBe(false);
-		expect(state.wallChainPoints).toHaveLength(1);
+		expect(resolveWallChainEndpointAtLength(state, 2)).toBeNull();
+		beginWallChain(state, [0, 0]);
+		expect(resolveWallChainEndpointAtLength(state, 0)).toBeNull();
+		expect(resolveWallChainEndpointAtLength(state, -1)).toBeNull();
+		expect(resolveWallChainEndpointAtLength(state, Number.NaN)).toBeNull();
+		expect(hasWallChainRun(state)).toBe(true);
 	});
 
 	it('explicit direction overrides the pending direction', () => {
 		const state = createLayoutInteractionState();
 		setLayoutDraftTool(state, 'wall-chain');
-		addWallChainPoint(state, [0, 0]);
-		addWallChainPoint(state, [1, 0]);
-		expect(appendWallChainPointAtLength(state, 2, [0, 1])).toBe(true);
-		expect(state.wallChainPoints[2]).toEqual([1, 2]);
+		beginWallChain(state, [0, 0]);
+		updateWallChainCursor(state, [1, 0]);
+		expect(resolveWallChainEndpointAtLength(state, 2, [0, 1])).toEqual([0, 2]);
+	});
+
+	it('pending direction prefers cursor, then last direction, then +X', () => {
+		const state = createLayoutInteractionState();
+		beginWallChain(state, [0, 0]);
+		expect(wallChainPendingDirection(state)).toEqual([1, 0]);
+		updateWallChainCursor(state, [0, 5]);
+		expect(wallChainPendingDirection(state)).toEqual([0, 5]);
 	});
 });
 
-describe('P23.9 chain cursor (rubber band)', () => {
-	it('tracks and clears the snapped cursor; clearLayoutDraft resets it', () => {
+describe('P23.9 run cursor (rubber band)', () => {
+	it('tracks and clears the snapped cursor; clearLayoutDraft resets the run', () => {
 		const state = createLayoutInteractionState();
 		expect(state.wallChainCursor).toBeNull();
 		setLayoutDraftTool(state, 'wall-chain');
-		addWallChainPoint(state, [0, 0]);
+		beginWallChain(state, [0, 0]);
 		updateWallChainCursor(state, [2, 3]);
 		expect(state.wallChainCursor).toEqual([2, 3]);
 		clearLayoutDraft(state);
 		expect(state.wallChainCursor).toBeNull();
-		expect(state.wallChainPoints).toHaveLength(0);
+		expect(hasWallChainRun(state)).toBe(false);
 	});
 });
