@@ -10,6 +10,7 @@
 	import CameraPlanToolbar from '../camera-plan/CameraPlanToolbar.svelte';
 	import EditorViewportToolbar from '../EditorViewportToolbar.svelte';
 	import EditorViewportGridControls from '../EditorViewportGridControls.svelte';
+	import { Maximize, Minimize, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-svelte';
 
 	let { store, viewState, layoutPreview, layoutInteraction, cameraPlan, gizmoCapabilities, transformDisabled, onDeleteArrange } : {
 		store: EditorStore; viewState: EditorViewState; layoutPreview: LayoutPreviewState;
@@ -55,25 +56,41 @@
 		{/if}
 	</div>
 	<!-- P21.6 Slice C — Zone C: panel visibility (shell chrome, all views).
-	     Collapse is CSS-grid only; the canvas is never unmounted. Requests
-	     during an active gesture defer to gesture end (store-owned). -->
+	     P23.3 — VS Code-style layout control: one icon per panel that
+	     collapses/expands it (the glyph itself reports the state), plus the
+	     combined focus toggle. Collapse is CSS-grid only; the canvas is never
+	     unmounted. Requests during an active gesture defer to gesture end
+	     (store-owned). There is no bottom panel in this shell, so the control
+	     carries three toggles rather than VS Code's four. -->
 	<div class="zone-c" role="group" aria-label="Panel visibility">
-		<button type="button" class="ribbon-btn" class:active={store.leftSidePanelCollapsed} aria-pressed={store.leftSidePanelCollapsed}
-			title={store.leftSidePanelCollapsed ? 'Expand left panel' : 'Collapse left panel'}
-			onclick={() => store.toggleLeftSidePanel()}>Left</button>
-		<button type="button" class="ribbon-btn" class:active={store.rightSidePanelCollapsed} aria-pressed={store.rightSidePanelCollapsed}
-			title={store.rightSidePanelCollapsed ? 'Expand right panel' : 'Collapse right panel'}
-			onclick={() => store.toggleRightSidePanel()}>Right</button>
-		<button type="button" class="ribbon-btn" class:active={store.focusMode} aria-pressed={store.focusMode}
-			title="Focus 3D — collapse both panels ( \ )"
-			onclick={() => store.toggleFocusMode()}>Focus</button>
+		<button type="button" class="ribbon-btn layout-toggle" aria-pressed={store.leftSidePanelCollapsed}
+			aria-label={store.leftSidePanelCollapsed ? 'Expand left sidebar' : 'Collapse left sidebar'}
+			title={store.leftSidePanelCollapsed ? 'Expand left sidebar' : 'Collapse left sidebar'}
+			onclick={() => store.toggleLeftSidePanel()}>
+			{#if store.leftSidePanelCollapsed}<PanelLeftOpen size={15} aria-hidden="true" />{:else}<PanelLeftClose size={15} aria-hidden="true" />{/if}
+		</button>
+		<button type="button" class="ribbon-btn layout-toggle" aria-pressed={store.rightSidePanelCollapsed}
+			aria-label={store.rightSidePanelCollapsed ? 'Expand right sidebar' : 'Collapse right sidebar'}
+			title={store.rightSidePanelCollapsed ? 'Expand right sidebar' : 'Collapse right sidebar'}
+			onclick={() => store.toggleRightSidePanel()}>
+			{#if store.rightSidePanelCollapsed}<PanelRightOpen size={15} aria-hidden="true" />{:else}<PanelRightClose size={15} aria-hidden="true" />{/if}
+		</button>
+		<button type="button" class="ribbon-btn layout-toggle" class:active={store.focusMode} aria-pressed={store.focusMode}
+			aria-label="Focus — collapse both sidebars"
+			title="Focus — collapse both sidebars ( \ )"
+			onclick={() => store.toggleFocusMode()}>
+			{#if store.focusMode}<Minimize size={15} aria-hidden="true" />{:else}<Maximize size={15} aria-hidden="true" />{/if}
+		</button>
 	</div>
 </div>
 
 <style>
 	.workspace-ribbon { display:flex; height:var(--editor-ribbon-height); min-width:0; box-sizing:border-box; background:var(--editor-bg-row-2); border-bottom:1px solid var(--editor-border-subtle); z-index:20; }
 	.zone-a { display:flex; align-items:center; gap:8px; flex:0 0 240px; box-sizing:border-box; padding:0 8px; border-right:1px solid var(--editor-border-subtle); }
-	.zone-c { display:flex; align-items:center; gap:6px; flex:0 0 auto; box-sizing:border-box; margin-left:auto; padding:0 8px; border-left:1px solid var(--editor-border-subtle); }
+	.zone-c { display:flex; align-items:center; gap:2px; flex:0 0 auto; box-sizing:border-box; margin-left:auto; padding:0 8px; border-left:1px solid var(--editor-border-subtle); }
+	/* Square icon-only toggles: the glyph carries the state, so no label and a
+	   tighter gutter (the VS Code layout-control look). */
+	.layout-toggle { justify-content:center; width:26px; height:26px; padding:0; gap:0; }
 	/* Row 2 control surfaces (tracks / segmented switches / ribbon-btn) are
 	   owned by the P21.5 grammar in styles/controls.css; only shell layout
 	   stays here. */

@@ -890,3 +890,226 @@ describe('Room reconciliation — rejection guards', () => {
 		expect(door.connectsRoomIds).toEqual(['room-left', 'room-annex']);
 	});
 });
+
+/**
+ * P23.3 step 0 — split-side portal remap (P23.8-owned). The two-room
+ * candidate with the LEFT room additionally split at x=1.5 into leftA
+ * (x∈[0,1.5]) and leftB (x∈[1.5,3]). Only `leftB` touches the portal wall
+ * `wall-e`, so wall-side adjacency is the only correct successor signal.
+ */
+function leftSplitCandidate(): Omit<LayoutDocumentWallFirst, 'rooms'> {
+	return document(
+		[
+			['j-a', 0, 0],
+			['j-o', 1.5, 0],
+			['j-m', 3, 0],
+			['j-b', 6, 0],
+			['j-c', 6, 4],
+			['j-n', 3, 4],
+			['j-p', 1.5, 4],
+			['j-d', 0, 4]
+		],
+		[
+			{ id: 'wall-a1', start: 'j-a', end: 'j-o' },
+			{ id: 'wall-a1b', start: 'j-o', end: 'j-m' },
+			{ id: 'wall-a2', start: 'j-m', end: 'j-b' },
+			{ id: 'wall-b', start: 'j-b', end: 'j-c' },
+			{ id: 'wall-c1', start: 'j-c', end: 'j-n' },
+			{ id: 'wall-c2', start: 'j-n', end: 'j-p' },
+			{ id: 'wall-c2b', start: 'j-p', end: 'j-d' },
+			{ id: 'wall-d', start: 'j-d', end: 'j-a' },
+			{ id: 'wall-e', start: 'j-m', end: 'j-n' },
+			{ id: 'wall-f', start: 'j-o', end: 'j-p' }
+		]
+	);
+}
+
+const LEFT_SPLIT_CANDIDATE = leftSplitCandidate();
+const LEFT_SPLIT_EXTRACTION = extractBoundaryCandidateFaces({
+	...LEFT_SPLIT_CANDIDATE,
+	rooms: []
+});
+const LEFT_SPLIT_LEFT_A = LEFT_SPLIT_EXTRACTION.faces.find((face) =>
+	face.boundary.some((ref) => ref.wallId === 'wall-a1')
+)!;
+const LEFT_SPLIT_LEFT_B = LEFT_SPLIT_EXTRACTION.faces.find((face) =>
+	face.boundary.some((ref) => ref.wallId === 'wall-a1b')
+)!;
+
+const PORTAL_DOOR = {
+	id: 'door-shared',
+	wallId: 'wall-e',
+	kind: 'door' as const,
+	offset: 1,
+	width: 0.9,
+	height: 2.1,
+	sillHeight: 0,
+	profile: 'rectangular' as const,
+	connectsRoomIds: ['room-left', 'room-right'] as [string, string]
+};
+
+function twoRoomBaselineWithPortal(openings = [PORTAL_DOOR]): LayoutDocumentWallFirst {
+	return {
+		...SPLIT_CANDIDATE,
+		rooms: [
+			room('room-left', 'Left', SPLIT_LEFT_FACE.boundary.map((ref) => ({ ...ref }))),
+			room('room-right', 'Right', SPLIT_RIGHT_FACE.boundary.map((ref) => ({ ...ref })))
+		],
+		openings: openings.map((opening) => ({ ...opening }))
+	};
+}
+
+describe('Room reconciliation — split-side portal remap (P23.3 step 0)', () => {
+	it('maps a split relation side to the descendant adjacent to the hosting Wall, not the ID survivor', () => {
+		const baseline = twoRoomBaselineWithPortal();
+		const result = reconcileRooms({
+			baseline,
+			candidateDocument: { ...LEFT_SPLIT_CANDIDATE, openings: baseline.openings },
+			extraction: LEFT_SPLIT_EXTRACTION,
+			components: [
+				{
+					candidateFaceKeys: [LEFT_SPLIT_LEFT_A.key, LEFT_SPLIT_LEFT_B.key],
+					predecessorRoomIds: ['room-left']
+				},
+				{ candidateFaceKeys: [SPLIT_RIGHT_FACE.key], predecessorRoomIds: ['room-right'] }
+			],
+			predecessorPolygons: new Map([['room-left', [[0, 0], [3, 0], [3, 4], [0, 4]]]]),
+			// Witness in the far half pins leftA as the survivor, so the
+			// predecessor ID stays on the half that does NOT touch wall-e.
+			predecessorWitnesses: new Map([['room-left', [0.5, 2]]]),
+			allocator: allocator()
+		});
+		if (!('document' in result)) throw new Error('expected success');
+		expect(result.retiredRoomIds).toEqual([]);
+		const survivor = result.document.rooms.find((entry) => entry.id === 'room-left')!;
+		expect(survivor.boundary).toEqual(
+			LEFT_SPLIT_LEFT_A.boundary.map((ref) => ({ ...ref }))
+		);
+		const newborn = result.document.rooms.find(
+			(entry) => entry.id !== 'room-left' && entry.id !== 'room-right'
+		)!;
+		expect(newborn.boundary.some((ref) => ref.wallId === 'wall-e')).toBe(true);
+		expect(survivor.boundary.some((ref) => ref.wallId === 'wall-e')).toBe(false);
+		// Relation follows physical adjacency: the door opens into the new child.
+		expect(result.document.openings[0]!.connectsRoomIds).toEqual([
+			newborn.id,
+			'room-right'
+		]);
+	});
+
+	it('keeps the relation on the survivor when the survivor is the adjacent descendant', () => {
+		const baseline = twoRoomBaselineWithPortal();
+		const result = reconcileRooms({
+			baseline,
+			candidateDocument: { ...LEFT_SPLIT_CANDIDATE, openings: baseline.openings },
+			extraction: LEFT_SPLIT_EXTRACTION,
+			components: [
+				{
+					candidateFaceKeys: [LEFT_SPLIT_LEFT_A.key, LEFT_SPLIT_LEFT_B.key],
+					predecessorRoomIds: ['room-left']
+				},
+				{ candidateFaceKeys: [SPLIT_RIGHT_FACE.key], predecessorRoomIds: ['room-right'] }
+			],
+			predecessorPolygons: new Map([['room-left', [[0, 0], [3, 0], [3, 4], [0, 4]]]]),
+			// Witness in the wall-e-adjacent half keeps the ID there.
+			predecessorWitnesses: new Map([['room-left', [2.5, 2]]]),
+			allocator: allocator()
+		});
+		if (!('document' in result)) throw new Error('expected success');
+		const survivor = result.document.rooms.find((entry) => entry.id === 'room-left')!;
+		expect(survivor.boundary).toEqual(
+			LEFT_SPLIT_LEFT_B.boundary.map((ref) => ({ ...ref }))
+		);
+		expect(result.document.openings[0]!.connectsRoomIds).toEqual([
+			'room-left',
+			'room-right'
+		]);
+	});
+
+	it('rejects the topology edit when no descendant is adjacent to the hosting Wall', () => {
+		// Far rectangle (x∈[20,26]) split at x=23 with a stale, nonadjacent
+		// legacy relation hosted on wall-e: wall-side lineage names no unique
+		// descendant for the split side → reject, never guess.
+		const farJunctions: Array<[string, number, number]> = [
+			['j-p', 20, 0],
+			['j-r', 26, 0],
+			['j-s', 26, 4],
+			['j-u', 20, 4]
+		];
+		const farWalls: WallSeed[] = [
+			{ id: 'wall-p', start: 'j-p', end: 'j-r' },
+			{ id: 'wall-q', start: 'j-r', end: 'j-s' },
+			{ id: 'wall-r', start: 'j-s', end: 'j-u' },
+			{ id: 'wall-s', start: 'j-u', end: 'j-p' }
+		];
+		const farFace = extractBoundaryCandidateFaces({
+			...document(farJunctions, farWalls),
+			rooms: []
+		}).faces[0]!;
+		const candidate = document(
+			[
+				...twoRoomCandidate().junctions.map(
+					(junction) => [junction.id, junction.point[0], junction.point[1]] as [string, number, number]
+				),
+				['j-p', 20, 0],
+				['j-v', 23, 0],
+				['j-r', 26, 0],
+				['j-s', 26, 4],
+				['j-w', 23, 4],
+				['j-u', 20, 4]
+			],
+			[
+				...twoRoomCandidate().walls.map((wall) => ({
+					id: wall.id,
+					start: wall.startJunctionId,
+					end: wall.endJunctionId
+				})),
+				{ id: 'wall-p', start: 'j-p', end: 'j-v' },
+				{ id: 'wall-p2', start: 'j-v', end: 'j-r' },
+				{ id: 'wall-q', start: 'j-r', end: 'j-s' },
+				{ id: 'wall-r', start: 'j-s', end: 'j-w' },
+				{ id: 'wall-r2', start: 'j-w', end: 'j-u' },
+				{ id: 'wall-t', start: 'j-v', end: 'j-w' },
+				{ id: 'wall-s', start: 'j-u', end: 'j-p' }
+			]
+		);
+		const extraction = extractBoundaryCandidateFaces({ ...candidate, rooms: [] });
+		expect(extraction.faces).toHaveLength(4);
+		const faceByWall = (wallId: string) =>
+			extraction.faces.find((face) => face.boundary.some((ref) => ref.wallId === wallId))!;
+		const farA = extraction.faces.find((face) =>
+			face.boundary.some((ref) => ref.wallId === 'wall-p')
+		)!;
+		const farB = faceByWall('wall-p2');
+		const baseline: LayoutDocumentWallFirst = {
+			...candidate,
+			rooms: [
+				room('room-left', 'Left', SPLIT_LEFT_FACE.boundary.map((ref) => ({ ...ref }))),
+				room('room-right', 'Right', SPLIT_RIGHT_FACE.boundary.map((ref) => ({ ...ref }))),
+				room('room-far', 'Far', farFace.boundary.map((ref) => ({ ...ref })))
+			],
+			openings: [
+				{
+					...PORTAL_DOOR,
+					connectsRoomIds: ['room-left', 'room-far']
+				}
+			]
+		};
+		const result = reconcileRooms({
+			baseline,
+			candidateDocument: { ...candidate, openings: baseline.openings },
+			extraction,
+			components: [
+				{ candidateFaceKeys: [faceByWall('wall-a1').key], predecessorRoomIds: ['room-left'] },
+				{ candidateFaceKeys: [faceByWall('wall-a2').key], predecessorRoomIds: ['room-right'] },
+				{ candidateFaceKeys: [farA.key, farB.key], predecessorRoomIds: ['room-far'] }
+			],
+			predecessorWitnesses: new Map([['room-far', [20.5, 2]]]),
+			allocator: allocator()
+		});
+		expect(result).toEqual({
+			kind: 'rejected',
+			rejection: expect.objectContaining({ code: 'unresolved_portal_remap' })
+		});
+	});
+});

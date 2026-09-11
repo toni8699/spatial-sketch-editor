@@ -6,7 +6,7 @@
 **Depends on:** P22 complete, including hosted cold-visitor acceptance.  
 **Owner reconciliation ratified:** 2026-09-09.  
 **Evidence basis:** completed `P23-H1`, `P23-H2`, `P23-H3`, `P23-H5`, current Museum Editor code, and the staging wall-first proposal.  
-**Implementation status:** Foundation Gate shipped — P23.0/P23.8 F0 acceptance passed 2026-09-10 and the stage-6 flip (branch `p23-stage6-flip`) enabled wall-first writes; legacy room-owned behavior persists only as the compatibility read path. The Build-set slices below (P23.1 → P23.2 → P23.9 → P23.3 → P23.4/P23.5 → P23.6 → P23.7) are the live implementation order; P23.1 and P23.2 are merged on `main` (PRs #9 and #13); **P23.9 in review via PR #18** (branch `p23.9`); **current slice: P23.3**.
+**Implementation status:** Foundation Gate shipped — P23.0/P23.8 F0 acceptance passed 2026-09-10 and the stage-6 flip (branch `p23-stage6-flip`) enabled wall-first writes; legacy room-owned behavior persists only as the compatibility read path. The Build-set slices below (P23.1 → P23.2 → P23.9 → P23.3 → P23.4/P23.5 → P23.6 → P23.7) are the live implementation order; P23.1 and P23.2 are merged on `main` (PRs #9 and #13); **P23.9 merged via PR #18 (`5f20aaa`)**; **current slice: P23.3**.
 
 This is the reconciled P23 umbrella. The accepted reconciliation — informed by the harvests — supersedes conflicting earlier P23 and North-Star direction. Harvest artifacts remain evidence, not implementation authority.
 
@@ -332,7 +332,15 @@ For legacy `auto-bezier` boundaries:
 
 - preserve authored curve fidelity;
 - never flatten to straight segments and call it lossless;
-- use a compatibility geometry variant or read-only compatibility representation until a fidelity-preserving canonical Wall representation exists.
+- use a compatibility geometry variant or read-only compatibility representation until a fidelity-preserving canonical Wall representation exists;
+- remain readable/renderable fidelity-preserving compatibility geometry, and
+  keep unsupported topology editing **visibly unavailable** rather than
+  silently flattening, approximating or corrupting the preserved curve.
+
+New canonical Wall authoring/direct manipulation is **straight-Wall-only for
+the P23 minimum**. Curved-Wall/Bézier authoring, selection, direct
+manipulation, topology, snapping and Opening manipulation are explicitly
+post-P23 (see the deferred-capability register under Deferred scope).
 
 ## Legacy Scene runtime preparation
 
@@ -448,7 +456,7 @@ Keep H2's deterministic snap/acquisition/guide model and map it to Junctions, Wa
 
 [Child plan](2026-09-09-P23.9-wall-partition-sketching.md)
 
-**Status:** `in progress` — review PR #18 open; **current slice: P23.3** (P23.3 unblocked by P23.9 wall authoring, pending merge).
+**Status:** shipped on `main` via PR #18 (`5f20aaa`); **current slice: P23.3**.
 
 Primary architectural authoring workflow (segment-first, ratified 2026-09-11): continuous Wall/Partition drawing where each completed segment commits immediately as one authored Wall and one Layout transaction, with only the current candidate segment transient; the committed endpoint becomes the next start without tool re-entry; Escape cancels only the active preview; H2 snap/precision integration; and Rectangle/Polygon convenience tools that produce the same canonical Walls/Junctions (Rectangle stays one bounded atomic transaction; Polygon may stay a bounded compound transient). Valid open Walls need not create Rooms.
 
@@ -456,7 +464,7 @@ Primary architectural authoring workflow (segment-first, ratified 2026-09-11): c
 
 [Child plan](2026-09-08-P23.3-openings-that-fit.md)
 
-Retain physical-meter offset, size/profile validation, body drag, width handles, center/end-clearance helpers and reject-not-clamp semantics. Host one physical opening on one Wall. Apply the new portal contract above.
+Retain physical-meter offset, size/profile validation, body drag, width handles, center/end-clearance helpers and reject-not-clamp semantics. Host one physical opening on one Wall. Apply the new portal contract above. Owns only the minimal canonical Opening selection (`wallId` + `openingId`) its create/edit/drag/resize gestures require — the full legacy `(roomId, segmentId)` architectural selection cutover stays deferred.
 
 ## P23.4 — Duplicate and linear repeat
 
@@ -474,13 +482,13 @@ Column / Platform / Plinth remain creation defaults over existing Layout object 
 
 [Child plan](2026-09-08-P23.6-architectural-drafting-visual-pass.md)
 
-Presentation only through compiled geometry / `PlanRenderModel` / existing Plan SVG authority. Add wall-first Wall/Junction/Room/Opening/Partition hierarchy, topology diagnostics, truthful dimensions and transient snap/draft feedback. Do not invent door handedness/swing semantics that are absent from authored data.
+Presentation flows through compiled geometry / `PlanRenderModel` / existing Plan SVG authority. P23.6 may extend the existing canonical selection/hit/interaction projection to first-class Wall/Junction targets, but it adds no authored geometry, topology, mutation authority, history authority, or renderer-local state. Add wall-first Wall/Junction/Room/Opening/Partition hierarchy, topology diagnostics, truthful dimensions and transient snap/draft feedback. Do not invent door handedness/swing semantics that are absent from authored data. Never create a second selection store, hit path or renderer-local selection model.
 
 ## P23.7 — Integration, compatibility and closeout
 
 [Child plan](2026-09-08-P23.7-integration-closeout.md)
 
-Runs last. Proves the complete Build loop, exact IDs/history, old save/publication compatibility, standalone Scene migration rejection/success cases, Scene/Camera exterior placement, Plan/3D parity, Save/Load, Preview and Publish.
+Runs last. Proves the complete Build loop, exact IDs/history, old save/publication compatibility, standalone Scene migration rejection/success cases, Scene/Camera exterior placement, Plan/3D parity, Save/Load, Preview and Publish. Accepts the completed Wall/Junction/Opening selection cutover: no stale Room-owned selection/hit path may remain authoritative.
 
 # Execution order
 
@@ -610,6 +618,19 @@ Do not expand the minimum into:
 - a second Camera/navigation/motion system.
 
 A later explicit grouped operation may move architecture and selected/staged content together, but ordinary Wall/Room topology edits do not.
+
+**Deferred capability register** — named post-P23 capabilities that are
+accepted but deliberately unscheduled and owned by no slice yet. They receive a
+P-number, child plan and date only when actually scheduled; nothing is assigned
+here, and no implementation detail is fixed.
+
+- **Curved-wall refinement** (registered 2026-09-11): curved-Wall/Bézier
+  authoring, selection, direct manipulation, topology, snapping and Opening
+  manipulation, plus the fidelity-preserving canonical Wall representation
+  that replaces today's read-only compatibility variant. It must reuse the one
+  canonical `LayoutDocument` → `compileLayoutGeometry()` family and the
+  existing auto-bezier sampling/evaluation machinery, and must never introduce
+  a second curve geometry, snapping, selection or rendering authority.
 
 # Documentation reconciliation rule
 

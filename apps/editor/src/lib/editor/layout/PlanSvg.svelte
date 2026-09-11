@@ -33,6 +33,10 @@
 		'primitive-ghost-circle': 'primitive-ghost circle',
 		'primitive-ghost-sphere': 'primitive-ghost sphere',
 		'primitive-ghost-invalid': 'primitive-ghost invalid',
+		// P23.3 — canonical Opening handles + drag preview.
+		'opening-handle': 'opening-handle',
+		'opening-drag-preview': 'opening-drag-preview',
+		'opening-drag-preview-invalid': 'opening-drag-preview invalid',
 		// P1.5 — Camera Plan authoring tokens.
 		'camera-edge': 'camera-edge',
 		'camera-edge-selected': 'camera-edge selected',
@@ -330,6 +334,11 @@
 	.interior-anchor { fill: var(--editor-accent); stroke: var(--editor-text-primary); stroke-width: 2; vector-effect: non-scaling-stroke; }
 	.interior-anchor.selected { fill: var(--editor-text-primary); stroke: var(--editor-accent-pressed); }
 	.vertex-handle { fill: var(--editor-plan-handle-fill); stroke: var(--editor-plan-handle-stroke); stroke-width: 2; vector-effect: non-scaling-stroke; }
+	/* P23.3 — canonical Opening width handles (edge-fixed resize affordances). */
+	.opening-handle { fill: var(--editor-plan-handle-fill); stroke: var(--editor-plan-handle-stroke); stroke-width: 2; vector-effect: non-scaling-stroke; }
+	/* P23.3 — transient Opening drag preview; invalid stays red and never commits. */
+	.opening-drag-preview { fill: rgb(47 140 255 / 18%); stroke: var(--editor-plan-selection); stroke-width: 2; stroke-dasharray: 5 3; vector-effect: non-scaling-stroke; pointer-events: none; }
+	.opening-drag-preview.invalid { fill: rgb(239 98 108 / 20%); stroke: var(--editor-danger); }
 	.rotation-arm { fill: none; stroke: var(--editor-accent-pressed); stroke-width: 3; vector-effect: non-scaling-stroke; pointer-events: none; }
 	.rotation-handle { fill: var(--editor-plan-handle-fill); stroke: var(--editor-plan-handle-stroke); stroke-width: 2; vector-effect: non-scaling-stroke; pointer-events: none; }
 	.rotation-feedback { fill: var(--editor-plan-label); font: 700 11px var(--editor-font); font-variant-numeric: tabular-nums; paint-order: stroke; stroke: var(--editor-plan-canvas-bg); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; user-select: none; }

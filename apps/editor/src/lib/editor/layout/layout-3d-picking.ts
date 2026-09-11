@@ -293,6 +293,8 @@ function layoutSelectionPriority(selection: LayoutSelection): number {
 		case 'interiorAnchor':
 			return 0;
 		case 'opening':
+		// P23.3 canonical wall-first Opening selection shares the opening rank.
+		case 'wallOpening':
 			return 1;
 		case 'object':
 			return 2;
@@ -415,6 +417,8 @@ export function layoutSelectionKey(selection: LayoutSelection | null): string {
 			return `wall:${selection.roomId}:${selection.segmentId}`;
 		case 'opening':
 			return `opening:${selection.roomId}:${selection.segmentId}:${selection.openingId}`;
+		case 'wallOpening':
+			return `wallOpening:${selection.wallId}:${selection.openingId}`;
 		case 'interiorAnchor':
 			return `anchor:${selection.roomId}:${selection.segmentId}:${selection.anchorId}`;
 		case 'object':

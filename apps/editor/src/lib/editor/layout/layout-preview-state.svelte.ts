@@ -1,8 +1,9 @@
 
-import { createEmptySceneDocument, type SceneDocument } from '$lib/content/scene';
+import { createEmptySceneDocument, createEmptyWorldLocalSceneDocument, type SceneDocument } from '$lib/content/scene';
 import type { Project } from '$lib/project/project-types';
 import {
 	createEmptyLayoutDocument,
+	createEmptyWallFirstLayoutDocument,
 	decodeLayoutJsonCompatible,
 	decodeLayoutValueCompatible,
 	serializeWallFirstLayoutDocument,
@@ -45,8 +46,21 @@ import {
 	removeRoomOpening,
 	replaceRoomOpening,
 	type LayoutOpeningKind,
-	type LayoutOpeningPatch
+	type LayoutOpeningPatch,
+	type WallFirstOpeningCreateIntent
 } from './layout-opening-editing';
+import {
+	planCenterWallFirstOpening,
+	planCreateWallFirstOpening,
+	planDeleteWallFirstOpening,
+	planMoveWallFirstOpening,
+	planUpdateWallFirstOpening,
+	wallFirstOpeningMetrics,
+	type WallFirstOpeningMetrics,
+	type WallOpeningOperation,
+	type WallOpeningPatch,
+	type WallOpeningPlan
+} from '$lib/layout/layout-wall-openings';
 import { hasBlockingLayoutIssues, validateLayoutDocumentGeometry, validateLineRoom, type LayoutGeometryIssue } from '$lib/layout/layout-geometry-validation';
 import { deleteLayoutRoom as deleteRoomFromDocument } from './layout-room-editing';
 import {
@@ -139,6 +153,13 @@ export type WallFirstPrecisionMutationResult =
 	| { success: true; operation: PrecisionOperation }
 	| {
 			success: true;
+			/** P23.3 canonical Opening operation (create/update/delete). */
+			operation: WallOpeningOperation;
+			/** The authored Opening the operation produced or removed. */
+			openingId: string;
+	  }
+	| {
+			success: true;
 			operation: 'wall-chain-commit';
 			/** Wall IDs created by the committed chain. */
 			wallIds: string[];
@@ -181,6 +202,35 @@ export function createLayoutPreviewState(
  */
 export function createEmptyLayoutPreviewState(): LayoutPreviewState {
 	return createState('empty', createEmptyLayoutDocument(), createEmptySceneDocument(), 0);
+}
+
+/**
+ * Boot a blank WALL-FIRST layout surface — the editor's new-project state.
+ *
+ * P23.3 reachability: the canonical Junction/Wall/Room/Opening authoring path
+ * (including the wall-first Opening flow) only applies to a wall-first Layout
+ * document, so importing a wall-first Layout JSON used to be the only way to
+ * reach it. Booting the canonical pair closes that gap. The Scene is
+ * world-local because `validateProject` rejects a wall-first Layout carrying
+ * the recognized legacy Scene, and the composer pairs this layout with the
+ * scene store document for Save.
+ *
+ * `createEmptyLayoutPreviewState` keeps returning the legacy blank document:
+ * it is the fixture for the legacy Room/opening mutator surfaces and their
+ * existing coverage, not the new-project boot.
+ */
+export function createEmptyWallFirstLayoutPreviewState(): LayoutPreviewState {
+	return createState(
+		'empty',
+		wallFirstEmptyLayout(),
+		createEmptyWorldLocalSceneDocument(),
+		0
+	);
+}
+
+/** Canonical empty wall-first document through the legacy `Project` seam. */
+function wallFirstEmptyLayout(): Project['layout'] {
+	return createEmptyWallFirstLayoutDocument() as unknown as Project['layout'];
 }
 
 export function layoutPreviewSourceLabel(source: LayoutPreviewSource): string {
@@ -440,9 +490,17 @@ export function loadChopinLayoutPreview(
 }
 
 export function resetLayoutPreview(state: LayoutPreviewState): boolean {
+	// Reset is a LAYOUT-only command: it must not wipe the scene, and it must
+	// not change the document's format under the user (a wall-first Layout
+	// carrying the legacy Scene is rejected by `validateProject`, so a blind
+	// reset would leave the project unsaveable). Empty the layout in the
+	// format family the document already has.
+	const emptyLayout = isWallFirstLayoutDocument(layoutPreviewDocument(state))
+		? wallFirstEmptyLayout()
+		: createEmptyLayoutDocument();
 	replaceState(
 		state,
-		createState('empty', createEmptyLayoutDocument(), state.project.scene, state.previewVersion)
+		createState('empty', emptyLayout, state.project.scene, state.previewVersion)
 	);
 	return true;
 }
@@ -695,6 +753,40 @@ export function updateLayoutObjectFields(
 	return applied.success ? { success: true, objectId } : applied;
 }
 
+/**
+ * Apply one already-planned wall-first document through the preview bundle
+ * atomically (single install point for P23.1 precision and P23.3 opening
+ * plans — one document path, one preview/geometry rebuild).
+ */
+function applyWallFirstDocumentPlan(
+	state: LayoutPreviewState,
+	document: LayoutDocumentWallFirst,
+	operation: PrecisionOperation | WallOpeningOperation,
+	openingId?: string
+): WallFirstPrecisionMutationResult {
+	try {
+		const bundle = derivePreviewBundle(
+			state.project.id,
+			state.project.name,
+			document,
+			state.project.scene
+		);
+		state.source = 'draft';
+		commitPreviewBundle(state, bundle);
+		state.previewVersion += 1;
+		state.lastMutationMessage = null;
+		state.statusMessage = null;
+		state.importError = null;
+		return openingId === undefined
+			? { success: true, operation: operation as PrecisionOperation }
+			: { success: true, operation: operation as WallOpeningOperation, openingId };
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Could not apply layout operation';
+		state.lastMutationMessage = message;
+		return { success: false, message };
+	}
+}
+
 /** Apply a P23.1 wall-first plan through the preview bundle atomically. */
 function applyWallFirstPrecisionPlan(
 	state: LayoutPreviewState,
@@ -704,25 +796,23 @@ function applyWallFirstPrecisionPlan(
 		state.lastMutationMessage = plan.rejection.message;
 		return { success: false, message: plan.rejection.message };
 	}
-	try {
-		const bundle = derivePreviewBundle(
-			state.project.id,
-			state.project.name,
-			plan.document,
-			state.project.scene
-		);
-		state.source = 'draft';
-		commitPreviewBundle(state, bundle);
-		state.previewVersion += 1;
-		state.lastMutationMessage = null;
-		state.statusMessage = null;
-		state.importError = null;
-		return { success: true, operation: plan.operation };
-	} catch (error) {
-		const message = error instanceof Error ? error.message : 'Could not apply precise layout operation';
-		state.lastMutationMessage = message;
-		return { success: false, message };
+	return applyWallFirstDocumentPlan(state, plan.document, plan.operation);
+}
+
+/** Apply a P23.3 canonical Opening plan (create/update/move/center/delete). */
+function applyWallFirstOpeningPlan(
+	state: LayoutPreviewState,
+	plan: WallOpeningPlan
+): LayoutOpeningMutationResult {
+	if (plan.kind === 'rejected') {
+		state.lastMutationMessage = plan.rejection.message;
+		return { success: false, message: plan.rejection.message };
 	}
+	const openingId = plan.changedOpeningIds[0] ?? '';
+	const applied = applyWallFirstDocumentPlan(state, plan.document, plan.operation, openingId);
+	return applied.success
+		? { success: true, openingId }
+		: { success: false, message: applied.message };
 }
 
 /**
@@ -929,6 +1019,109 @@ export function deleteLayoutObject(
 	if (!layout) return failObjectMutation(state, 'Object no longer exists');
 	const applied = applyLayoutMutation(state, layout);
 	return applied.success ? { success: true, objectId } : applied;
+}
+
+/**
+ * P23.3 canonical Opening create on a wall-first document. One authored
+ * Opening record hosted by `wallId`, document-global ID, whole-hosting-Wall
+ * validation inside the planner. Rejection installs nothing.
+ */
+export function createWallFirstOpening(
+	state: LayoutPreviewState,
+	intent: WallFirstOpeningCreateIntent
+): LayoutOpeningMutationResult {
+	const layout = wallFirstLayoutOrError(state);
+	if (!layout) {
+		return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
+	}
+	const plan = planCreateWallFirstOpening(layout, {
+		wallId: intent.wallId,
+		kind: intent.kind,
+		offset: intent.offset,
+		width: intent.width,
+		height: intent.height,
+		sillHeight: intent.sillHeight
+	});
+	return applyWallFirstOpeningPlan(state, plan);
+}
+
+/** P23.3 canonical Opening exact-field update (host Wall never changes). */
+export function updateWallFirstOpening(
+	state: LayoutPreviewState,
+	openingId: string,
+	patch: WallOpeningPatch
+): LayoutOpeningMutationResult {
+	const layout = wallFirstLayoutOrError(state);
+	if (!layout) {
+		return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
+	}
+	return applyWallFirstOpeningPlan(
+		state,
+		planUpdateWallFirstOpening(layout, openingId, patch)
+	);
+}
+
+/**
+ * P23.3 canonical Opening drag/move commit: one raw candidate offset,
+ * validated against the whole hosting-Wall set. Out-of-fit rejects — the
+ * clamped snap result must never reach this call.
+ */
+export function moveWallFirstOpening(
+	state: LayoutPreviewState,
+	openingId: string,
+	offset: number
+): LayoutOpeningMutationResult {
+	const layout = wallFirstLayoutOrError(state);
+	if (!layout) {
+		return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
+	}
+	return applyWallFirstOpeningPlan(
+		state,
+		planMoveWallFirstOpening(layout, openingId, offset)
+	);
+}
+
+/** P23.3 Center on Wall (exact meter offset). */
+export function centerWallFirstOpening(
+	state: LayoutPreviewState,
+	openingId: string
+): LayoutOpeningMutationResult {
+	const layout = wallFirstLayoutOrError(state);
+	if (!layout) {
+		return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
+	}
+	return applyWallFirstOpeningPlan(
+		state,
+		planCenterWallFirstOpening(layout, openingId)
+	);
+}
+
+/** P23.3 canonical Opening delete (the single physical record). */
+export function deleteWallFirstOpening(
+	state: LayoutPreviewState,
+	openingId: string
+): LayoutOpeningMutationResult {
+	const layout = wallFirstLayoutOrError(state);
+	if (!layout) {
+		return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
+	}
+	return applyWallFirstOpeningPlan(
+		state,
+		planDeleteWallFirstOpening(layout, openingId)
+	);
+}
+
+/**
+ * P23.3 numeric read model for the Inspector: canonical Wall length, opening
+ * offset/width, both end clearances and the Center-on-Wall offset.
+ */
+export function wallFirstOpeningMetricsFor(
+	state: LayoutPreviewState,
+	openingId: string
+): WallFirstOpeningMetrics | undefined {
+	const layout = layoutPreviewDocument(state);
+	if (!isWallFirstLayoutDocument(layout)) return undefined;
+	return wallFirstOpeningMetrics(layout, openingId);
 }
 
 export function commitLayoutOpening(

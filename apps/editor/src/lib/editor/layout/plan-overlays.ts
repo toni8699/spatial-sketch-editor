@@ -75,7 +75,121 @@ function toPlanSelection(selection: LayoutSelection): PlanSelection {
 			return { kind: 'interiorAnchor', roomId: selection.roomId, segmentId: selection.segmentId, anchorId: selection.anchorId };
 		case 'object':
 			return { kind: 'object', objectId: selection.objectId };
+		case 'wallOpening':
+			return { kind: 'wallOpening', wallId: selection.wallId, openingId: selection.openingId };
 	}
+}
+
+/** Canonical Wall centerline endpoints from the compiled wall spans. */
+export function physicalWallSpan(
+	model: LayoutPreviewModel,
+	wallId: string
+): { start: LayoutVec2; end: LayoutVec2 } | null {
+	const spans = model.queries.spans
+		.filter(
+			(span) =>
+				span.roomId === undefined &&
+				span.kind === 'wall' &&
+				(span.wallKey ?? span.segmentId) === wallId
+		)
+		.sort((a, b) => a.startDistance - b.startDistance);
+	const first = spans[0];
+	const last = spans.at(-1);
+	return first && last ? { start: [...first.start] as LayoutVec2, end: [...last.end] as LayoutVec2 } : null;
+}
+
+/** World point at a meter offset along a canonical Wall span (unclamped). */
+export function pointAtWallOffset(
+	span: { start: LayoutVec2; end: LayoutVec2 },
+	offset: number
+): LayoutVec2 {
+	const dx = span.end[0] - span.start[0];
+	const dz = span.end[1] - span.start[1];
+	const length = Math.hypot(dx, dz);
+	if (length <= 0) return [...span.start] as LayoutVec2;
+	const t = offset / length;
+	return [span.start[0] + dx * t, span.start[1] + dz * t];
+}
+
+/**
+ * P23.3 — the two jamb points of one canonical Opening, from the compiled
+ * query spans. ONE source for both the rendered width handles and the
+ * viewport's screen-space handle hit test.
+ */
+export function wallOpeningEdgeWorldPoints(
+	model: LayoutPreviewModel,
+	openingId: string
+): { start: LayoutVec2; end: LayoutVec2 } | null {
+	const span = model.queries.spans.find(
+		(candidate) => candidate.kind === 'opening' && candidate.openingId === openingId
+	);
+	return span ? { start: [...span.start] as LayoutVec2, end: [...span.end] as LayoutVec2 } : null;
+}
+
+/** Rendered canonical Opening affordances for one selected Opening. */
+function pushWallOpeningAffordances(
+	selection: { openingId: string },
+	model: LayoutPreviewModel,
+	handles: PlanRenderPrimitive[],
+	labels: PlanRenderPrimitive[]
+): void {
+	const edges = wallOpeningEdgeWorldPoints(model, selection.openingId);
+	if (!edges) return;
+	handles.push(
+		{
+			kind: 'circle',
+			key: geometryId(['plan', 'overlay', 'opening-handle', selection.openingId, 'start']),
+			center: edges.start,
+			radiusPx: 6,
+			style: 'opening-handle'
+		},
+		{
+			kind: 'circle',
+			key: geometryId(['plan', 'overlay', 'opening-handle', selection.openingId, 'end']),
+			center: edges.end,
+			radiusPx: 6,
+			style: 'opening-handle'
+		}
+	);
+	labels.push({
+		kind: 'text',
+		key: geometryId(['plan', 'overlay', 'opening-handle-label', selection.openingId]),
+		anchor: [(edges.start[0] + edges.end[0]) / 2, (edges.start[1] + edges.end[1]) / 2],
+		text: `${Math.hypot(edges.end[0] - edges.start[0], edges.end[1] - edges.start[1]).toFixed(2)} m`,
+		offsetPx: [0, -DIMENSION_LABEL_OFFSET_PX],
+		style: 'dimension-label'
+	});
+}
+
+/**
+ * P23.3 — transient drag preview for one canonical Opening gesture. The
+ * candidate renders valid or invalid exactly as the drag state reports it: a
+ * raw candidate outside fit bounds previews invalid and commits nothing.
+ */
+function pushWallOpeningDragPreview(
+	drag: LayoutInteractionState['wallOpeningDrag'],
+	model: LayoutPreviewModel,
+	drafts: PlanRenderPrimitive[],
+	labels: PlanRenderPrimitive[]
+): void {
+	if (!drag) return;
+	const span = physicalWallSpan(model, drag.wallId);
+	if (!span) return;
+	const width = Math.max(0, drag.candidateWidth);
+	drafts.push({
+		kind: 'polyline',
+		key: geometryId(['plan', 'overlay', 'opening-drag-preview']),
+		points: [pointAtWallOffset(span, drag.candidateOffset), pointAtWallOffset(span, drag.candidateOffset + width)],
+		style: drag.valid ? 'opening-drag-preview' : 'opening-drag-preview-invalid'
+	});
+	labels.push({
+		kind: 'text',
+		key: geometryId(['plan', 'overlay', 'opening-drag-label']),
+		anchor: pointAtWallOffset(span, drag.candidateOffset + width / 2),
+		text: `${drag.candidateOffset.toFixed(2)} m`,
+		offsetPx: [0, -DIMENSION_LABEL_OFFSET_PX],
+		style: 'dimension-label'
+	});
 }
 
 /** Screen position of the rotation handle (top-center + 28px vertical offset). */
@@ -399,6 +513,13 @@ export function buildPlanInteractionProjection(
 			});
 		}
 	}
+
+	// P23.3 — canonical Opening affordances + transient drag preview. Both are
+	// session-only projections: no document write ever happens during a drag.
+	if (activeSelection.kind === 'wallOpening') {
+		pushWallOpeningAffordances(activeSelection, model, handles, labels);
+	}
+	pushWallOpeningDragPreview(interaction.wallOpeningDrag, model, drafts, labels);
 
 	const roomOverrides = interaction.editing
 		? [{ roomId: interaction.editing.roomId, points: interaction.editing.currentPoints }]

@@ -16,14 +16,17 @@
 	import EditorNumberField from './fields/EditorNumberField.svelte';
 	import { degreesToRadians, radiansToDegrees, type PlacementTransform } from './editor-transform';
 	import {
+		centerWallFirstOpening,
 		deleteLayoutObject,
 		deleteLayoutOpening,
 		deleteLayoutRoom,
+		deleteWallFirstOpening,
 		layoutPreviewSourceLabel,
 		layoutPreviewStatusLabel,
 		layoutRoomSceneReferenceSummary,
 		layoutRoomSceneReferenceTotal,
 		listLayoutRoomSceneReferences,
+		updateWallFirstOpening,
 		updateLayoutObjectFields,
 		layoutPreviewDocument,
 		updateLayoutOpeningFields,
@@ -35,9 +38,16 @@
 		updateWallFirstWallThickness,
 		updateWallFirstRectangle,
 		subdivideWallFirstWall,
+		type LayoutOpeningMutationResult,
 		type LayoutPreviewState,
 		type LayoutRoomFieldPatch
 	} from './layout/layout-preview-state.svelte';
+	import {
+		wallFirstOffsetFromEndDistance,
+		wallFirstOffsetFromStartDistance,
+		wallFirstOpeningMetrics
+	} from '$lib/layout/layout-wall-openings';
+	import { wallFirstAdjacentRooms } from '$lib/layout/layout-portals';
 	import { layoutMutationRunnerFor, runLayoutMutation } from './layout/layout-mutation-runner';
 	import {
 		selectLayoutObject,
@@ -287,6 +297,39 @@ import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall, LayoutWallFir
 			? selectedLayoutRoom.openings.find((opening) => opening.id === selectedLayoutOpeningSelection.openingId)
 			: undefined
 	);
+	// P23.3 — canonical wall-first Opening Inspector target (document-global
+	// `wallId` + `openingId`; Room-side context is derived, never stored).
+	const selectedWallFirstOpeningSelection = $derived(
+		layoutInteraction.selection.kind === 'wallOpening' ? layoutInteraction.selection : null
+	);
+	const selectedWallFirstOpening = $derived(
+		selectedWallFirstOpeningSelection && wallFirstLayout
+			? (wallFirstLayout.openings.find(
+					(opening) => opening.id === selectedWallFirstOpeningSelection.openingId
+				) ?? null)
+			: null
+	);
+	const selectedWallFirstOpeningMetrics = $derived(
+		selectedWallFirstOpening && wallFirstLayout
+			? (wallFirstOpeningMetrics(wallFirstLayout, selectedWallFirstOpening.id) ?? null)
+			: null
+	);
+	const selectedWallFirstHostingWall = $derived(
+		selectedWallFirstOpening && wallFirstLayout
+			? (wallFirstLayout.walls.find((wall) => wall.id === selectedWallFirstOpening.wallId) ?? null)
+			: null
+	);
+	/** Portal candidates come only from accepted Wall-side topology. */
+	const selectedWallFirstOpeningAdjacentRooms = $derived(
+		selectedWallFirstOpening && wallFirstLayout
+			? wallFirstAdjacentRooms(wallFirstLayout, selectedWallFirstOpening.wallId)
+			: []
+	);
+	const selectedWallFirstOpeningAdjacentRoomNames = $derived(
+		selectedWallFirstOpeningAdjacentRooms.map(
+			(roomId) => wallFirstLayout?.rooms.find((room) => room.id === roomId)?.name ?? roomId
+		)
+	);
 	const selectedLayoutSegment = $derived(
 		selectedLayoutWallSelection && selectedLayoutRoom
 			? selectedLayoutRoom.boundary.segments.find((segment) => segment.id === selectedLayoutWallSelection.segmentId)
@@ -420,6 +463,147 @@ import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall, LayoutWallFir
 			return;
 		}
 		store.setStatusMessage(`Updated opening ${field}`);
+	}
+
+	/**
+	 * P23.3 — one canonical Opening edit through the shared history runner:
+	 * validate once → commit once, invalid/no-op → no history entry.
+	 */
+	function commitWallOpeningEdit(
+		mutate: () => LayoutOpeningMutationResult,
+		successMessage: string
+	): boolean {
+		const outcome = runLayoutMutationGuarded(mutate, (result) => result.success);
+		if (outcome.kind === 'skipped') {
+			store.setStatusMessage('Finish the current layout interaction first');
+			return false;
+		}
+		if (!outcome.result.success) {
+			store.setStatusMessage(`Opening rejected: ${outcome.result.message}`);
+			return false;
+		}
+		store.setStatusMessage(successMessage);
+		return true;
+	}
+
+	function updateWallFirstOpeningField(
+		field: 'offset' | 'width' | 'height' | 'sillHeight',
+		event: Event
+	) {
+		const opening = selectedWallFirstOpening;
+		if (!opening) return;
+		const input = event.currentTarget as HTMLInputElement;
+		const value = Number(input.value);
+		if (!Number.isFinite(value)) {
+			store.setStatusMessage('Opening value must be a finite number');
+			input.value = String(opening[field]);
+			return;
+		}
+		if (!commitWallOpeningEdit(
+			() => updateWallFirstOpening(layoutPreview, opening.id, { [field]: value }),
+			`Updated opening ${field}`
+		)) {
+			input.value = String(opening[field]);
+		}
+	}
+
+	function updateWallFirstOpeningProfile(event: Event) {
+		const opening = selectedWallFirstOpening;
+		if (!opening) return;
+		const profile = (event.currentTarget as HTMLSelectElement)
+			.value as typeof opening.profile;
+		commitWallOpeningEdit(
+			() => updateWallFirstOpening(layoutPreview, opening.id, { profile }),
+			'Updated opening profile'
+		);
+	}
+
+	/**
+	 * `door → window` clears the portal relation explicitly (never silently);
+	 * `window → door` invents no relation.
+	 */
+	function updateWallFirstOpeningKind(event: Event) {
+		const opening = selectedWallFirstOpening;
+		if (!opening) return;
+		const kind = (event.currentTarget as HTMLSelectElement).value as 'door' | 'window';
+		const patch =
+			kind === 'window' ? { kind, connectsRoomIds: null } : { kind };
+		commitWallOpeningEdit(
+			() => updateWallFirstOpening(layoutPreview, opening.id, patch),
+			`Updated opening type to ${kind}`
+		);
+	}
+
+	function centerSelectedWallFirstOpening() {
+		const opening = selectedWallFirstOpening;
+		if (!opening) return;
+		commitWallOpeningEdit(
+			() => centerWallFirstOpening(layoutPreview, opening.id),
+			'Centered opening on wall'
+		);
+	}
+
+	function updateWallFirstOpeningDistanceFromStart(event: Event) {
+		const opening = selectedWallFirstOpening;
+		const input = event.currentTarget as HTMLInputElement;
+		const value = Number(input.value);
+		if (!opening || !Number.isFinite(value)) return;
+		commitWallOpeningEdit(
+			() =>
+				updateWallFirstOpening(layoutPreview, opening.id, {
+					offset: wallFirstOffsetFromStartDistance(value)
+				}),
+			'Updated opening position'
+		);
+	}
+
+	function updateWallFirstOpeningDistanceFromEnd(event: Event) {
+		const opening = selectedWallFirstOpening;
+		const metrics = selectedWallFirstOpeningMetrics;
+		const input = event.currentTarget as HTMLInputElement;
+		const value = Number(input.value);
+		if (!opening || !metrics || !Number.isFinite(value)) return;
+		commitWallOpeningEdit(
+			() =>
+				updateWallFirstOpening(layoutPreview, opening.id, {
+					offset: wallFirstOffsetFromEndDistance(metrics, value)
+				}),
+			'Updated opening position'
+		);
+	}
+
+	function updateWallFirstOpeningRelation(event: Event) {
+		const opening = selectedWallFirstOpening;
+		if (!opening) return;
+		const value = (event.currentTarget as HTMLSelectElement).value;
+		if (value === '') {
+			commitWallOpeningEdit(
+				() => updateWallFirstOpening(layoutPreview, opening.id, { connectsRoomIds: null }),
+				'Cleared opening portal relation'
+			);
+			return;
+		}
+		const [first, second] = value.split('|');
+		if (!first || !second) return;
+		commitWallOpeningEdit(
+			() =>
+				updateWallFirstOpening(layoutPreview, opening.id, {
+					connectsRoomIds: [first, second]
+				}),
+			'Updated opening portal relation'
+		);
+	}
+
+	function removeSelectedWallFirstOpening() {
+		const opening = selectedWallFirstOpening;
+		if (!opening) return;
+		if (commitWallOpeningEdit(
+			() => deleteWallFirstOpening(layoutPreview, opening.id),
+			'Deleted opening'
+		)) {
+			// No canonical wall selection target yet (cutover deferred) → clear.
+			layoutInteraction.selection = { kind: 'none' };
+		}
 	}
 
 	function updateOpeningProfile(event: Event) {
@@ -670,11 +854,16 @@ import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall, LayoutWallFir
 	}
 
 	function armLayoutPlaceTool(tool: 'door' | 'window' | LayoutPrimitiveTool) {
-		if (isWallFirstLayout) {
-			store.setStatusMessage('Legacy placement is unavailable for wall-first layouts; use Architecture · exact.');
+		// P23.3 — a wall-first document hosts canonical Openings, so the
+		// door/window place tools arm for it and author against a
+		// document-global `wallId`; only the legacy room-owned primitives stay
+		// unavailable (they have no canonical counterpart yet).
+		const primitive = tool === 'box' || tool === 'cylinder' || tool === 'sphere';
+		if (primitive && isWallFirstLayout) {
+			store.setStatusMessage('Legacy primitive placement is unavailable for wall-first layouts; use Architecture · exact.');
 			return;
 		}
-		if ((tool === 'box' || tool === 'cylinder' || tool === 'sphere') && layoutInteraction.viewMode !== 'plan') {
+		if (primitive && layoutInteraction.viewMode !== 'plan') {
 			store.setStatusMessage('Primitive placement is Plan-only');
 			return;
 		}
@@ -1032,15 +1221,15 @@ import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall, LayoutWallFir
 			</dl>
 			{#if layoutPreview.importError}<p class="layout-opening-warning" role="alert">Import failed: {layoutPreview.importError}</p>{/if}
 			<p class="layout-inspector-note">Openings are geometry-only in this phase. No room adjacency or portal semantics are inferred.</p>
-			{#if isWallFirstLayout}<p class="layout-inspector-note">Wall-first layout: use Architecture · exact for Junctions, Walls, Rooms, and existing object transforms. Legacy room, opening, and primitive placement is unavailable.</p>{/if}
+			{#if isWallFirstLayout}<p class="layout-inspector-note">Wall-first layout: use Architecture · exact for Junctions, Walls, Rooms, and existing object transforms. Door and Window place canonical Openings on a Wall; legacy room and primitive placement is unavailable.</p>{/if}
 
 			{#if isScenePlanLayout}
 			<div class="layout-accordion">
 				<button type="button" class="accordion-trigger" aria-expanded={layoutInteraction.accordions.place} onclick={() => toggleLayoutAccordion(layoutInteraction, 'place')}><strong>Place</strong><span>{layoutInteraction.accordions.place ? '−' : '+'}</span></button>
 				{#if layoutInteraction.accordions.place}
 					<div class="place-tools" aria-label="Layout place tools">
-						<button type="button" disabled={layoutInteraction.viewMode !== 'plan' || isWallFirstLayout} onclick={() => armLayoutPlaceTool('door')}>Door</button>
-						<button type="button" disabled={layoutInteraction.viewMode !== 'plan' || isWallFirstLayout} onclick={() => armLayoutPlaceTool('window')}>Window</button>
+						<button type="button" disabled={layoutInteraction.viewMode !== 'plan'} onclick={() => armLayoutPlaceTool('door')}>Door</button>
+						<button type="button" disabled={layoutInteraction.viewMode !== 'plan'} onclick={() => armLayoutPlaceTool('window')}>Window</button>
 						<button type="button" disabled={layoutInteraction.viewMode !== 'plan' || isWallFirstLayout} onclick={() => armLayoutPlaceTool('box')}>Box</button>
 						<button type="button" disabled={layoutInteraction.viewMode !== 'plan' || isWallFirstLayout} onclick={() => armLayoutPlaceTool('cylinder')}>Cylinder</button>
 						<button type="button" disabled={layoutInteraction.viewMode !== 'plan' || isWallFirstLayout} onclick={() => armLayoutPlaceTool('sphere')}>Sphere</button>
@@ -1202,15 +1391,62 @@ import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall, LayoutWallFir
 					{#if layoutPreview.lastMutationMessage}<p class="layout-opening-warning" role="status">{layoutPreview.lastMutationMessage}</p>{/if}
 					<button type="button" class="layout-danger" disabled={selectedLayoutObject.kind === 'profile'} onclick={removeSelectedObject}>Delete object</button>
 				</div>
+			{:else if selectedWallFirstOpening && selectedWallFirstOpeningMetrics}
+				<div class="layout-selected-room" aria-label="Selected wall-first opening">
+					<strong>{selectedWallFirstOpening.kind} opening</strong>
+					<span>Opening: {selectedWallFirstOpening.id}</span>
+					<span>
+						Wall: {selectedWallFirstOpening.wallId} · {selectedWallFirstOpeningMetrics.wallLength.toFixed(2)} m{#if selectedWallFirstHostingWall}
+							· {selectedWallFirstHostingWall.role}{/if}
+					</span>
+					<label>Offset from wall start (m)<input type="number" min="0" step="0.05" value={selectedWallFirstOpening.offset.toFixed(2)} onchange={(event) => updateWallFirstOpeningField('offset', event)} /></label>
+					<label>Distance from start (m)<input type="number" min="0" step="0.05" value={selectedWallFirstOpeningMetrics.clearanceFromStart.toFixed(2)} onchange={updateWallFirstOpeningDistanceFromStart} /></label>
+					<label>Distance from end (m)<input type="number" min="0" step="0.05" value={selectedWallFirstOpeningMetrics.clearanceFromEnd.toFixed(2)} onchange={updateWallFirstOpeningDistanceFromEnd} /></label>
+					<label>Width (m)<input type="number" min="0.05" step="0.05" value={selectedWallFirstOpening.width.toFixed(2)} onchange={(event) => updateWallFirstOpeningField('width', event)} /></label>
+					<label>Height (m)<input type="number" min="0.05" step="0.05" value={selectedWallFirstOpening.height.toFixed(2)} onchange={(event) => updateWallFirstOpeningField('height', event)} /></label>
+					<label>Sill height (m)<input type="number" min="0" step="0.05" value={selectedWallFirstOpening.sillHeight.toFixed(2)} onchange={(event) => updateWallFirstOpeningField('sillHeight', event)} /></label>
+					<label>Profile<select value={selectedWallFirstOpening.profile} onchange={updateWallFirstOpeningProfile}>
+						<option value="rectangular">Rectangular</option>
+						<option value="rounded">Rounded arch</option>
+						<option value="pointed">Pointed arch</option>
+					</select></label>
+					<label>Type<select value={selectedWallFirstOpening.kind} onchange={updateWallFirstOpeningKind}>
+						<option value="door">Door</option>
+						<option value="window">Window</option>
+					</select></label>
+					{#if selectedWallFirstOpening.kind === 'door'}
+						<label>Portal relation<select
+							value={selectedWallFirstOpening.connectsRoomIds
+								? [...selectedWallFirstOpening.connectsRoomIds].sort().join('|')
+								: ''}
+							onchange={updateWallFirstOpeningRelation}
+						>
+							<option value="">None (exterior / partition door)</option>
+							{#if selectedWallFirstOpeningAdjacentRooms.length === 2}
+								<option value={[...selectedWallFirstOpeningAdjacentRooms].sort().join('|')}>
+									{selectedWallFirstOpeningAdjacentRoomNames.join(' ↔ ')}
+								</option>
+							{/if}
+						</select></label>
+						<span>Adjacent rooms: {selectedWallFirstOpeningAdjacentRoomNames.length > 0 ? selectedWallFirstOpeningAdjacentRoomNames.join(', ') : 'none'}</span>
+					{/if}
+					{#if layoutPreview.lastMutationMessage}
+						<p class="layout-opening-warning" role="status">{layoutPreview.lastMutationMessage}</p>
+					{/if}
+					<div class="layout-opening-actions">
+						<button type="button" onclick={centerSelectedWallFirstOpening}>Center on wall</button>
+						<button type="button" class="layout-danger" onclick={removeSelectedWallFirstOpening}>Delete opening</button>
+					</div>
+				</div>
 			{:else if selectedLayoutOpening && selectedLayoutSegment && selectedLayoutRoom}
 				<div class="layout-selected-room" aria-label="Selected layout opening">
 					<strong>{selectedLayoutOpening.kind} opening</strong>
 					<span>{selectedLayoutRoom.name} · {selectedLayoutRoom.id}</span>
 					<span>Wall: {selectedLayoutSegment.id} · {roomEdgeLength(selectedLayoutRoom, selectedLayoutRoom.boundary.segments.indexOf(selectedLayoutSegment)).toFixed(2)} m</span>
-					<label>Offset from wall start (m)<input type="number" min="0" step="0.05" value={selectedLayoutOpening.offset} onchange={(event) => updateOpeningField('offset', event)} /></label>
-					<label>Width (m)<input type="number" min="0.01" step="0.05" value={selectedLayoutOpening.width} onchange={(event) => updateOpeningField('width', event)} /></label>
-					<label>Height (m)<input type="number" min="0.01" step="0.05" value={selectedLayoutOpening.height} onchange={(event) => updateOpeningField('height', event)} /></label>
-					<label>Sill height (m)<input type="number" min="0" step="0.05" value={selectedLayoutOpening.sillHeight} onchange={(event) => updateOpeningField('sillHeight', event)} /></label>
+					<label>Offset from wall start (m)<input type="number" min="0" step="0.05" value={selectedLayoutOpening.offset.toFixed(2)} onchange={(event) => updateOpeningField('offset', event)} /></label>
+					<label>Width (m)<input type="number" min="0.05" step="0.05" value={selectedLayoutOpening.width.toFixed(2)} onchange={(event) => updateOpeningField('width', event)} /></label>
+					<label>Height (m)<input type="number" min="0.05" step="0.05" value={selectedLayoutOpening.height.toFixed(2)} onchange={(event) => updateOpeningField('height', event)} /></label>
+					<label>Sill height (m)<input type="number" min="0" step="0.05" value={selectedLayoutOpening.sillHeight.toFixed(2)} onchange={(event) => updateOpeningField('sillHeight', event)} /></label>
 					<label>Profile<select value={selectedLayoutOpening.profile} onchange={updateOpeningProfile}>
 						<option value="rectangular">Rectangular</option>
 						<option value="rounded">Rounded arch</option>

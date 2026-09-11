@@ -24,7 +24,41 @@ export type PlanHitResult =
 	| { kind: 'object'; objectId: string }
 	| { kind: 'wall'; roomId: string; segmentId: string; projection: PlanWallProjection }
 	| { kind: 'room'; roomId: string }
+	/**
+	 * P23.3 — canonical wall-first hits keyed by document-global IDs only. Room
+	 * context is derived on demand by the caller (never faked into the record),
+	 * and these never carry a `roomId`/`segmentId` pair.
+	 */
+	| { kind: 'wallOpening'; wallId: string; openingId: string; projection: PlanWallProjection }
+	| { kind: 'physicalWall'; wallId: string; projection: PlanWallProjection }
 	| null;
+
+/** Canonical (non-room-derived) span groups keyed by document-global `wallId`. */
+type PhysicalWallSpans = {
+	wallSpans: CompiledQuerySpan[];
+	openingSpans: CompiledQuerySpan[];
+};
+
+/**
+ * Group canonical physical-Wall query spans by `wallKey` (= document-global
+ * `wallId`). Room-derived records are skipped: this index is the wall-first
+ * hit path, not a legacy alias.
+ */
+function physicalSpansByWall(
+	queries: CompiledLayoutQueryGeometry
+): Map<string, PhysicalWallSpans> {
+	const byWall = new Map<string, PhysicalWallSpans>();
+	for (const span of queries.spans) {
+		if (span.roomId !== undefined) continue;
+		if (span.kind !== 'wall' && span.kind !== 'opening') continue;
+		const wallId = span.wallKey ?? span.segmentId;
+		const group = byWall.get(wallId) ?? { wallSpans: [], openingSpans: [] };
+		if (span.kind === 'wall') group.wallSpans.push(span);
+		else group.openingSpans.push(span);
+		byWall.set(wallId, group);
+	}
+	return byWall;
+}
 
 function wallSpansByRoomSegment(queries: CompiledLayoutQueryGeometry): Map<string, Map<string, CompiledQuerySpan[]>> {
 	const byRoom = new Map<string, Map<string, CompiledQuerySpan[]>>();
@@ -118,6 +152,65 @@ function nearestOpeningHit(
 	return null;
 }
 
+/** Canonical wall-first opening hit: `(wallId, openingId)`, no fake `roomId`. */
+function canonicalOpeningHit(
+	queries: CompiledLayoutQueryGeometry,
+	point: LayoutVec2,
+	tolerance: number
+): PlanHitResult {
+	for (const [wallId, group] of physicalSpansByWall(queries)) {
+		const projection = projectPointToSpans(point, group.wallSpans);
+		if (!projection || projection.distance > tolerance) continue;
+		for (const opening of [...group.openingSpans].reverse()) {
+			if (!opening.openingId) continue;
+			if (
+				projection.offset >= opening.startDistance - tolerance &&
+				projection.offset <= opening.endDistance + tolerance
+			) {
+				return {
+					kind: 'wallOpening',
+					wallId,
+					openingId: opening.openingId,
+					projection: {
+						point: projection.point,
+						offset: projection.offset,
+						distance: projection.distance,
+						t: projection.t
+					}
+				};
+			}
+		}
+	}
+	return null;
+}
+
+/** Canonical wall-first Wall hit for authoring tools (never a selection target). */
+function canonicalWallHit(
+	queries: CompiledLayoutQueryGeometry,
+	point: LayoutVec2,
+	tolerance: number
+): PlanHitResult {
+	let best: { wallId: string; projection: PlanWallProjection } | null = null;
+	for (const [wallId, group] of physicalSpansByWall(queries)) {
+		const projection = projectPointToSpans(point, group.wallSpans);
+		if (!projection || projection.distance > tolerance) continue;
+		if (!best || projection.distance < best.projection.distance) {
+			best = {
+				wallId,
+				projection: {
+					point: projection.point,
+					offset: projection.offset,
+					distance: projection.distance,
+					t: projection.t
+				}
+			};
+		}
+	}
+	return best
+		? { kind: 'physicalWall', wallId: best.wallId, projection: best.projection }
+		: null;
+}
+
 function nearestWallHit(
 	queries: CompiledLayoutQueryGeometry,
 	point: LayoutVec2,
@@ -161,6 +254,8 @@ export function resolvePlanHit(
 	if (anchor) return anchor;
 	const opening = nearestOpeningHit(queries, point, tolerance);
 	if (opening) return opening;
+	const canonicalOpening = canonicalOpeningHit(queries, point, tolerance);
+	if (canonicalOpening) return canonicalOpening;
 
 	const objectPolygon = findPolygonContaining(
 		point,
@@ -172,6 +267,8 @@ export function resolvePlanHit(
 
 	const wall = nearestWallHit(queries, point, tolerance);
 	if (wall) return wall;
+	const canonicalWall = canonicalWallHit(queries, point, tolerance);
+	if (canonicalWall) return canonicalWall;
 
 	const room = findPlanHitRoom(queries, point, options);
 	return room ? { kind: 'room', roomId: room.roomId } : null;
@@ -208,6 +305,31 @@ export function projectPointToWall(
 	return projection
 		? { point: projection.point, offset: projection.offset, distance: projection.distance, t: projection.t }
 		: null;
+}
+
+/**
+ * Project a point onto one canonical physical Wall's compiled spans, keyed by
+ * document-global `wallId` (no `roomId`). Returns the unclamped linear offset
+ * — callers decide fit validity; this helper never clamps.
+ */
+export function projectPointToPhysicalWall(
+	queries: CompiledLayoutQueryGeometry,
+	wallId: string,
+	point: LayoutVec2
+): PlanWallProjection | null {
+	const spans = physicalSpansByWall(queries).get(wallId)?.wallSpans ?? [];
+	const projection = projectPointToSpans(point, spans);
+	return projection
+		? { point: projection.point, offset: projection.offset, distance: projection.distance, t: projection.t }
+		: null;
+}
+
+/** Total compiled arc length of one canonical physical Wall. */
+export function compiledPhysicalWallLength(
+	queries: CompiledLayoutQueryGeometry,
+	wallId: string
+): number {
+	return physicalSpansByWall(queries).get(wallId)?.wallSpans.at(-1)?.endDistance ?? 0;
 }
 
 /** Total compiled arc length of one wall segment. */

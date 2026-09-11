@@ -477,7 +477,7 @@
 			>
 				<span class="chevron" class:open={roomsOpen}>›</span>
 				<span class="tree-row__label tree-root__label">Rooms</span>
-				<span class="tree-row__meta">{model.rooms.length}</span>
+				<span class="tree-row__meta">{model.rooms.length + model.wallFirstRooms.length}</span>
 			</button>
 			{#if onAddRoom}
 				<button
@@ -490,12 +490,32 @@
 			{/if}
 		</div>
 		{#if roomsOpen}
-			{#if model.rooms.length === 0}
-				<p class="empty">{wallFirstLayout ? 'Use Architecture · exact in the Inspector to edit wall-first Junctions, Walls, and Rooms.' : 'Draw a room in Plan to begin'}</p>
-			{:else if visibleModel.rooms.length === 0}
+			{#if model.rooms.length + model.wallFirstRooms.length === 0}
+				<p class="empty">{wallFirstLayout ? 'Draw a wall or room in Plan to begin' : 'Draw a room in Plan to begin'}</p>
+			{:else if visibleModel.rooms.length + visibleModel.wallFirstRooms.length === 0}
 				<p class="empty">No rows match “{filterQuery.trim()}”</p>
 			{:else}
 				<ul role="tree" aria-label="Rooms">
+					<!-- P23.3 canonical wall-first Rooms. Read-only until the canonical
+					     tree rows are cut over, and never given a fabricated segment id:
+					     their boundary Walls are document-global (`wallId`). A document is
+					     one format, so only one of these two lists is ever populated. -->
+					{#each visibleModel.wallFirstRooms as room (room.roomId)}
+						<li role="treeitem" aria-selected={false}>
+							<div class="room-line">
+								<span class="tree-row__chevron-spacer" aria-hidden="true"></span>
+								<button
+									type="button"
+									class="tree-row room-row"
+									aria-disabled="true"
+									title={`Wall-first Room · ${room.wallIds.length} walls · ${room.openingIds.length} openings — edit in Architecture · exact`}
+								>
+									<span class="tree-row__label" title={room.name}>{room.name}</span>
+									<span class="tree-row__meta">{room.wallIds.length} walls</span>
+								</button>
+							</div>
+						</li>
+					{/each}
 					{#each visibleModel.rooms as room (room.roomId)}
 						{@const open = roomOpen(room)}
 						{@const roomRow = { kind: 'room', roomId: room.roomId } satisfies UnifiedTreeRow}
@@ -958,6 +978,9 @@
 	.tree-row--selected[aria-disabled='true'] { opacity: 1; }
 	.tree-row__chevron { display: grid; width: 1.7rem; min-height: 2rem; place-items: center; padding: 0; border: 1px solid transparent; border-radius: 0.28rem; background: transparent; color: var(--editor-accent); cursor: pointer; }
 	.tree-row__chevron:hover { border-color: var(--editor-border-normal); background: var(--editor-bg-control); }
+	/* P23.3 — reserves the expand/collapse gutter on read-only canonical room
+	   rows so they align with the legacy rows instead of shifting left. */
+	.tree-row__chevron-spacer { display: block; width: 1.7rem; min-height: 2rem; flex: 0 0 auto; }
 	.tree-row__label { min-width: 0; overflow: hidden; font-size: 0.74rem; font-weight: 570; text-overflow: ellipsis; white-space: nowrap; }
 	.tree-row__meta { min-width: 0; margin-left: auto; overflow: hidden; color: var(--editor-text-muted); font-size: 0.62rem; text-overflow: ellipsis; white-space: nowrap; }
 	.tree-row--selected .tree-row__meta { color: var(--editor-text-primary); }

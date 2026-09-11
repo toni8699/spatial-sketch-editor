@@ -377,9 +377,29 @@ export function reconcileRooms(options: {
 			}
 		}
 	}
+	// Split descendants derive from lineage records only as well: a 1→2
+	// component emits one `split-survivor` (the predecessor ID) plus one
+	// `created` record carrying the predecessor as its single lineage source.
+	// The survivor is NOT retired, so a relation endpoint on it must still be
+	// resolved through wall-side adjacency (P23.8 portal split rule) instead
+	// of silently keeping the ID survivor.
+	const splitDescendants = new Map<string, string[]>();
+	for (const record of lineage) {
+		const isSplitRecord =
+			record.kind === 'split-survivor' ||
+			(record.kind === 'created' && record.predecessorRoomIds.length === 1);
+		if (!isSplitRecord) continue;
+		for (const predecessorId of record.predecessorRoomIds) {
+			const descendants = splitDescendants.get(predecessorId) ?? [];
+			descendants.push(record.roomId);
+			splitDescendants.set(predecessorId, descendants);
+		}
+	}
 	const portalResult = remapPortalRelations({
 		successorOf,
 		retiredRoomIds,
+		splitDescendants,
+		rooms: finalRooms,
 		openings: candidateDocument.openings
 	});
 	if (portalResult.kind === 'rejected') return portalResult;
@@ -465,47 +485,120 @@ function chooseMergeSurvivor(options: {
 	return first.room.id < second.room.id ? first.room : second.room;
 }
 
+/** Outcome of resolving one relation endpoint through the topology edit. */
+type PortalSideResolution =
+	| { kind: 'room'; roomId: string }
+	| { kind: 'cleared' }
+	| { kind: 'unresolved'; reason: string };
+
 /**
  * Portal semantic remapping for topology edits (P23.8). New-schema doors on
  * boundary walls derive physical adjacency from the wall; the explicit
  * `connectsRoomIds` relation is remapped only when lineage makes the result
  * unambiguous, cleared on planned semantic collapse, and rejected otherwise.
+ *
+ * Split sides are resolved through **wall-side adjacency**: when a relation
+ * endpoint is the predecessor of a 1→2 split, the successor is the descendant
+ * whose reconciled boundary references the opening's hosting Wall — never
+ * merely the descendant that kept the predecessor ID. Zero or multiple
+ * adjacent descendants is an ambiguous remap and rejects the whole topology
+ * edit (`unresolved_portal_remap`), per the P23.8 portal split rule.
  */
 function remapPortalRelations(options: {
 	successorOf: ReadonlyMap<string, string>;
 	retiredRoomIds: readonly string[];
+	/** Predecessor Room ID → descendant Room IDs of a 1→2 split component. */
+	splitDescendants: ReadonlyMap<string, readonly string[]>;
+	/** Reconciled surviving Rooms (boundaries already rewritten/reconciled). */
+	rooms: readonly LayoutWallFirstRoom[];
 	openings: readonly LayoutWallOpening[];
 }): { kind: 'ok'; openings: LayoutWallOpening[] } | ReconciliationFailure {
-	const { successorOf, retiredRoomIds, openings } = options;
-	if (retiredRoomIds.length === 0) {
+	const { successorOf, retiredRoomIds, splitDescendants, rooms, openings } = options;
+	if (retiredRoomIds.length === 0 && splitDescendants.size === 0) {
 		return { kind: 'ok', openings: [...openings] };
 	}
-	const remapped: LayoutWallOpening[] = openings.map((opening) => {
+	const boundaryByRoomId = new Map(rooms.map((room) => [room.id, room.boundary]));
+	const referencesWall = (roomId: string, wallId: string): boolean =>
+		(boundaryByRoomId.get(roomId) ?? []).some((ref) => ref.wallId === wallId);
+
+	/** Resolve one relation endpoint for one opening's hosting Wall. */
+	const resolveSide = (roomId: string, hostWallId: string): PortalSideResolution => {
+		const descendants = splitDescendants.get(roomId);
+		if (descendants && descendants.length > 0) {
+			if (descendants.length !== 2) {
+				return {
+					kind: 'unresolved',
+					reason: `split of room '${roomId}' has ${descendants.length} descendants`
+				};
+			}
+			const adjacent = descendants.filter((id) => referencesWall(id, hostWallId));
+			if (adjacent.length !== 1) {
+				return {
+					kind: 'unresolved',
+					reason:
+						adjacent.length === 0
+							? `no descendant of split room '${roomId}' is adjacent to the hosting wall '${hostWallId}'`
+							: `descendants ${adjacent.join(', ')} of room '${roomId}' are both adjacent to the hosting wall '${hostWallId}'`
+				};
+			}
+			return { kind: 'room', roomId: adjacent[0]! };
+		}
+		if (retiredRoomIds.includes(roomId)) {
+			const successor = successorOf.get(roomId);
+			return successor ? { kind: 'room', roomId: successor } : { kind: 'cleared' };
+		}
+		return { kind: 'room', roomId };
+	};
+
+	const remapped: LayoutWallOpening[] = [];
+	for (const opening of openings) {
 		const relation = opening.connectsRoomIds;
-		if (!relation) return opening;
+		if (!relation) {
+			remapped.push(opening);
+			continue;
+		}
 		const [a, b] = relation;
-		const nextA = successorOf.get(a) ?? (retiredRoomIds.includes(a) ? undefined : a);
-		const nextB = successorOf.get(b) ?? (retiredRoomIds.includes(b) ? undefined : b);
-		if (nextA === undefined || nextB === undefined) {
+		const nextA = resolveSide(a, opening.wallId);
+		const nextB = resolveSide(b, opening.wallId);
+		const unresolved = [nextA, nextB].find((side) => side.kind === 'unresolved');
+		if (unresolved && unresolved.kind === 'unresolved') {
+			return failure({
+				code: 'unresolved_portal_remap',
+				message: `Opening '${opening.id}' portal relation cannot be remapped unambiguously (${unresolved.reason})`,
+				roomIds: [a, b]
+			});
+		}
+		const aCleared = nextA.kind !== 'room';
+		const bCleared = nextB.kind !== 'room';
+		if (aCleared && bCleared) {
 			// Unambiguous disappearance clears the relation while preserving
 			// the physical door (P23.8 portal disappearance rule).
-			if (!retiredRoomIds.includes(a) || !retiredRoomIds.includes(b)) {
-				// One side unresolvable → reject.
-				return opening;
-			}
 			const cleared = { ...opening };
 			delete (cleared as Partial<LayoutWallOpening>).connectsRoomIds;
-			return cleared as LayoutWallOpening;
+			remapped.push(cleared as LayoutWallOpening);
+			continue;
 		}
-		if (nextA === nextB) {
+		if (aCleared || bCleared) {
+			// One side vanished while the other resolved: the surviving
+			// semantic pairing is unknown → reject rather than guess.
+			return failure({
+				code: 'unresolved_portal_remap',
+				message: `Opening '${opening.id}' relation has one unresolvable endpoint (${aCleared ? a : b} disappeared)`,
+				roomIds: [a, b]
+			});
+		}
+		const nextAId = (nextA as { kind: 'room'; roomId: string }).roomId;
+		const nextBId = (nextB as { kind: 'room'; roomId: string }).roomId;
+		if (nextAId === nextBId) {
 			// Both tuple members collapsed into the same room: planned semantic
 			// collapse, physical door preserved.
 			const collapsed = { ...opening };
 			delete (collapsed as Partial<LayoutWallOpening>).connectsRoomIds;
-			return collapsed as LayoutWallOpening;
+			remapped.push(collapsed as LayoutWallOpening);
+			continue;
 		}
-		return { ...opening, connectsRoomIds: [nextA, nextB] };
-	});
+		remapped.push({ ...opening, connectsRoomIds: [nextAId, nextBId] });
+	}
 	// Validate no unresolved relations to retired rooms remain.
 	for (const opening of remapped) {
 		const relation = opening.connectsRoomIds;

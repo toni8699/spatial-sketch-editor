@@ -1,10 +1,11 @@
 import {
 	createEmptyLayoutDocument,
+	createEmptyWallFirstLayoutDocument,
 	validateLayoutDocument,
 	type LayoutValidationResult
 } from '@portfolio/layout-core';
 import { validateWallFirstLayoutDocument } from '@portfolio/layout-core';
-import { createEmptySceneDocument } from './scene';
+import { createEmptySceneDocument, createEmptyWorldLocalSceneDocument } from './scene';
 import {
 	validateSceneDocument,
 	type SceneDocumentValidationResult,
@@ -64,6 +65,30 @@ export function createEmptyProject(input: EmptyProjectInput): Project {
 		name: input.name,
 		layout: createEmptyLayoutDocument(),
 		scene: createEmptySceneDocument()
+	};
+}
+
+/**
+ * Authoring-empty WALL-FIRST project — the canonical new-project boot.
+ *
+ * One valid empty wall-first Layout (`formatVersion: 4`) plus one valid empty
+ * world-local Scene (`formatVersion: 1`): the pair `validateProject` requires,
+ * since a wall-first Layout carrying the recognized legacy Scene is rejected
+ * by name. Booting the canonical pair is what makes the wall-first Layout path
+ * (canonical Junctions/Walls/Rooms/Openings) reachable without importing JSON,
+ * while `createEmptyProject` keeps returning the legacy pair for the legacy
+ * read path and compatibility fixtures.
+ */
+export function createEmptyWallFirstProject(input: EmptyProjectInput): Project {
+	return {
+		id: input.id,
+		name: input.name,
+		// The public `Project` document type stays the legacy compatibility
+		// shape; a wall-first payload is carried through this boundary unchanged
+		// at runtime and typed by the compatible runtime/save seams (same cast
+		// `validateProject` performs).
+		layout: createEmptyWallFirstLayoutDocument() as unknown as Project['layout'],
+		scene: createEmptyWorldLocalSceneDocument()
 	};
 }
 

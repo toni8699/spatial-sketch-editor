@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { LayoutDocument } from '$lib/layout/layout-types';
+import type { LayoutDocumentWallFirst } from '$lib/layout/layout-wall-first-types';
 import type { SceneDocument, SceneEntity } from '$lib/content/scene';
 import type { ActiveEditorSelection } from '$lib/editor/app/active-editor-selection.svelte';	import {
 		buildUnifiedProjectTreeModel,
@@ -549,5 +550,102 @@ describe('hierarchy filter', () => {
 	it('yields an empty room list when nothing matches', () => {
 		const filtered = filterUnifiedProjectTreeModel(buildModel(), 'zzz-no-match');
 		expect(filtered.rooms).toEqual([]);
+	});
+});
+
+/**
+ * P23.3 — canonical wall-first documents. A new project boots wall-first, so
+ * the sidebar must count and list their Rooms; before this the tree reported
+ * zero Rooms for a document that had them. Canonical Rooms are keyed by
+ * document-global `wallId`, never squeezed into the legacy `segmentId` rows.
+ */
+describe('unified project tree — wall-first documents', () => {
+	function makeWallFirstLayout(): LayoutDocumentWallFirst {
+		return {
+			units: 'meters',
+			formatVersion: 4,
+			floor: { id: 'floor-1', name: 'Floor 1', elevation: 0, height: 3 },
+			junctions: [
+				{ id: 'j1', point: [0, 0] },
+				{ id: 'j2', point: [5, 0] },
+				{ id: 'j3', point: [5, 4] },
+				{ id: 'j4', point: [0, 4] }
+			],
+			walls: [
+				{ id: 'w1', startJunctionId: 'j1', endJunctionId: 'j2', role: 'boundary', thickness: 0.15, height: 2.8 },
+				{ id: 'w2', startJunctionId: 'j2', endJunctionId: 'j3', role: 'boundary', thickness: 0.15, height: 2.8 },
+				{ id: 'w3', startJunctionId: 'j3', endJunctionId: 'j4', role: 'boundary', thickness: 0.15, height: 2.8 },
+				{ id: 'w4', startJunctionId: 'j4', endJunctionId: 'j1', role: 'boundary', thickness: 0.15, height: 2.8 },
+				// Partition that bounds no Room; its Opening is not the Room's.
+				{ id: 'w5', startJunctionId: 'j1', endJunctionId: 'j3', role: 'partition', thickness: 0.1, height: 2.8 }
+			],
+			rooms: [
+				{
+					id: 'room-wf',
+					name: 'Canonical Room',
+					boundary: [
+						{ wallId: 'w1', direction: 'forward' },
+						{ wallId: 'w2', direction: 'forward' },
+						{ wallId: 'w3', direction: 'forward' },
+						{ wallId: 'w4', direction: 'forward' },
+						// Dangling ref (mid-flight topology edit) must not surface.
+						{ wallId: 'w-gone', direction: 'forward' }
+					],
+					floorThickness: 0.1,
+					ceilingThickness: 0.1
+				}
+			],
+			openings: [
+				{ id: 'op-1', wallId: 'w1', kind: 'door', offset: 1, width: 0.9, height: 2.1, sillHeight: 0, profile: 'rectangular' },
+				{ id: 'op-2', wallId: 'w5', kind: 'window', offset: 0.5, width: 0.9, height: 1.2, sillHeight: 0.9, profile: 'rectangular' }
+			],
+			objects: []
+		};
+	}
+
+	function buildWallFirstModel() {
+		return buildUnifiedProjectTreeModel({
+			layout: makeWallFirstLayout(),
+			scene: { textures: [], materials: [], entities: [], navigationNodes: [], connections: [] },
+			guidedTourNodeIds: []
+		});
+	}
+
+	it('counts canonical Rooms and lists each with its own boundary Walls', () => {
+		const model = buildWallFirstModel();
+
+		// The legacy bucket stays empty: canonical Rooms never reuse the
+		// (roomId, segmentId) row identity.
+		expect(model.rooms).toEqual([]);
+		expect(model.wallFirstRooms).toHaveLength(1);
+
+		const room = model.wallFirstRooms[0]!;
+		expect(room.roomId).toBe('room-wf');
+		expect(room.name).toBe('Canonical Room');
+		// Dangling boundary ref dropped; document order preserved.
+		expect(room.wallIds).toEqual(['w1', 'w2', 'w3', 'w4']);
+		// Only Openings hosted by THIS Room's Walls — the partition's is not.
+		expect(room.openingIds).toEqual(['op-1']);
+	});
+
+	it('keeps the legacy bucket empty of canonical rooms and vice versa', () => {
+		const legacy = buildUnifiedProjectTreeModel({
+			layout: makeLayout(),
+			scene: { textures: [], materials: [], entities: [], navigationNodes: [], connections: [] },
+			guidedTourNodeIds: []
+		});
+		expect(legacy.wallFirstRooms).toEqual([]);
+		expect(legacy.rooms).toHaveLength(2);
+	});
+
+	it('filters canonical Rooms by room, Wall and Opening identity', () => {
+		const model = buildWallFirstModel();
+
+		expect(filterUnifiedProjectTreeModel(model, 'canonical').wallFirstRooms).toHaveLength(1);
+		expect(filterUnifiedProjectTreeModel(model, 'w3').wallFirstRooms).toHaveLength(1);
+		expect(filterUnifiedProjectTreeModel(model, 'op-1').wallFirstRooms).toHaveLength(1);
+		expect(filterUnifiedProjectTreeModel(model, 'zzz-no-match').wallFirstRooms).toEqual([]);
+		// A partition's Wall is not any Room's, so its id matches nothing here.
+		expect(filterUnifiedProjectTreeModel(model, 'w5').wallFirstRooms).toEqual([]);
 	});
 });

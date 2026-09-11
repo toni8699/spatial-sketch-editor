@@ -355,6 +355,10 @@ export function resolveLayoutGizmoTarget(
 			return resolveInteriorAnchor(layout, geometry, selection);
 		case 'object':
 			return resolveObject(layout, geometry, selection);
+		// P23.3 canonical wall-first Opening selection has no legacy Room-owned
+		// gizmo candidate (the wall-first gizmo adapter is a deferred cutover).
+		case 'wallOpening':
+			return null;
 	}
 }
 

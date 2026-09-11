@@ -1,4 +1,5 @@
 import type { DraftSegment, LayoutDocument, LayoutRoom, LayoutVec2 } from '$lib/layout/layout-types';
+import type { LayoutDocumentWallFirst } from '$lib/layout/layout-wall-first-types';
 import type { LayoutRoomUnitTransform } from './layout-room-transform';
 import { createPlanViewportState, snapToGrid, type PlanViewportState } from './layout-plan-transform';
 import { EDITOR_DRAG_THRESHOLD_PX } from '../interaction-constants';
@@ -124,7 +125,169 @@ export type LayoutSelection =
 	| { kind: 'wall'; roomId: string; segmentId: string }
 	| { kind: 'opening'; roomId: string; segmentId: string; openingId: string }
 	| { kind: 'interiorAnchor'; roomId: string; segmentId: string; anchorId: string }
-	| { kind: 'object'; objectId: string };
+	| { kind: 'object'; objectId: string }
+	/**
+	 * P23.3 — canonical wall-first opening target on the same selection
+	 * authority: document-global `wallId` + `openingId`, no `roomId` and no
+	 * `segmentId`. Legacy opening selection keeps its room-anchored shape; the
+	 * full `(roomId, segmentId)` → `(wallId/junctionId)` cutover stays deferred
+	 * (P23.6/P23.7), so this is deliberately the only wall-first slot.
+	 */
+	| { kind: 'wallOpening'; wallId: string; openingId: string };
+
+/** P23.3 — which part of a canonical Opening a drag gesture is moving. */
+export type LayoutWallOpeningDragMode = 'body' | 'start-edge' | 'end-edge';
+
+/**
+ * P23.3 — transient canonical Opening drag session (never persisted, never a
+ * second selection store). The baseline is immutable for the whole gesture;
+ * `rawPointerOffset` is the unclamped pointer projection and
+ * `candidateOffset`/`candidateWidth` are the suggested placement — from a real
+ * P23.2 snap win when one is honored, otherwise from the raw candidate. A raw
+ * candidate outside fit bounds stays `valid: false` and commits nothing.
+ */
+export type LayoutWallOpeningDrag = {
+	mode: LayoutWallOpeningDragMode;
+	wallId: string;
+	openingId: string;
+	/** Immutable gesture baseline (offset/width in canonical Wall meters). */
+	baselineOffset: number;
+	baselineWidth: number;
+	wallLength: number;
+	/** Unclamped pointer projection (body: opening start frame; edges: edge offset). */
+	rawPointerOffset: number;
+	candidateOffset: number;
+	candidateWidth: number;
+	/** True only when a real P23.2 snap candidate won (never set by clamping). */
+	snapped: boolean;
+	/** Candidate interval fit the hosting Wall (shape-only; the commit re-validates the whole set). */
+	valid: boolean;
+};
+
+export type LayoutWallOpeningDragCandidate = {
+	offset: number;
+	width: number;
+	snapped: boolean;
+	valid: boolean;
+};
+
+/**
+ * Pure candidate derivation for one drag update — the P23.3 raw-vs-snap
+ * contract in one place. `snapOffset` carries a *honored* snap win only (an
+ * offset that was reachable without clamping); `null` means the raw candidate
+ * stands on its own merits.
+ */
+export function computeLayoutWallOpeningDragCandidate(
+	drag: Pick<
+		LayoutWallOpeningDrag,
+		'mode' | 'baselineOffset' | 'baselineWidth' | 'wallLength'
+	>,
+	input: { rawPointerOffset: number; snapOffset: number | null }
+): LayoutWallOpeningDragCandidate {
+	const epsilon = 1e-6;
+	const snapped = input.snapOffset !== null;
+	const fits = (offset: number, width: number): boolean =>
+		width > epsilon && offset >= -epsilon && offset + width <= drag.wallLength + epsilon;
+	if (drag.mode === 'body') {
+		// `rawPointerOffset` is the pointer's own center projection, while an
+		// honored `snapOffset` is already a resolved start-edge offset (the P23.2
+		// resolver clamps every candidate into `[0, length - width]`). Only the
+		// raw path needs the half-width shift; the snapped path is final.
+		const offset = input.snapOffset ?? input.rawPointerOffset - drag.baselineWidth / 2;
+		return {
+			offset,
+			width: drag.baselineWidth,
+			snapped,
+			valid: snapsAfterClamp(input.snapOffset, offset, drag.baselineWidth, drag.wallLength) && fits(offset, drag.baselineWidth)
+		};
+	}
+	const resolved = input.snapOffset ?? input.rawPointerOffset;
+	const fixedRightEdge = drag.baselineOffset + drag.baselineWidth;
+	if (drag.mode === 'end-edge') {
+		const width = resolved - drag.baselineOffset;
+		return {
+			offset: drag.baselineOffset,
+			width,
+			snapped,
+			valid: fits(drag.baselineOffset, width)
+		};
+	}
+	// start-edge: the opposite (right) edge stays fixed.
+	const width = fixedRightEdge - resolved;
+	return {
+		offset: resolved,
+		width,
+		snapped,
+		valid: fits(resolved, width)
+	};
+}
+
+/**
+ * A snap win only counts when its own candidate interval is inside the Wall
+ * (never when the resolver merely clamped a far-away pointer into range).
+ */
+function snapsAfterClamp(
+	snapOffset: number | null,
+	offset: number,
+	width: number,
+	wallLength: number
+): boolean {
+	if (snapOffset === null) return true;
+	return snapOffset >= -1e-6 && snapOffset + width <= wallLength + 1e-6;
+}
+
+/** Begin one canonical Opening drag with an immutable baseline. */
+export function beginLayoutWallOpeningDrag(
+	state: LayoutInteractionState,
+	input: {
+		mode: LayoutWallOpeningDragMode;
+		wallId: string;
+		openingId: string;
+		offset: number;
+		width: number;
+		wallLength: number;
+	}
+): void {
+	state.wallOpeningDrag = {
+		mode: input.mode,
+		wallId: input.wallId,
+		openingId: input.openingId,
+		baselineOffset: input.offset,
+		baselineWidth: input.width,
+		wallLength: input.wallLength,
+		rawPointerOffset: input.offset + input.width / 2,
+		candidateOffset: input.offset,
+		candidateWidth: input.width,
+		snapped: false,
+		valid: true
+	};
+}
+
+/**
+ * Update the transient candidate for one pointer move. `snapOffset` is an
+ * honored snap win's offset (edge space for width handles, start space for
+ * body drags) or `null`. Never mutates the document or history.
+ */
+export function updateLayoutWallOpeningDrag(
+	state: LayoutInteractionState,
+	input: { rawPointerOffset: number; snapOffset: number | null; wallLength: number }
+): LayoutWallOpeningDragCandidate | null {
+	const drag = state.wallOpeningDrag;
+	if (!drag) return null;
+	drag.wallLength = input.wallLength;
+	drag.rawPointerOffset = input.rawPointerOffset;
+	const candidate = computeLayoutWallOpeningDragCandidate(drag, input);
+	drag.candidateOffset = candidate.offset;
+	drag.candidateWidth = candidate.width;
+	drag.snapped = candidate.snapped;
+	drag.valid = candidate.valid;
+	return candidate;
+}
+
+/** Cancel the drag session (Escape / pointer-cancel): the baseline was never applied. */
+export function cancelLayoutWallOpeningDrag(state: LayoutInteractionState): void {
+	state.wallOpeningDrag = null;
+}
 
 export type LayoutInteractionState = {
 	viewMode: LayoutViewMode;
@@ -158,6 +321,8 @@ export type LayoutInteractionState = {
 	selection: LayoutSelection;
 	objectDrag: LayoutObjectDrag | null;
 	roomUnitDrag: LayoutRoomUnitDrag | null;
+	/** P23.3 canonical Opening drag session (transient; never persisted). */
+	wallOpeningDrag: LayoutWallOpeningDrag | null;
 	/** P10 — the Arrange session's remembered last owner (routing, never identity). */
 	arrangeOwner: ArrangeOwner;
 	accordions: LayoutAccordionState;
@@ -190,6 +355,7 @@ export function createLayoutInteractionState(): LayoutInteractionState {
 		selection: { kind: 'none' },
 		objectDrag: null,
 		roomUnitDrag: null,
+		wallOpeningDrag: null,
 		arrangeOwner: null,
 		accordions: { place: true, objects: true, selection: true },
 		planView: createPlanViewportState(),
@@ -258,7 +424,14 @@ export function resolveArrangeScenePick(input: {
 export function hasLayoutTransientInteraction(
 	state: Pick<
 		LayoutInteractionState,
-		'polygonPoints' | 'rectangleStart' | 'primitiveDraft' | 'objectDrag' | 'roomUnitDrag' | 'editing' | 'wallChainStart'
+		| 'polygonPoints'
+		| 'rectangleStart'
+		| 'primitiveDraft'
+		| 'objectDrag'
+		| 'roomUnitDrag'
+		| 'wallOpeningDrag'
+		| 'editing'
+		| 'wallChainStart'
 	>
 ): boolean {
 	return Boolean(
@@ -268,6 +441,7 @@ export function hasLayoutTransientInteraction(
 		state.primitiveDraft ||
 		state.objectDrag ||
 		state.roomUnitDrag ||
+		state.wallOpeningDrag ||
 		state.editing
 	);
 }
@@ -279,6 +453,7 @@ export function setLayoutViewMode(state: LayoutInteractionState, viewMode: Layou
 	state.objectDrag = null;
 	state.roomUnitDrag = null;
 	state.primitiveDraft = null;
+	state.wallOpeningDrag = null;
 }
 
 export function setLayoutDraftTool(state: LayoutInteractionState, tool: LayoutDraftTool): void {
@@ -288,6 +463,7 @@ export function setLayoutDraftTool(state: LayoutInteractionState, tool: LayoutDr
 	state.objectDrag = null;
 	state.roomUnitDrag = null;
 	state.primitiveDraft = null;
+	state.wallOpeningDrag = null;
 }
 
 export function toggleLayoutAccordion(
@@ -571,6 +747,19 @@ export function selectLayoutInteriorAnchor(
 	cancelRoomEdit(state);
 }
 
+/**
+ * P23.3 — select one canonical wall-first Opening by document-global IDs on
+ * the existing selection authority (no second store, no fake `roomId`).
+ */
+export function selectLayoutWallOpening(
+	state: LayoutInteractionState,
+	wallId: string,
+	openingId: string
+): void {
+	state.selection = { kind: 'wallOpening', wallId, openingId };
+	cancelRoomEdit(state);
+}
+
 export function clearLayoutSelection(state: LayoutInteractionState): void {
 	state.selection = { kind: 'none' };
 	cancelRoomEdit(state);
@@ -582,9 +771,20 @@ export function selectLayoutObject(state: LayoutInteractionState, objectId: stri
 }
 
 export function selectedLayoutRoomId(state: Pick<LayoutInteractionState, 'selection'>): string | null {
-	return state.selection.kind === 'none' || state.selection.kind === 'object'
+	return state.selection.kind === 'none' ||
+		state.selection.kind === 'object' ||
+		state.selection.kind === 'wallOpening'
 		? null
 		: state.selection.roomId;
+}
+
+/** P23.3 — the canonical wall-first opening selection, or `null`. */
+export function selectedLayoutWallOpening(
+	state: Pick<LayoutInteractionState, 'selection'>
+): { wallId: string; openingId: string } | null {
+	return state.selection.kind === 'wallOpening'
+		? { wallId: state.selection.wallId, openingId: state.selection.openingId }
+		: null;
 }
 
 export function beginLayoutObjectDrag(
@@ -833,13 +1033,24 @@ export function reconcileLayoutSelection(
 	selection: LayoutSelection,
 	layout: LayoutDocument
 ): LayoutSelection {
-	// Wall-first precision targets are inspector-local in P23.1. Keep the
-	// existing legacy selection slot safe when a project swap replaces a
-	// Room-owned document with a wall-first document that has no `.floors`.
+	// Wall-first documents have no `.floors`. The minimal P23.3 canonical
+	// opening target survives when its own `(wallId, openingId)` record still
+	// exists and the touch-drag invariant holds: an Opening that survives a
+	// topology edit keeps its ID, so selection needs no re-derivation. Every
+	// other legacy target clears (the `(roomId, segmentId)` cutover is
+	// deferred); nothing here invents a roomless-wall rich selection.
 	if ('formatVersion' in layout) {
-		return selection.kind === 'none' || selection.kind === 'object'
-			? selection
-			: { kind: 'none' };
+		if (selection.kind === 'none' || selection.kind === 'object') return selection;
+		if (selection.kind === 'wallOpening') {
+			const wallFirst = layout as unknown as LayoutDocumentWallFirst;
+			const opening = wallFirst.openings.find(
+				(candidate) => candidate.id === selection.openingId
+			);
+			return opening && opening.wallId === selection.wallId
+				? selection
+				: { kind: 'none' };
+		}
+		return { kind: 'none' };
 	}
 	switch (selection.kind) {
 		case 'none':
@@ -875,5 +1086,9 @@ export function reconcileLayoutSelection(
 			return layout.objects.some((object) => object.id === selection.objectId)
 				? selection
 				: { kind: 'none' };
+		// A canonical wall-first target cannot be validated against a legacy
+		// Room-owned document: clear rather than guess.
+		case 'wallOpening':
+			return { kind: 'none' };
 	}
 }
