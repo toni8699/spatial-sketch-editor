@@ -125,6 +125,7 @@ export function layoutAnchorHelperPlacements(
 	const placements: LayoutAnchorHelperPlacement[] = [];
 	for (const point of geometry.queries.points) {
 		if (point.kind !== 'interior-anchor') continue;
+		if (point.roomId === undefined) continue;
 		placements.push({
 			roomId: point.roomId,
 			segmentId: point.segmentId,

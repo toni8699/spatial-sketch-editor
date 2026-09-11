@@ -6,18 +6,25 @@
 	import type { LayoutPreviewModel } from './layout-mesh-factory';
 	import {
 		addPolygonPoint,
+		advanceWallChainContinuation,
 		beginLayoutObjectDrag,
 		beginLayoutObjectRotateDrag,
 		beginLayoutRoomUnitDrag,
 		beginLayoutPrimitiveDraft,
 		beginRectangle,
 		beginRoomEdit,
+		beginWallChain,
 		cancelLayoutObjectDrag,
 		cancelLayoutRoomUnitDrag,
 		cancelLayoutPrimitiveDraft,
 		cancelRoomEdit,
+		cancelWallChainRun,
+		captureWallChainRun,
 		clearLayoutDraft,
 		clearLayoutSelection,
+		hasWallChainRun,
+		resolveWallChainEndpointAtLength,
+		restoreWallChainRun,
 		selectLayoutInteriorAnchor,
 		selectLayoutObject,
 		selectLayoutOpening,
@@ -27,7 +34,9 @@
 		setLayoutDraftTool,
 		type LayoutDraftTool,
 		removeLastPolygonPoint,
+		updateWallChainCursor,
 		resolveArrangeScenePick,
+		wallChainRoleForTool,
 		shouldBeginWallBend,
 		updateRectangle,
 		updateLayoutObjectDrag,
@@ -135,6 +144,7 @@
 		onSceneGestureCancel,
 		onSceneDelete,
 		onCommit,
+		onWallSegmentCommit,
 		onOpeningCreate,
 		onOpeningDelete,
 		onRoomDelete,
@@ -166,6 +176,8 @@
 		onSceneGestureCancel?: () => boolean;
 		onSceneDelete?: () => boolean;
 		onCommit: (points: LayoutVec2[]) => boolean;
+	/** P23.9 segment-first — commit one Wall/Partition segment (one history entry). Returns the canonical Junctions for continuation. */
+	onWallSegmentCommit: (start: LayoutVec2, end: LayoutVec2) => { success: boolean; startJunctionId?: string; endJunctionId?: string; closedRun?: boolean };
 		onOpeningCreate: (roomId: string, segmentId: string, kind: LayoutOpeningKind, clickOffset: number) => void;
 		onOpeningDelete: (roomId: string, openingId: string) => void;
 		onRoomDelete: (roomId: string) => boolean;
@@ -349,10 +361,11 @@
 		arrangeEligibleLayoutObjectIds.size === 0 &&
 		stagingEligibleIds.size === 0
 	);
-	// P3.3 — the canonical empty-plan state: no rooms, no layout objects, and
-	// no scene entities anywhere in the document.
+	// P3.3 — the canonical empty-plan state: no rooms, no physical walls, no
+	// layout objects, and no scene entities anywhere in the document.
 	const planEmpty = $derived(
 		preview.model.rooms.length === 0 &&
+		(preview.geometry.walls ?? []).length === 0 &&
 		preview.model.objects.length === 0 &&
 		(scene?.entities.length ?? 0) === 0
 	);
@@ -551,6 +564,24 @@
 		}
 	});
 
+	// P23.9 segment-first — a sketch run never survives document/history
+	// replacement (import/reset/undo/redo). Every replacement bumps
+	// `previewVersion`. Our own segment commits also bump it, so the commit
+	// path sets `draftedVersion` synchronously after advancing continuation —
+	// only external bumps clear the run. Tool changes already cancel via
+	// `setLayoutDraftTool`. `pointerleave` clears only cursor/snap, never the run.
+	let draftedVersion = $state<number | null>(null);
+	$effect(() => {
+		const version = preview.previewVersion;
+		if (draftedVersion === null) {
+			draftedVersion = version;
+			return;
+		}
+		if (version === draftedVersion) return;
+		draftedVersion = version;
+		if (hasWallChainRun(interaction)) cancelWallChainRun(interaction);
+	});
+
 	$effect(() => {
 		const replacementVersion = preview.reframeVersion;
 		if (framedReplacementVersion === null) {
@@ -568,8 +599,12 @@
 	});
 
 	function frameView() {
+		const wallPoints = (preview.geometry.walls ?? []).flatMap((wall) =>
+			wall.solidCenterlinePolylines.flat()
+		);
 		const points = [
 			...model.rooms.flatMap((room) => room.floorPolygon),
+			...wallPoints,
 			...model.objects.flatMap((object) => object.planFootprint),
 			...(sceneProjection?.footprints.flatMap((footprint) => footprint.points) ?? [])
 		];
@@ -1221,7 +1256,8 @@
 		}
 
 		if (interaction.tool === 'rectangle') {
-			if ('formatVersion' in preview.project.layout) return;
+			// P23.9 — Rectangle sketches a boundary chain on wall-first documents
+			// too; only the commit path differs by document format.
 			const snapped = draftPoint(event, null);
 			if (!snapped || !svgElement) return;
 			pointerId = event.pointerId;
@@ -1340,6 +1376,17 @@
 	}
 
 	function onPointerMove(event: PointerEvent) {
+		// P23.9 segment-first — pending segment preview follows the snapped
+		// cursor once a run has started. `pointerleave` clears only the
+		// cursor/snap preview, never the run (click-click needs SVG exit).
+		if (wallChainRoleForTool(interaction.tool) !== null && interaction.planViewMode === 'layout') {
+			if (hasWallChainRun(interaction)) {
+				const point = worldPoint(event);
+				updateWallChainCursor(interaction, point ? applyLayoutSnap(point) : null);
+			} else if (interaction.wallChainCursor) {
+				updateWallChainCursor(interaction, null);
+			}
+		}
 		if (stagingGesture?.pointerId === event.pointerId) {
 			previewStagingGesture(event);
 			return;
@@ -1656,8 +1703,13 @@
 		dragSnapshot = null;
 		svgElement?.releasePointerCapture(event.pointerId);
 		if (interaction.tool === 'rectangle') {
+			// P23.9 — on a wall-first document Rectangle is the bounded four-Wall
+			// chain frontend: same canonical graph as an equivalent chain. The
+			// legacy Room-polygon commit stays for legacy documents.
 			if ('formatVersion' in preview.project.layout) {
-				clearLayoutDraft(interaction);
+				const points = rectanglePoints(interaction);
+				if (points && onCommit(points)) clearLayoutDraft(interaction);
+				else clearLayoutDraft(interaction);
 				return;
 			}
 			const points = rectanglePoints(interaction);
@@ -1712,9 +1764,13 @@
 			suppressNextClick = false;
 			return;
 		}
-		if (interaction.tool !== 'polygon') return;
+		if (interaction.tool !== 'polygon' && wallChainRoleForTool(interaction.tool) === null) return;
 		const point = worldPoint(event);
 		if (!point) return;
+		if (wallChainRoleForTool(interaction.tool) !== null) {
+			commitWallChainClick(point);
+			return;
+		}
 		const anchor = interaction.polygonPoints.at(-1) ?? null;
 		let nextPoint = point;
 		if (anchor && event.shiftKey && interaction.planView.angleSnapEnabled) nextPoint = constrainToAngle(anchor, nextPoint);
@@ -1728,9 +1784,101 @@
 		addPolygonPoint(interaction, nextPoint);
 	}
 
+	/**
+	 * P23.9 segment-first — one click either starts a run (first click =
+	 * transient start) or completes one Wall (validate + commit immediately,
+	 * then seed the next start from the canonical end Junction). Closure is
+	 * explicit Junction identity (`endJunctionId === runStartJunctionId`),
+	 * never coordinate proximity and never "a Room appeared".
+	 */
+	function commitWallChainClick(rawPoint: LayoutVec2) {
+		const snapped = applyLayoutSnap(rawPoint);
+		if (!hasWallChainRun(interaction)) {
+			preview.statusMessage = null;
+			beginWallChain(interaction, snapped);
+			return;
+		}
+		const start = interaction.wallChainStart!;
+		// A rejection rolls its history transaction back through snapshot
+		// restore (clearing transient state as a side effect and bumping the
+		// version), so re-install the saved run + version to keep the current
+		// start available for correction.
+		const savedRun = captureWallChainRun(interaction);
+		const result = onWallSegmentCommit([...start], [...snapped]);
+		if (!result.success) {
+			if (savedRun) restoreWallChainRun(interaction, savedRun);
+			draftedVersion = preview.previewVersion;
+			return;
+		}
+		if (result.startJunctionId === undefined || result.endJunctionId === undefined) {
+			cancelWallChainRun(interaction);
+			return;
+		}
+		const endPoint = resolveJunctionPoint(result.endJunctionId) ?? [...snapped];
+		if (result.closedRun) {
+			cancelWallChainRun(interaction);
+		} else {
+			advanceWallChainContinuation(interaction, {
+				endPoint,
+				endJunctionId: result.endJunctionId,
+				startJunctionId: result.startJunctionId
+			});
+		}
+		draftedVersion = preview.previewVersion;
+	}
+
+	/** Resolve a canonical Junction point from the live wall-first document. */
+	function resolveJunctionPoint(junctionId: string): LayoutVec2 | null {
+		const layout = preview.project.layout;
+		if (!('formatVersion' in layout)) return null;
+		const wallFirst = layout as unknown as { junctions: { id: string; point: LayoutVec2 }[] };
+		const junction = wallFirst.junctions.find((candidate) => candidate.id === junctionId);
+		return junction ? ([...junction.point] as LayoutVec2) : null;
+	}
+
 	function finishPolygon() {
 		if (interaction.polygonPoints.length < 3) return;
 		if (onCommit([...interaction.polygonPoints])) clearLayoutDraft(interaction);
+	}
+
+	/**
+	 * P23.9 segment-first — exact length resolves the current candidate
+	 * endpoint (bypasses gesture grid snapping), commits exactly one segment
+	 * transaction, and makes the canonical end Junction the next start.
+	 */
+	let chainLengthDraft = $state('');
+
+	function addChainLengthLeg(event: SubmitEvent) {
+		event.preventDefault();
+		const length = Number(chainLengthDraft);
+		if (!chainLengthDraft.trim() || !Number.isFinite(length) || length <= 0) return;
+		if (!hasWallChainRun(interaction)) return;
+		const endpoint = resolveWallChainEndpointAtLength(interaction, length);
+		if (!endpoint) return;
+		const start = interaction.wallChainStart!;
+		const savedRun = captureWallChainRun(interaction);
+		const result = onWallSegmentCommit([...start], [...endpoint]);
+		if (!result.success) {
+			if (savedRun) restoreWallChainRun(interaction, savedRun);
+			draftedVersion = preview.previewVersion;
+			return;
+		}
+		if (result.startJunctionId === undefined || result.endJunctionId === undefined) {
+			cancelWallChainRun(interaction);
+			return;
+		}
+		chainLengthDraft = '';
+		const endPoint = resolveJunctionPoint(result.endJunctionId) ?? [...endpoint];
+		if (result.closedRun) {
+			cancelWallChainRun(interaction);
+		} else {
+			advanceWallChainContinuation(interaction, {
+				endPoint,
+				endJunctionId: result.endJunctionId,
+				startJunctionId: result.startJunctionId
+			});
+		}
+		draftedVersion = preview.previewVersion;
 	}
 
 	function onWheel(event: WheelEvent) {
@@ -1783,6 +1931,13 @@
 			}
 			if (interaction.tool === 'door' || interaction.tool === 'window') {
 				setLayoutDraftTool(interaction, 'select');
+				return;
+			}
+			// P23.9 segment-first — Escape cancels only the active continuation
+			// preview/run (committed Walls remain; no history entry; tool stays
+			// selected). It must never remove committed Walls.
+			if (hasWallChainRun(interaction)) {
+				cancelWallChainRun(interaction);
 				return;
 			}
 			onLayoutTransactionCancel();
@@ -1870,6 +2025,9 @@
 			event.preventDefault();
 			removeLastPolygonPoint(interaction);
 		}
+		// P23.9 segment-first — Backspace must not act as undo for committed
+		// Walls (they use normal Undo/Redo). Kept only for genuinely transient
+		// compound tools (uncommitted Polygon vertices above).
 	}
 
 	function distance(a: LayoutVec2, b: LayoutVec2): number {
@@ -1938,6 +2096,9 @@
 			rotationHoverScreen = null;
 			arrangeLayoutRotationHoverScreen = null;
 			arrangeHover = null;
+			// P23.9 — the pending segment preview follows the pointer, so leaving
+			// the surface drops it rather than freezing a stale leg.
+			updateWallChainCursor(interaction, null);
 			clearLayoutSnapFeedback();
 		}}
 	>
@@ -1952,11 +2113,30 @@
 		{/if}
 
 	</svg>
+	{#if preview.statusMessage}
+		<p class="plan-status" role="status">{preview.statusMessage}</p>
+	{/if}
 	<div class="plan-actions">
+		{#if wallChainRoleForTool(interaction.tool) !== null && hasWallChainRun(interaction)}
+			<form class="chain-length" onsubmit={addChainLengthLeg}>
+				<label for="plan-chain-length">Length</label>
+				<input
+					id="plan-chain-length"
+					type="number"
+					min="0.01"
+					step="0.01"
+					placeholder="m"
+					aria-label="Exact current segment length in meters"
+					value={chainLengthDraft}
+					oninput={(event) => (chainLengthDraft = event.currentTarget.value)}
+				/>
+				<button type="submit">Commit segment</button>
+			</form>
+		{/if}
 		{#if interaction.tool === 'polygon' && interaction.polygonPoints.length >= 3}
 			<button type="button" onclick={finishPolygon}>Finish polygon</button>
 		{/if}
-		{#if draftPolygon && draftPolygon.length > 0}
+		{#if (draftPolygon && draftPolygon.length > 0) || (wallChainRoleForTool(interaction.tool) !== null && hasWallChainRun(interaction))}
 			<button type="button" class="secondary" onclick={() => clearLayoutDraft(interaction)}>Cancel draft</button>
 		{/if}
 	</div>
@@ -1986,9 +2166,12 @@
 	.plan-empty-state { position: absolute; top: 50%; left: 50%; z-index: 5; transform: translate(-50%, -50%); display: grid; gap: 0.45rem; max-width: min(24rem, calc(100% - 4rem)); padding: var(--editor-space-4) var(--editor-space-5); border: 1px solid var(--editor-plan-grid-major); border-radius: var(--editor-radius-lg); background: rgb(255 255 255 / 72%); color: var(--editor-plan-label); text-align: center; pointer-events: none; box-shadow: var(--editor-shadow-popover); }
 	.plan-empty-state strong { font-size: 0.86rem; font-weight: 650; }
 	.plan-empty-state span { font-size: 0.74rem; line-height: 1.45; color: var(--editor-plan-muted); }
+	.plan-status { position: absolute; left: 0.8rem; bottom: 0.8rem; z-index: 10; max-width: 60%; margin: 0; padding: 0.34rem 0.5rem; border: 1px solid var(--editor-border-normal); border-radius: 0.3rem; background: var(--editor-bg-panel-raised); color: var(--editor-text-secondary); font: 500 0.7rem/1.25 var(--editor-font); pointer-events: none; }
 	.plan-actions { position: absolute; right: 0.8rem; bottom: 0.8rem; z-index: 10; display: flex; gap: 0.4rem; pointer-events: auto; }
 	.plan-actions button { padding: 0.44rem 0.6rem; border: 1px solid var(--editor-accent-border); border-radius: 0.32rem; background: var(--editor-bg-selected); color: var(--editor-text-primary); font: 600 0.7rem/1 var(--editor-font); cursor: pointer; }
 	.plan-actions button.secondary { border-color: var(--editor-border-normal); background: var(--editor-bg-panel-raised); color: var(--editor-text-secondary); }
+	.chain-length { display: flex; align-items: center; gap: 0.3rem; margin: 0; padding: 0 0.35rem; border: 1px solid var(--editor-border-normal); border-radius: 0.32rem; background: var(--editor-bg-panel-raised); color: var(--editor-text-secondary); font: 600 0.7rem/1 var(--editor-font); }
+	.chain-length input { width: 4.2rem; padding: 0.3rem 0.25rem; border: 1px solid var(--editor-border-normal); border-radius: 0.25rem; background: var(--editor-bg-input, var(--editor-bg-panel-raised)); color: var(--editor-text-primary); font: 600 0.7rem/1 var(--editor-font); }
 	.plan-meta { position: absolute; left: 0.8rem; bottom: 0.8rem; z-index: 2; display: flex; gap: 0.7rem; color: var(--editor-plan-muted); font: 0.68rem/1 var(--editor-font); pointer-events: none; }
 	.plan-meta .warning { color: var(--editor-danger-fg); }
 	@media (max-width: 44rem) {

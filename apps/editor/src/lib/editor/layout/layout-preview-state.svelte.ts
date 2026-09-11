@@ -35,6 +35,7 @@ import {
 	type PrecisionPlan
 } from '$lib/layout/layout-wall-first-precision';
 import type { NodingIdAllocator } from '$lib/layout/layout-wall-noding';
+import { planWallChain, planWallSegment, type LayoutWallRole as ChainWallRole } from '$lib/layout/layout-wall-chain';
 import { deleteInteriorAnchorOnSegment, insertInteriorAnchorOnSegment, pointInRoom, replaceRoomPoints, updateInteriorAnchorOnSegment } from './layout-editing';
 import {
 	appendRoomOpening,
@@ -61,7 +62,7 @@ import {
 } from './layout-object-editing';
 import type { Vec3 } from '$lib/types/scene';
 import type { CompiledLayoutGeometry } from '$lib/layout/layout-geometry-types';
-import { buildRoomWallMesh, type IndexedWallMesh } from '$lib/layout/wall-mesh-builder';
+import { buildRoomWallMesh, buildStandaloneWallMesh, type IndexedWallMesh } from '$lib/layout/wall-mesh-builder';
 import { buildLayout3dTriangleIndex, type Layout3dPickIndex } from './layout-3d-picking';
 import { transformLayoutRoomUnit, type LayoutRoomUnitTransform } from './layout-room-transform';
 import { deriveLayoutRoomFrame } from '$lib/layout/layout-room-frame';
@@ -87,6 +88,14 @@ export type LayoutPreviewState = {
 	 * these prebuilt meshes — it never builds geometry inline.
 	 */
 	wallMeshesByRoom: ReadonlyMap<string, IndexedWallMesh>;
+	/**
+	 * Derived cache: one prebuilt render-only `IndexedWallMesh` per canonical
+	 * physical Wall, keyed by `wallId` (P23.9). Render-only until the
+	 * P23.6/P23.7 `wallId` selection cutover: these meshes are never entered
+	 * into `layout3dPickIndexByRoom` (no fake `roomId` ownership for picking).
+	 * Same lifecycle as `wallMeshesByRoom`, never in the undo snapshot.
+	 */
+	wallMeshesByWall: ReadonlyMap<string, IndexedWallMesh>;
 	/**
 	 * triangle reverse index per compiled room, built once per mesh
 	 * generation beside `wallMeshesByRoom` (same lifecycle, never in the undo
@@ -128,6 +137,28 @@ export type LayoutObjectMutationResult =
 
 export type WallFirstPrecisionMutationResult =
 	| { success: true; operation: PrecisionOperation }
+	| {
+			success: true;
+			operation: 'wall-chain-commit';
+			/** Wall IDs created by the committed chain. */
+			wallIds: string[];
+			/** Room IDs born from the chain's reconciliation (boundary chains). */
+			roomIds: string[];
+	  }
+	| {
+			success: true;
+			operation: 'wall-segment-commit';
+			/** Authored-segment Wall IDs (candidate lineage/fragments, not host fragments). */
+			wallIds: string[];
+			/** All new Wall records the transaction caused (authored + host fragments). */
+			allWallIds: string[];
+			/** Room IDs born from the segment's reconciliation (boundary segments). */
+			roomIds: string[];
+			/** Canonical resolved start Junction of the committed candidate. */
+			startJunctionId: string;
+			/** Canonical resolved end Junction (next continuation start). */
+			endJunctionId: string;
+	  }
 	| { success: false; message: string };
 
 export type LayoutRoomFieldPatch = Partial<
@@ -207,19 +238,55 @@ export function layoutPreviewCanonicalJson(state: LayoutPreviewState): string {
 }
 
 /**
- * Preflight the procedural wall meshes for every compiled room. Failed rooms
+ * P23.9 segment-first — does an incoming history snapshot carry the
+ * already-live layout? `HistoryController.commitLayout()` re-installs the
+ * just-committed snapshot through `host.replace()` on every successful
+ * transaction, so an unconditional clear would destroy the continuous run
+ * after each segment (reseeding `runStart` from the current leg and losing
+ * `wallChainLastDirection`, which breaks `DA→A` closure). Only a genuinely
+ * different layout — Undo/Redo/cancel/external replacement — terminates the
+ * run. Same JSON comparison as the history `matches` predicate so the two
+ * decisions can never diverge.
+ */
+export function layoutPreviewSnapshotMatchesLive(
+	state: LayoutPreviewState,
+	snapshot: LayoutPreviewSnapshot
+): boolean {
+	try {
+		return JSON.stringify(state.project.layout) === JSON.stringify(snapshot.project.layout);
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Preflight the procedural wall meshes for every compiled room plus every
+ * canonical physical Wall. Rooms with empty wall detail are wall-first
+ * canonical rooms (their Walls render via `wallMeshesByWall`); they build
+ * no room mesh and yield no issue — a compiled legacy room always carries
+ * walls, so legacy `room_no_walls` behavior is preserved. Failed builds
  * yield structured issues (no mesh) that the editor surfaces in
- * `layoutPreview.issues`; the scene renders only rooms that built a mesh.
+ * `layoutPreview.issues`; the scene renders only meshes that built.
  */
 function buildWallMeshesByRoom(geometry: CompiledLayoutGeometry): {
 	wallMeshesByRoom: ReadonlyMap<string, IndexedWallMesh>;
+	wallMeshesByWall: ReadonlyMap<string, IndexedWallMesh>;
 	layout3dPickIndexByRoom: ReadonlyMap<string, Layout3dPickIndex>;
 	issues: LayoutGeometryIssue[];
 } {
 	const wallMeshesByRoom = new Map<string, IndexedWallMesh>();
+	const wallMeshesByWall = new Map<string, IndexedWallMesh>();
 	const layout3dPickIndexByRoom = new Map<string, Layout3dPickIndex>();
 	const issues: LayoutGeometryIssue[] = [];
+	const canonicalMode = geometry.walls.length > 0;
 	for (const room of geometry.rooms) {
+		if (room.walls.length === 0) {
+			if (!canonicalMode) {
+				const result = buildRoomWallMesh(room);
+				issues.push(...result.issues);
+			}
+			continue;
+		}
 		const result = buildRoomWallMesh(room);
 		if (result.mesh) {
 			wallMeshesByRoom.set(room.roomId, result.mesh);
@@ -229,7 +296,18 @@ function buildWallMeshesByRoom(geometry: CompiledLayoutGeometry): {
 		}
 		issues.push(...result.issues);
 	}
-	return { wallMeshesByRoom, layout3dPickIndexByRoom, issues };
+	const floorElevationById = new Map(geometry.floors.map((floor) => [floor.floorId, floor.elevation] as const));
+	const ceilingElevationById = new Map(
+		geometry.floors.map((floor) => [floor.floorId, floor.elevation + floor.height] as const)
+	);
+	for (const wall of geometry.walls) {
+		const floorElevation = floorElevationById.get(wall.floorId) ?? 0;
+		const ceilingElevation = ceilingElevationById.get(wall.floorId) ?? floorElevation + 3;
+		const result = buildStandaloneWallMesh(wall, floorElevation, ceilingElevation);
+		if (result.mesh) wallMeshesByWall.set(wall.wallId, result.mesh);
+		issues.push(...result.issues);
+	}
+	return { wallMeshesByRoom, wallMeshesByWall, layout3dPickIndexByRoom, issues };
 }
 
 /**
@@ -244,6 +322,7 @@ function applyCompiledLayout(state: LayoutPreviewState, result: LayoutPreviewMod
 	state.issues = issues;
 	state.bounds = result.bounds;
 	state.wallMeshesByRoom = meshes.wallMeshesByRoom;
+	state.wallMeshesByWall = meshes.wallMeshesByWall;
 	state.layout3dPickIndexByRoom = meshes.layout3dPickIndexByRoom;
 }
 
@@ -264,6 +343,7 @@ export function derivePreviewBundle(
 	model: LayoutPreviewModel;
 	geometry: CompiledLayoutGeometry;
 	wallMeshesByRoom: ReadonlyMap<string, IndexedWallMesh>;
+	wallMeshesByWall: ReadonlyMap<string, IndexedWallMesh>;
 	layout3dPickIndexByRoom: ReadonlyMap<string, Layout3dPickIndex>;
 	issues: LayoutGeometryIssue[];
 	bounds: LayoutPreviewBounds | null;
@@ -276,6 +356,7 @@ export function derivePreviewBundle(
 		model: result.model,
 		geometry: result.geometry,
 		wallMeshesByRoom: meshes.wallMeshesByRoom,
+		wallMeshesByWall: meshes.wallMeshesByWall,
 		layout3dPickIndexByRoom: meshes.layout3dPickIndexByRoom,
 		issues: meshes.issues.length > 0 ? [...result.issues, ...meshes.issues] : result.issues,
 		bounds: result.bounds
@@ -288,6 +369,7 @@ function commitPreviewBundle(state: LayoutPreviewState, bundle: ReturnType<typeo
 	state.model = bundle.model;
 	state.geometry = bundle.geometry;
 	state.wallMeshesByRoom = bundle.wallMeshesByRoom;
+	state.wallMeshesByWall = bundle.wallMeshesByWall;
 	state.layout3dPickIndexByRoom = bundle.layout3dPickIndexByRoom;
 	state.issues = bundle.issues;
 	state.bounds = bundle.bounds;
@@ -330,6 +412,7 @@ export function commitLayoutCandidate(
 	state.model = bundle.model;
 	state.geometry = bundle.geometry;
 	state.wallMeshesByRoom = bundle.wallMeshesByRoom;
+	state.wallMeshesByWall = bundle.wallMeshesByWall ?? new Map();
 	state.layout3dPickIndexByRoom = bundle.layout3dPickIndexByRoom;
 	state.issues = bundle.issues;
 	state.bounds = bundle.bounds;
@@ -637,6 +720,93 @@ function applyWallFirstPrecisionPlan(
 		return { success: true, operation: plan.operation };
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Could not apply precise layout operation';
+		state.lastMutationMessage = message;
+		return { success: false, message };
+	}
+}
+
+/**
+ * P23.9 — commit a sketched wall/partition chain as one Layout history entry.
+ * The planner (P23.8 engine) resolves junction reuse, T/X noding and Room
+ * reconciliation; a rejected chain leaves the document and history untouched.
+ * Kept for the bounded compound convenience tools (Rectangle/Polygon).
+ */
+export function commitWallChain(
+	state: LayoutPreviewState,
+	points: readonly LayoutVec2[],
+	role: ChainWallRole,
+	options: { close: boolean }
+): WallFirstPrecisionMutationResult {
+	const layout = wallFirstLayoutOrError(state);
+	if (!layout) return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
+	const plan = planWallChain({ baseline: layout, points, role, close: options.close });
+	if (plan.kind === 'rejected') {
+		state.lastMutationMessage = plan.rejection.message;
+		return { success: false, message: plan.rejection.message };
+	}
+	try {
+		const bundle = derivePreviewBundle(
+			state.project.id,
+			state.project.name,
+			plan.document,
+			state.project.scene
+		);
+		state.source = 'draft';
+		commitPreviewBundle(state, bundle);
+		state.previewVersion += 1;
+		state.lastMutationMessage = null;
+		state.statusMessage = null;
+		state.importError = null;
+		return { success: true, operation: 'wall-chain-commit', wallIds: plan.createdWallIds, roomIds: plan.lineage.map((record) => record.roomId) };
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Could not commit wall chain';
+		state.lastMutationMessage = message;
+		return { success: false, message };
+	}
+}
+
+/**
+ * P23.9 segment-first — commit one straight Wall segment as one Layout
+ * history entry. Returns the canonical resolved Junctions for continuation
+ * (never derived from `createdWallIds`). Rejection mutates nothing.
+ */
+export function commitWallSegment(
+	state: LayoutPreviewState,
+	start: LayoutVec2,
+	end: LayoutVec2,
+	role: ChainWallRole
+): WallFirstPrecisionMutationResult {
+	const layout = wallFirstLayoutOrError(state);
+	if (!layout) return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
+	const plan = planWallSegment({ baseline: layout, start, end, role });
+	if (plan.kind === 'rejected') {
+		state.lastMutationMessage = plan.rejection.message;
+		return { success: false, message: plan.rejection.message };
+	}
+	try {
+		const bundle = derivePreviewBundle(
+			state.project.id,
+			state.project.name,
+			plan.document,
+			state.project.scene
+		);
+		state.source = 'draft';
+		commitPreviewBundle(state, bundle);
+		state.previewVersion += 1;
+		state.lastMutationMessage = null;
+		state.statusMessage = null;
+		state.importError = null;
+		return {
+			success: true,
+			operation: 'wall-segment-commit',
+			wallIds: [...plan.authoredWallIds],
+			allWallIds: [...plan.createdWallIds],
+			roomIds: plan.lineage.map((record) => record.roomId),
+			startJunctionId: plan.startJunctionId,
+			endJunctionId: plan.endJunctionId
+		};
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Could not commit wall segment';
 		state.lastMutationMessage = message;
 		return { success: false, message };
 	}
@@ -1140,6 +1310,7 @@ function createState(
 		model: bundle.model,
 		geometry: bundle.geometry,
 		wallMeshesByRoom: bundle.wallMeshesByRoom,
+		wallMeshesByWall: bundle.wallMeshesByWall,
 		layout3dPickIndexByRoom: bundle.layout3dPickIndexByRoom,
 		issues: bundle.issues,
 		bounds: bundle.bounds,
@@ -1240,6 +1411,7 @@ function replaceState(target: LayoutPreviewState, next: LayoutPreviewState): voi
 	target.model = next.model;
 	target.geometry = next.geometry;
 	target.wallMeshesByRoom = next.wallMeshesByRoom;
+	target.wallMeshesByWall = next.wallMeshesByWall;
 	target.layout3dPickIndexByRoom = next.layout3dPickIndexByRoom;
 	target.issues = next.issues;
 	target.bounds = next.bounds;
@@ -1296,6 +1468,7 @@ export function restoreLayoutPreviewSnapshot(state: LayoutPreviewState, snapshot
 	// snapshot: undo restores the document and the caches rebuild from geometry.
 	const meshes = buildWallMeshesByRoom(snapshot.geometry);
 	state.wallMeshesByRoom = meshes.wallMeshesByRoom;
+	state.wallMeshesByWall = meshes.wallMeshesByWall;
 	state.layout3dPickIndexByRoom = meshes.layout3dPickIndexByRoom;
 	state.bounds = snapshot.bounds
 		? {

@@ -33,6 +33,7 @@
 	import {
 		captureLayoutPreviewSnapshot,
 		createLayoutPreviewState,
+		layoutPreviewSnapshotMatchesLive,
 		restoreLayoutPreviewSnapshot
 	} from './layout/layout-preview-state.svelte';
 	// P7.3 — the relic is the one editor-domain site that seeds Chopin
@@ -40,7 +41,7 @@
 	// empty or from an imported project.
 	import { chopinProject, chopinRuntime, sceneDocument } from '$lib/content/chopin-project';
 	import { useEditorShellBoot } from './hooks/editor-shell-boot.svelte';
-	import { createLayoutInteractionState } from './layout/layout-interaction';
+	import { cancelWallChainRun, createLayoutInteractionState } from './layout/layout-interaction';
 	import { initTheme } from './theme.svelte';
 
 	let { relic = false }: { relic?: boolean } = $props();
@@ -64,7 +65,16 @@
 	if (!untrack(() => relic)) {
 		store.registerLayoutHistory({
 			capture: () => captureLayoutPreviewSnapshot(layoutPreview),
-			replace: (snapshot) => restoreLayoutPreviewSnapshot(layoutPreview, snapshot as ReturnType<typeof captureLayoutPreviewSnapshot>),
+			replace: (snapshot) => {
+				// P23.9 segment-first: only a genuinely different layout clears
+				// the run (Undo/Redo/cancel/external). Successful commits
+				// re-install the already-live snapshot here — see EditorApp.
+				const typed = snapshot as ReturnType<typeof captureLayoutPreviewSnapshot>;
+				if (!layoutPreviewSnapshotMatchesLive(layoutPreview, typed)) {
+					cancelWallChainRun(layoutInteraction);
+				}
+				restoreLayoutPreviewSnapshot(layoutPreview, typed);
+			},
 			matches: (a, b) => JSON.stringify((a as { project: { layout: unknown } }).project.layout) === JSON.stringify((b as { project: { layout: unknown } }).project.layout)
 		});
 	}

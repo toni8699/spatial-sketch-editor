@@ -5,6 +5,8 @@
 		captureLayoutPreviewSnapshot,
 		commitLayoutDraftRoom,
 		commitLayoutOpening,
+		commitWallChain,
+		commitWallSegment,
 		deleteLayoutOpening,
 		deleteLayoutRoom
 	} from '$lib/editor/layout/layout-preview-state.svelte';
@@ -14,7 +16,9 @@
 	import type { EditorContextMenuStore } from '$lib/editor/context-menu/context-menu-state.svelte';
 	import {
 		hasLayoutTransientInteraction,
+		selectLayoutRoom,
 		setPlanViewMode,
+		wallChainRoleForTool,
 		type PlanViewMode,
 		type LayoutInteractionState
 	} from '$lib/editor/layout/layout-interaction';
@@ -52,6 +56,11 @@
 	}
 
 	function commitDraftRoom(points: [number, number][]): boolean {
+		// P23.9 — on a wall-first document the Rect/Polygon convenience tools
+		// commit the same canonical Junction/Wall chain the chain tools do.
+		if ('formatVersion' in layoutPreview.project.layout) {
+			return commitDraftWallChain(points, true);
+		}
 		const outcome = runLayoutMutationGuarded(
 			() => commitLayoutDraftRoom(layoutPreview, points),
 			(result) => result.success
@@ -67,6 +76,93 @@
 			store.setStatusMessage(`Room draft rejected: ${result.message}`);
 		}
 		return result.success;
+	}
+
+	/** P23.9 — bounded compound convenience tools (Rectangle/Polygon) commit one atomic chain. */
+	function commitDraftWallChain(points: [number, number][], close: boolean): boolean {
+		// P23.9 — boundary (Rect/Polygon close a boundary; Wall tool) vs
+		// partition is fixed at commit time, not read from the live tool, so a
+		// tool switch mid-commit can never flip the role of a drawn chain.
+		const role = close && layoutInteraction.tool !== 'partition-chain'
+			? 'boundary'
+			: wallChainRoleForTool(layoutInteraction.tool) ?? 'boundary';
+		const commitRole = role;
+		const outcome = runLayoutMutationGuarded(
+			() => commitWallChain(layoutPreview, points, commitRole, { close }),
+			(result) => result.success
+		);
+		if (outcome.kind === 'skipped') {
+			setWallChainStatus('Finish the current layout interaction first');
+			return false;
+		}
+		const result = outcome.result;
+		if (result.success) {
+			const roomLabel = result.operation === 'wall-chain-commit' && result.roomIds.length > 0 ? ` + ${result.roomIds.length} room${result.roomIds.length === 1 ? '' : 's'}` : '';
+			setWallChainStatus(`Committed ${result.operation === 'wall-chain-commit' ? result.wallIds.length : 0} walls${roomLabel}`);
+			// Bounded tools are atomic (not continuous runs): a birth may
+			// select through the existing authority.
+			if (result.operation === 'wall-chain-commit' && result.roomIds.length > 0) {
+				selectLayoutRoom(layoutInteraction, result.roomIds[0]);
+			}
+		} else {
+			setWallChainStatus(`Wall rejected: ${result.message}`);
+		}
+		return result.success;
+	}
+
+	/**
+	 * P23.9 segment-first — one completed straight segment = one Wall
+	 * authoring command and one Layout transaction. Preserves selection
+	 * throughout the continuous run (never selects newborn Rooms mid-run);
+	 * continuous drawing never depends on selection. Returns the canonical
+	 * Junctions for continuation; closure is Junction identity.
+	 */
+	function commitDraftWallSegment(
+		start: [number, number],
+		end: [number, number]
+	): { success: boolean; startJunctionId?: string; endJunctionId?: string; closedRun?: boolean } {
+		const role = wallChainRoleForTool(layoutInteraction.tool) ?? 'boundary';
+		const runStartBefore = layoutInteraction.wallChainRunStartJunctionId;
+		const outcome = runLayoutMutationGuarded(
+			() => commitWallSegment(layoutPreview, start, end, role),
+			(result) => result.success
+		);
+		if (outcome.kind === 'skipped') {
+			setWallChainStatus('Finish the current layout interaction first');
+			return { success: false };
+		}
+		const result = outcome.result;
+		if (!result.success) {
+			setWallChainStatus(`Wall rejected: ${result.message}`);
+			return { success: false };
+		}
+		if (result.operation !== 'wall-segment-commit') {
+			setWallChainStatus(`Wall rejected: unexpected commit result`);
+			return { success: false };
+		}
+		const roomLabel = result.roomIds.length > 0 ? ` + ${result.roomIds.length} room${result.roomIds.length === 1 ? '' : 's'}` : '';
+		const kindLabel = role === 'partition' ? 'partition' : 'wall';
+		setWallChainStatus(`Committed ${kindLabel}${roomLabel}`);
+		// Closure: boundary runs end when the final endpoint resolves to the
+		// canonical run-start Junction. Partitions end via Escape only.
+		const effectiveRunStart = runStartBefore ?? result.startJunctionId;
+		const closedRun = role === 'boundary' && result.endJunctionId === effectiveRunStart;
+		return {
+			success: true,
+			startJunctionId: result.startJunctionId,
+			endJunctionId: result.endJunctionId,
+			closedRun
+		};
+	}
+
+	/**
+	 * P23.9 — mirror a chain outcome onto the plan surface. The store status
+	 * line only renders in the Inspector's empty-selection branch, so a
+	 * rejection would otherwise be invisible while the Plan is focused.
+	 */
+	function setWallChainStatus(message: string) {
+		layoutPreview.statusMessage = message;
+		store.setStatusMessage(message);
 	}
 
 	function createOpening(roomId: string, segmentId: string, kind: LayoutOpeningKind, clickOffset: number) {
@@ -235,6 +331,7 @@
 		onSceneGestureCancel={cancelSceneGesture}
 		onSceneDelete={deleteSceneSelection}
 		onCommit={commitDraftRoom}
+		onWallSegmentCommit={commitDraftWallSegment}
 		onOpeningCreate={createOpening}
 		onOpeningDelete={deleteOpening}
 		onRoomDelete={deleteRoom}

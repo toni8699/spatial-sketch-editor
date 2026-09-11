@@ -52,6 +52,7 @@
 		installLayoutPreviewBundle,
 		layoutPreviewCanonicalJson,
 		layoutPreviewIsDirty,
+		layoutPreviewSnapshotMatchesLive,
 		markLayoutPreviewSaved,
 		restoreLayoutPreviewSnapshot
 	} from '$lib/editor/layout/layout-preview-state.svelte';
@@ -59,6 +60,7 @@
 	import { useEditorShellBoot } from '$lib/editor/hooks/editor-shell-boot.svelte';
 	import { initTheme } from '$lib/editor/theme.svelte';
 	import {
+		cancelWallChainRun,
 		clearLayoutSelection,
 		createLayoutInteractionState,
 		reconcileLayoutSelection,
@@ -251,7 +253,18 @@
 	setContext(ACTIVE_EDITOR_SELECTION_KEY, activeSelection);
 	store.registerLayoutHistory({
 		capture: () => captureLayoutPreviewSnapshot(layoutPreview),
-		replace: (snapshot) => restoreLayoutPreviewSnapshot(layoutPreview, snapshot as ReturnType<typeof captureLayoutPreviewSnapshot>),
+		replace: (snapshot) => {
+			// P23.9 segment-first: only a genuinely different layout terminates
+			// the transient run. Successful commits re-install the already-live
+			// snapshot through this same entry point — clearing there would
+			// reseed `runStart` from the current leg and break DA→A closure.
+			// Undo/Redo/cancel/external installs a different layout → clear.
+			const typed = snapshot as ReturnType<typeof captureLayoutPreviewSnapshot>;
+			if (!layoutPreviewSnapshotMatchesLive(layoutPreview, typed)) {
+				cancelWallChainRun(layoutInteraction);
+			}
+			restoreLayoutPreviewSnapshot(layoutPreview, typed);
+		},
 		matches: (a, b) => JSON.stringify((a as { project: { layout: unknown } }).project.layout) === JSON.stringify((b as { project: { layout: unknown } }).project.layout)
 	});
 	// P23.0 F0 stage 1 — point the central format-dispatch guard at the live

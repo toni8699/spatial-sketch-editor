@@ -194,6 +194,7 @@ function wallSpansByRoomSegment(compiled: CompiledLayoutGeometry): Map<string, M
 	const byRoom = new Map<string, Map<string, CompiledQuerySpan[]>>();
 	for (const span of compiled.queries.spans) {
 		if (span.kind !== 'wall') continue;
+		if (span.roomId === undefined) continue;
 		let bySegment = byRoom.get(span.roomId);
 		if (!bySegment) {
 			bySegment = new Map();
@@ -216,6 +217,7 @@ function nearestPointHit(
 	let bestDistance = tolerance;
 	for (const record of compiled.queries.points) {
 		if (record.kind !== kind) continue;
+		if (record.roomId === undefined) continue;
 		const distance = Math.hypot(record.point[0] - point[0], record.point[1] - point[1]);
 		if (distance <= bestDistance) {
 			best =

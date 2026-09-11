@@ -264,9 +264,11 @@ describe('compileLayoutGeometry', () => {
 		);
 	});
 
-	// P23.2 review round 2 / B1: wall-first wall ids are document-global, so
-	// shared walls keep one wallKey across every room that references them.
-	it('keeps wall-first wall identity document-global across shared rooms', () => {
+	// P23.9 canonical physical Walls: every document Wall compiles exactly
+	// once (wall-start frame, document-global ID, no fake roomId), so a wall
+	// shared by two Rooms has one physical/query representation, not one per
+	// incident Room. Rooms keep floor polygons + floor/ceiling semantics only.
+	it('emits each wall-first Wall once with no per-Room wall duplication', () => {
 		const document: LayoutDocumentWallFirst = {
 			units: 'meters',
 			formatVersion: LAYOUT_WALL_FIRST_FORMAT_VERSION,
@@ -314,14 +316,66 @@ describe('compileLayoutGeometry', () => {
 			objects: []
 		};
 		const { geometry } = compileWallFirstLayoutGeometry(document);
+		// One canonical wall per document Wall, unique IDs covering all four.
+		expect(geometry.walls.map((wall) => wall.wallId).sort()).toEqual(['wall-a', 'wall-b', 'wall-c', 'wall-d']);
+		// Rooms keep identity + floor semantics with empty wall detail.
+		for (const room of geometry.rooms) {
+			expect(room.walls).toEqual([]);
+			expect(room.openings).toEqual([]);
+			expect(room.floorPolygon).toHaveLength(4);
+		}
 		const wallASpans = geometry.queries.spans.filter(
 			(span) => span.kind === 'wall' && span.segmentId === 'wall-a'
 		);
 		expect(wallASpans.length).toBeGreaterThan(0);
-		expect(new Set(wallASpans.map((span) => span.roomId))).toEqual(
-			new Set(['room-main', 'room-second'])
-		);
+		// Exactly one query representation: no fake room ownership, one wallKey.
+		for (const span of wallASpans) expect(span.roomId).toBeUndefined();
 		expect(new Set(wallASpans.map((span) => span.wallKey))).toEqual(new Set(['wall-a']));
+	});
+
+	it('roomless physical Walls expand floor bounds and floor/document query AABBs', () => {
+		const document: LayoutDocumentWallFirst = {
+			units: 'meters',
+			formatVersion: LAYOUT_WALL_FIRST_FORMAT_VERSION,
+			floor: { id: 'floor-1', name: 'Floor 1', elevation: 0, height: 3 },
+			junctions: [
+				{ id: 'j-a', point: [0, 0] },
+				{ id: 'j-b', point: [4, 0] }
+			],
+			walls: [
+				{ id: 'wall-a', startJunctionId: 'j-a', endJunctionId: 'j-b', role: 'boundary', thickness: 0.2, height: 3 }
+			],
+			rooms: [],
+			openings: [],
+			objects: []
+		};
+		const { geometry } = compileWallFirstLayoutGeometry(document);
+		expect(geometry.walls).toHaveLength(1);
+		const wall = geometry.walls[0]!;
+		// Top-level bounds include the wall.
+		expect(geometry.bounds).not.toBeNull();
+		// The aggregate floor record includes the wall (previously null/stale
+		// for roomless documents: the shared core only sees Rooms + objects).
+		expect(geometry.floors).toHaveLength(1);
+		const compiledFloor = geometry.floors[0]!;
+		expect(compiledFloor.bounds3).not.toBeNull();
+		for (const axis of [0, 1, 2] as const) {
+			expect(compiledFloor.bounds3!.min[axis]).toBeLessThanOrEqual(wall.bounds3.min[axis]);
+			expect(compiledFloor.bounds3!.max[axis]).toBeGreaterThanOrEqual(wall.bounds3.max[axis]);
+			expect(geometry.bounds!.min[axis]).toBeLessThanOrEqual(wall.bounds3.min[axis]);
+			expect(geometry.bounds!.max[axis]).toBeGreaterThanOrEqual(wall.bounds3.max[axis]);
+		}
+		// Aggregate query AABBs exist and span the wall footprint — exactly
+		// one each (recomputed, never a stale duplicate).
+		const floorAabbs = geometry.queries.aabbs.filter((aabb) => aabb.kind === 'floor');
+		const documentAabbs = geometry.queries.aabbs.filter((aabb) => aabb.kind === 'document');
+		expect(floorAabbs).toHaveLength(1);
+		expect(documentAabbs).toHaveLength(1);
+		expect(floorAabbs[0]!.sourceId).toBe('floor-1');
+		for (const aabb of [floorAabbs[0]!, documentAabbs[0]!]) {
+			expect(aabb.aabb.min[0]).toBeLessThanOrEqual(0);
+			expect(aabb.aabb.max[0]).toBeGreaterThanOrEqual(4);
+		}
 	});
 
 	// P23 review round 1 / B1: the compiler cutover briefly compiled only

@@ -3,6 +3,7 @@ import type { LayoutPreviewModel } from './layout-mesh-factory';
 import {
 	primitiveDraftFootprint,
 	rectanglePoints,
+	wallChainRoleForTool,
 	type LayoutInteractionState,
 	type LayoutSelection
 } from './layout-interaction';
@@ -246,7 +247,20 @@ export function withArrangeHoverOutline(
 
 function draftPolyline(interaction: LayoutInteractionState): LayoutVec2[] | null {
 	if (interaction.tool === 'rectangle') return rectanglePoints(interaction);
+	if (wallChainRoleForTool(interaction.tool) !== null) {
+		if (!interaction.wallChainStart) return null;
+		// P23.9 segment-first — only the currently previewed next segment is
+		// transient: committed Walls live in the document, never here.
+		return interaction.wallChainCursor
+			? [interaction.wallChainStart, interaction.wallChainCursor]
+			: [interaction.wallChainStart];
+	}
 	return interaction.polygonPoints.length > 0 ? interaction.polygonPoints : null;
+}
+
+/** P23.9 — the active sketch's role, for explicit Wall vs Partition feedback. */
+function draftStyle(interaction: LayoutInteractionState): PlanStyleToken {
+	return wallChainRoleForTool(interaction.tool) === 'partition' ? 'draft-outline-partition' : 'draft-outline';
 }
 
 function ghostStyle(interaction: LayoutInteractionState): PlanStyleToken {
@@ -342,6 +356,7 @@ export function buildPlanInteractionProjection(
 
 	for (const record of model.queries.points) {
 		if (record.kind !== 'interior-anchor') continue;
+		if (record.roomId === undefined) continue;
 		handles.push({
 			kind: 'circle',
 			key: geometryId(['plan', 'overlay', 'interior-anchor', record.roomId, record.segmentId, record.sourceId]),
@@ -372,7 +387,7 @@ export function buildPlanInteractionProjection(
 			kind: 'polyline',
 			key: geometryId(['plan', 'overlay', 'draft-outline']),
 			points: draft,
-			style: 'draft-outline'
+			style: draftStyle(interaction)
 		});
 		for (const [index, point] of draft.entries()) {
 			drafts.push({

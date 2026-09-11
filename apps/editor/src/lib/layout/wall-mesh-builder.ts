@@ -1,6 +1,7 @@
 import type { LayoutVec2 } from './layout-types';
 import type {
 	CompiledOpening,
+	CompiledPhysicalWall,
 	CompiledRoom,
 	CompiledWall,
 	CompiledWallSection,
@@ -189,6 +190,78 @@ export function buildRoomWallMesh(room: CompiledRoom, options: WallMeshOptions =
 	const mesh = emitMesh(room.roomId, wallResult.wallsFaces, classify, weldTolerance);
 	if (options.assertWinding) assertWindingAgreesWithNormals(mesh);
 	return { mesh, issues: [] };
+}
+
+/**
+ * Build one standalone box mesh for a canonical physical Wall (P23.9).
+ *
+ * Canonical Walls are straight segments between two explicit Junctions, so
+ * both ends are exact square miters — no room-loop corner computation, no
+ * neighbor-clearance gate (connected Walls legitimately touch at shared
+ * Junctions; that is topology, not offset overlap). Sections (side/lintel),
+ * opening reveals, band splits and winding guards reuse the room path
+ * verbatim by passing the Wall as its own neighbor with trivial corners.
+ *
+ * Render-only until the P23.6/P23.7 `wallId` selection cutover: callers must
+ * NOT enter the result into room-keyed pick-index maps (its refs namespace
+ * to the Wall ID, and there is no Room ownership to claim). Corner seams
+ * between connected Walls are butt joints here; mitered room-corner polish
+ * stays with P23.6.
+ */
+export function buildStandaloneWallMesh(
+	wall: CompiledPhysicalWall,
+	floorElevation: number,
+	ceilingElevation: number,
+	options: WallMeshOptions = {}
+): WallMeshBuildResult {
+	const issues: LayoutGeometryIssue[] = [];
+	if (wall.samples.length < 2) {
+		issues.push({ path: `walls.${wall.wallId}`, code: 'wall_degenerate', message: 'Wall has too few samples to build a mesh.', targetId: wall.wallId });
+	}
+	if (!Number.isFinite(wall.thickness) || wall.thickness <= 0) {
+		issues.push({ path: `walls.${wall.wallId}`, code: 'wall_thickness_invalid', message: 'Wall thickness must be finite and greater than zero.', targetId: wall.wallId });
+	}
+	if (issues.length > 0) return { mesh: undefined, issues };
+
+	const classify = options.classifySurface ?? ((ref: WallMeshSectionRef) => ref.kind);
+	const weldTolerance = options.weldTolerance ?? DEFAULT_WELD_TOLERANCE;
+	const wallHeight = ceilingElevation - floorElevation;
+	const half = wall.thickness / 2;
+	const wallAsCompiled: CompiledWall = { ...wall, segmentId: wall.wallId };
+	const roomView = {
+		roomId: wall.wallId,
+		floorElevation,
+		ceilingElevation
+	} as CompiledRoom;
+	const first = wall.samples[0]!;
+	const last = wall.samples.at(-1)!;
+	const cornerStart = squareEndCorner(first.point, first.normal, half);
+	const cornerEnd = squareEndCorner(last.point, last.normal, half);
+	const breakpoints = standaloneHeightBreakpoints(wall, wallHeight);
+	const wallsFaces = [
+		buildWallFaces(roomView, wallAsCompiled, wallAsCompiled, wallAsCompiled, cornerStart, cornerEnd, wallHeight, breakpoints, classify)
+	];
+	const mesh = emitMesh(wall.wallId, wallsFaces, classify, weldTolerance);
+	if (options.assertWinding) assertWindingAgreesWithNormals(mesh);
+	return { mesh, issues: [] };
+}
+
+/** Exact square end cap for a straight canonical Wall (no neighbor corner). */
+function squareEndCorner(point: LayoutVec2, normal: LayoutVec2, half: number): Corner {
+	const apex = (sign: number): LayoutVec2 => [point[0] + sign * half * normal[0], point[1] + sign * half * normal[1]];
+	return { front: { kind: 'miter', apex: apex(1) }, back: { kind: 'miter', apex: apex(-1) } };
+}
+
+/** Vertical band breakpoints (sill/spring heights) for one canonical Wall. */
+function standaloneHeightBreakpoints(wall: CompiledPhysicalWall, wallHeight: number): number[] {
+	const breakpoints = new Set<number>();
+	for (const opening of wall.openings) {
+		const springHeight = opening.profileShape ? opening.profileShape.height - opening.profileShape.rise : opening.height;
+		if (opening.sillHeight > LAYOUT_GEOMETRY_EPSILON) breakpoints.add(opening.sillHeight);
+		const spring = opening.sillHeight + springHeight;
+		if (spring > LAYOUT_GEOMETRY_EPSILON && spring < wallHeight - LAYOUT_GEOMETRY_EPSILON) breakpoints.add(spring);
+	}
+	return [...breakpoints].sort((a, b) => a - b);
 }
 
 function validateRoom(room: CompiledRoom): LayoutGeometryIssue[] {

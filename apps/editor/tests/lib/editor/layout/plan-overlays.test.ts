@@ -90,6 +90,7 @@ describe('buildPlanInteractionProjection', () => {
 		const document = g2AutoBezierDocument();
 		const model = buildLayoutPreviewModel(document).model;
 		const record = model.queries.points.find((point) => point.kind === 'interior-anchor')!;
+		if (record.roomId === undefined) throw new Error('expected room-owned anchor');
 
 		const state = createLayoutInteractionState();
 		selectLayoutInteriorAnchor(state, record.roomId, record.segmentId, record.sourceId);

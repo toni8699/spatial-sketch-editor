@@ -68,6 +68,9 @@ export type PlanStyleToken =
 	| 'primitive-ghost-sphere'
 	| 'primitive-ghost-invalid'
 	| 'draft-outline'
+	// P23.9 — a Partition sketch is wall-like but must never read as a
+	// semantic Room boundary while it is being drawn.
+	| 'draft-outline-partition'
 	| 'draft-point'
 	| 'snap-guide'
 	| 'snap-marker'
@@ -486,6 +489,38 @@ export function buildPlanRenderModel(
 			),
 			hit: { kind: 'object', objectId: object.objectId }
 		});
+	}
+
+	// P23.9 — canonical physical Walls independent of Room ownership.
+	// Wall-first Rooms carry no wall detail (their `walls`/`openings` are
+	// empty by compiler contract), so every wall-first Wall renders here
+	// exactly once from `compiled.walls`. Legacy documents keep room-derived
+	// rendering with an empty canonical collection — no double rendering in
+	// either generation, no fake `roomId` ownership for hit/selection.
+	for (const wall of compiled.walls ?? []) {
+		wall.solidCenterlinePolylines.forEach((polyline, index) => {
+			walls.push({
+				kind: 'polyline',
+				key: geometryId(['plan', 'physical-wall', wall.floorId, wall.wallId, String(index)]),
+				points: polyline.map(([x, z]) => [x, z] as LayoutVec2),
+				architecture: { kind: 'wall', thicknessMeters: wall.thickness },
+				style: 'wall-line'
+			});
+		});
+		for (const opening of wall.openings) {
+			openings.push({
+				kind: 'polyline',
+				key: geometryId(['plan', 'physical-opening', wall.floorId, wall.wallId, opening.openingId]),
+				points: opening.centerPolyline.map(([x, z]) => [x, z] as LayoutVec2),
+				architecture: {
+					kind: opening.kind,
+					widthMeters: opening.width,
+					wallThicknessMeters: wall.thickness,
+					inwardNormal: [...opening.center.normal] as LayoutVec2
+				},
+				style: 'opening-line'
+			});
+		}
 	}
 
 	layers.push({ order: 1, primitives: fills });

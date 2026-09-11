@@ -8,8 +8,11 @@ export type LayoutViewMode = 'plan' | '3d';
 /** Scene → Plan's local authoring authority. Camera Plan never reads this. */
 export type PlanViewMode = 'layout' | 'staging';
 export type LayoutPrimitiveTool = 'box' | 'cylinder' | 'sphere';
-export type LayoutDraftTool = 'select' | 'rectangle' | 'polygon' | 'door' | 'window' | LayoutPrimitiveTool;
+export type LayoutDraftTool = 'select' | 'rectangle' | 'polygon' | 'door' | 'window' | 'wall-chain' | 'partition-chain' | LayoutPrimitiveTool;
 export type LayoutRoomDragMode = 'room' | 'vertex';
+
+/** P23.9 — role of the active wall-chain draft (Wall vs Partition tool). */
+export type WallChainDraftRole = 'boundary' | 'partition';
 
 export type LayoutRoomUnitDrag = LayoutRoomUnitTransform & {
 	roomId: string;
@@ -128,6 +131,27 @@ export type LayoutInteractionState = {
 	planViewMode: PlanViewMode;
 	tool: LayoutDraftTool;
 	polygonPoints: LayoutVec2[];
+	/**
+	 * P23.9 segment-first continuation state (replaces the old whole-chain
+	 * `wallChainPoints` array). Only the currently previewed next segment is
+	 * transient; committed Walls live in the document, never here.
+	 */
+	wallChainStart: LayoutVec2 | null;
+	/** Canonical start Junction after the first commit; null until then. */
+	wallChainStartJunctionId: string | null;
+	/** Canonical run-start Junction set once the first Wall commits. */
+	wallChainRunStartJunctionId: string | null;
+	/** Last committed segment direction (for exact-length defaulting). */
+	wallChainLastDirection: LayoutVec2 | null;
+	/**
+	 * Last valid start→cursor hover direction (P23.9 exact-length memory).
+	 * Updated on every cursor move; `pointerleave` clears only the visual
+	 * cursor/snap preview, never this — moving to the Length input must not
+	 * erase the direction typed precision uses.
+	 */
+	wallChainHoverDirection: LayoutVec2 | null;
+	/** P23.9 — snapped cursor the pending segment is drawn to (rubber band). */
+	wallChainCursor: LayoutVec2 | null;
 	rectangleStart: LayoutVec2 | null;
 	rectangleCurrent: LayoutVec2 | null;
 	primitiveDraft: LayoutPrimitiveDraft | null;
@@ -154,6 +178,12 @@ export function createLayoutInteractionState(): LayoutInteractionState {
 		planViewMode: 'layout',
 		tool: 'select',
 		polygonPoints: [],
+		wallChainStart: null,
+		wallChainStartJunctionId: null,
+		wallChainRunStartJunctionId: null,
+		wallChainLastDirection: null,
+		wallChainHoverDirection: null,
+		wallChainCursor: null,
 		rectangleStart: null,
 		rectangleCurrent: null,
 		primitiveDraft: null,
@@ -228,11 +258,12 @@ export function resolveArrangeScenePick(input: {
 export function hasLayoutTransientInteraction(
 	state: Pick<
 		LayoutInteractionState,
-		'polygonPoints' | 'rectangleStart' | 'primitiveDraft' | 'objectDrag' | 'roomUnitDrag' | 'editing'
+		'polygonPoints' | 'rectangleStart' | 'primitiveDraft' | 'objectDrag' | 'roomUnitDrag' | 'editing' | 'wallChainStart'
 	>
 ): boolean {
 	return Boolean(
 		state.polygonPoints.length > 0 ||
+		state.wallChainStart !== null ||
 		state.rectangleStart ||
 		state.primitiveDraft ||
 		state.objectDrag ||
@@ -361,6 +392,158 @@ export function addPolygonPoint(state: LayoutInteractionState, point: LayoutVec2
 
 export function removeLastPolygonPoint(state: LayoutInteractionState): void {
 	state.polygonPoints = state.polygonPoints.slice(0, -1);
+}
+
+/**
+ * P23.9 segment-first — first click establishes the transient start. No
+ * document change, no history entry, no Junction allocated yet.
+ */
+export function beginWallChain(state: LayoutInteractionState, point: LayoutVec2): void {
+	state.wallChainStart = [...point];
+	state.wallChainStartJunctionId = null;
+	state.wallChainRunStartJunctionId = null;
+	state.wallChainLastDirection = null;
+	state.wallChainHoverDirection = null;
+	state.wallChainCursor = null;
+}
+
+/** P23.9 — pending segment preview: the snapped cursor the run is drawn to. */
+export function updateWallChainCursor(state: LayoutInteractionState, point: LayoutVec2 | null): void {
+	if (point && state.wallChainStart) {
+		const dx = point[0] - state.wallChainStart[0];
+		const dz = point[1] - state.wallChainStart[1];
+		if (Math.hypot(dx, dz) > 1e-9) state.wallChainHoverDirection = [dx, dz];
+	}
+	state.wallChainCursor = point ? [...point] : null;
+}
+
+/** P23.9 — true while a continuous run has a start (first click done). */
+export function hasWallChainRun(state: Pick<LayoutInteractionState, 'wallChainStart'>): boolean {
+	return state.wallChainStart !== null;
+}
+
+/**
+ * P23.9 — advance continuation from the canonical commit result. The
+ * committed end becomes the next start; the run-start is set once on the
+ * first commit. Direction remembers the just-committed segment for
+ * exact-length defaulting. Never derive from `createdWallIds`.
+ */
+export function advanceWallChainContinuation(
+	state: LayoutInteractionState,
+	result: { endPoint: LayoutVec2; endJunctionId: string; startJunctionId: string }
+): void {
+	const previousStart = state.wallChainStart;
+	if (previousStart) {
+		const dx = result.endPoint[0] - previousStart[0];
+		const dz = result.endPoint[1] - previousStart[1];
+		if (Math.hypot(dx, dz) > 1e-9) state.wallChainLastDirection = [dx, dz];
+	}
+	state.wallChainStart = [...result.endPoint];
+	state.wallChainStartJunctionId = result.endJunctionId;
+	if (state.wallChainRunStartJunctionId === null) {
+		state.wallChainRunStartJunctionId = result.startJunctionId;
+	}
+	state.wallChainCursor = null;
+	state.wallChainHoverDirection = null;
+}
+
+/** P23.9 — cancel only the active continuation preview/run (Escape). Committed Walls remain. */
+export function cancelWallChainRun(state: LayoutInteractionState): void {
+	state.wallChainStart = null;
+	state.wallChainStartJunctionId = null;
+	state.wallChainRunStartJunctionId = null;
+	state.wallChainLastDirection = null;
+	state.wallChainHoverDirection = null;
+	state.wallChainCursor = null;
+}
+
+export type WallChainRunSnapshot = {
+	start: LayoutVec2;
+	startJunctionId: string | null;
+	runStartJunctionId: string | null;
+	lastDirection: LayoutVec2 | null;
+	hoverDirection: LayoutVec2 | null;
+	cursor: LayoutVec2 | null;
+};
+
+/**
+ * P23.9 — capture the active continuation for rejection retry. A rejected
+ * segment rolls its history transaction back through snapshot restore (which
+ * clears transient state as a side effect), so the caller re-installs the
+ * saved run to keep the current start available for correction. Returns
+ * `null` when no run is active. Never persisted.
+ */
+export function captureWallChainRun(state: LayoutInteractionState): WallChainRunSnapshot | null {
+	if (!state.wallChainStart) return null;
+	return {
+		start: [...state.wallChainStart],
+		startJunctionId: state.wallChainStartJunctionId,
+		runStartJunctionId: state.wallChainRunStartJunctionId,
+		lastDirection: state.wallChainLastDirection ? [...state.wallChainLastDirection] : null,
+		hoverDirection: state.wallChainHoverDirection ? [...state.wallChainHoverDirection] : null,
+		cursor: state.wallChainCursor ? [...state.wallChainCursor] : null
+	};
+}
+
+/** P23.9 — re-install a run saved by `captureWallChainRun` (rejection retry). */
+export function restoreWallChainRun(state: LayoutInteractionState, snapshot: WallChainRunSnapshot): void {
+	state.wallChainStart = [...snapshot.start];
+	state.wallChainStartJunctionId = snapshot.startJunctionId;
+	state.wallChainRunStartJunctionId = snapshot.runStartJunctionId;
+	state.wallChainLastDirection = snapshot.lastDirection ? [...snapshot.lastDirection] : null;
+	state.wallChainHoverDirection = snapshot.hoverDirection ? [...snapshot.hoverDirection] : null;
+	state.wallChainCursor = snapshot.cursor ? [...snapshot.cursor] : null;
+}
+
+/**
+ * P23.9 — direction a typed-length segment follows: the live cursor
+ * direction when the pointer indicates one, otherwise the last hovered
+ * direction (retained across `pointerleave`, which clears only the visual
+ * cursor — the Length form lives outside the SVG), otherwise the last
+ * committed segment's direction, otherwise +X. Exact entry is a precision
+ * aid, not a constraint solver.
+ */
+export function wallChainPendingDirection(state: LayoutInteractionState): LayoutVec2 {
+	const start = state.wallChainStart;
+	const cursor = state.wallChainCursor;
+	if (start && cursor) {
+		const dx = cursor[0] - start[0];
+		const dz = cursor[1] - start[1];
+		if (Math.hypot(dx, dz) > 1e-9) return [dx, dz];
+	}
+	if (state.wallChainHoverDirection) {
+		const [dx, dz] = state.wallChainHoverDirection;
+		if (Math.hypot(dx, dz) > 1e-9) return [dx, dz];
+	}
+	if (state.wallChainLastDirection) {
+		const [dx, dz] = state.wallChainLastDirection;
+		if (Math.hypot(dx, dz) > 1e-9) return [dx, dz];
+	}
+	return [1, 0];
+}
+
+/**
+ * P23.9 — resolve the current candidate endpoint at an exact typed meter
+ * length, bypassing gesture grid snapping. Returns the endpoint; the caller
+ * commits one segment transaction from the current start to it.
+ */
+export function resolveWallChainEndpointAtLength(
+	state: LayoutInteractionState,
+	length: number,
+	direction?: LayoutVec2
+): LayoutVec2 | null {
+	const start = state.wallChainStart;
+	if (!start) return null;
+	if (!Number.isFinite(length) || length <= 0) return null;
+	const dir = direction ?? wallChainPendingDirection(state);
+	const norm = Math.hypot(dir[0], dir[1]);
+	if (!(norm > 0)) return null;
+	return [start[0] + (dir[0] / norm) * length, start[1] + (dir[1] / norm) * length];
+}
+
+/** P23.9 — role implied by the active chain tool ('boundary' for Wall). */
+export function wallChainRoleForTool(tool: LayoutDraftTool): WallChainDraftRole | null {
+	return tool === 'wall-chain' ? 'boundary' : tool === 'partition-chain' ? 'partition' : null;
 }
 
 export function selectLayoutRoom(state: LayoutInteractionState, roomId: string | null): void {
@@ -561,6 +744,7 @@ export function cancelRoomEdit(state: LayoutInteractionState): void {
 
 export function clearLayoutDraft(state: LayoutInteractionState): void {
 	state.polygonPoints = [];
+	cancelWallChainRun(state);
 	state.rectangleStart = null;
 	state.rectangleCurrent = null;
 }

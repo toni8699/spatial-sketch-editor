@@ -152,7 +152,8 @@ export type CompiledQueryPoint = CompiledIdentity & {
 	aabb: LayoutBounds2;
 	sourceId: string;
 	floorId: string;
-	roomId: string;
+	/** Owning Room for room-derived records; absent for roomless physical Walls (never faked). */
+	roomId?: string;
 	segmentId: string;
 	sourceIndex: number;
 	/**
@@ -174,7 +175,8 @@ export type CompiledQuerySpan = CompiledIdentity & {
 	aabb: LayoutBounds2;
 	sourceId: string;
 	floorId: string;
-	roomId: string;
+	/** Owning Room for room-derived records; absent for roomless physical Walls (never faked). */
+	roomId?: string;
 	segmentId: string;
 	openingId?: string;
 	/**
@@ -211,9 +213,37 @@ export type CompiledLayoutQueryGeometry = {
 	aabbs: CompiledQueryAabb[];
 };
 
+export type CompiledPhysicalWall = CompiledIdentity & {
+	wallId: string;
+	/** Document-global Wall role (`boundary` participates in face extraction; `partition` does not). */
+	role: 'boundary' | 'partition';
+	floorId: string;
+	thickness: number;
+	length: number;
+	samples: CompiledCurveSample[];
+	sections: CompiledWallSection[];
+	solidSpans: CompiledSolidSpan[];
+	openings: CompiledOpening[];
+	/** Opening-free centerline polylines for the Plan wall strokes. */
+	solidCenterlinePolylines: LayoutVec2[][];
+	bounds2: LayoutBounds2;
+	bounds3: LayoutBounds3;
+};
+
 export type CompiledLayoutGeometry = {
 	floors: CompiledFloor[];
 	rooms: CompiledRoom[];
+	/**
+	 * Canonical physical Walls independent of Room ownership (wall-first
+	 * only; empty for legacy). Each document-global Wall appears exactly
+	 * once, keyed by `wallId` — including Walls referenced by Rooms.
+	 * Wall-first Rooms keep identity + floor/ceiling semantics + floor
+	 * polygons with empty `walls`/`openings`; Plan/3D/query consumers read
+	 * physical Walls here, never per-Room duplicates. Never invent fake
+	 * `roomId` ownership for these records — query spans/points for
+	 * physical Walls carry no `roomId`.
+	 */
+	walls: CompiledPhysicalWall[];
 	objects: CompiledLayoutObject[];
 	queries: CompiledLayoutQueryGeometry;
 	bounds: LayoutBounds3 | null;

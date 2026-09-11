@@ -17,6 +17,7 @@ import type {
 	CompiledLayoutGeometryResult,
 	CompiledLayoutObject,
 	CompiledOpening,
+	CompiledPhysicalWall,
 	CompiledQueryAabb,
 	CompiledRoom,
 	CompiledSolidSpan,
@@ -27,7 +28,7 @@ import type {
 	LayoutGeometryIssue
 } from './layout-geometry-types';
 import { geometryId } from './layout-geometry-types';
-import { pointAlongSamples, type SampledSegment } from './layout-geometry-curve';
+import { pointAlongSamples, sampleSegment, type SampledSegment } from './layout-geometry-curve';
 import {
 	archProfileTopAt,
 	buildArchProfile,
@@ -195,11 +196,339 @@ export function compileWallFirstLayoutGeometry(
 		};
 	});
 
-	return compileLayoutGeometrySource({
+	return compileWallFirstWithPhysicalWalls(document, {
 		floors: [{ floor: document.floor, rooms }],
 		objects: document.objects,
 		wallIdScope: 'document'
 	});
+}
+
+/**
+ * Wall-first compile with canonical physical-Wall output (P23.9 compiler
+ * prerequisite, acceptance-blocking). Every document Wall compiles exactly
+ * once into top-level `geometry.walls` (canonical, wall-start frame, keyed
+ * by document-global Wall ID, no fake `roomId`). Room-derived walls are NOT
+ * re-emitted: wall-first `CompiledRoom` records keep identity + floor/ceiling
+ * semantics + floor polygons (fills, containment, room hits) with empty
+ * `walls`/`openings`, and wall/opening span+point+AABB query records come
+ * solely from the canonical path. Room-floor polygons, room AABBs, and all
+ * validation/issues/floor logic are unchanged, except the aggregate
+ * `floors[].bounds3` and `floor`/`document` query AABBs expand to include
+ * canonical physical Walls (roomless Walls otherwise leave them stale). One compiler, not a second
+ * geometry system. Legacy documents never enter this function, so the legacy
+ * contract stays byte-identical.
+ */
+function compileWallFirstWithPhysicalWalls(
+	document: LayoutDocumentWallFirst,
+	source: CompilerSource
+): CompiledLayoutGeometryResult {
+	const result = compileLayoutGeometrySource(source);
+	const geometry = result.geometry;
+	const floor = document.floor;
+	const floorElevation = floor.elevation;
+	const ceilingElevation = floor.elevation + floor.height;
+
+	const pointById = new Map(document.junctions.map((junction) => [junction.id, junction.point]));
+	const queryBuilder: QueryGeometryBuilder = {
+		// Room path keeps floor polygons + room/floor/object/document AABBs
+		// only; wall/opening span+point and wall/opening AABB records are
+		// dropped below so each physical Wall has exactly one query
+		// representation (canonical, no roomId).
+		points: [],
+		spans: [],
+		polygons: [...geometry.queries.polygons],
+		aabbs: geometry.queries.aabbs.filter(
+			(aabb) => aabb.kind !== 'wall' && aabb.kind !== 'opening'
+		)
+	};
+	const physicalWalls: CompiledPhysicalWall[] = [];
+	let documentMin: Vec3 | null = geometry.bounds ? [...geometry.bounds.min] as Vec3 : null;
+	let documentMax: Vec3 | null = geometry.bounds ? [...geometry.bounds.max] as Vec3 : null;
+	const includePhysicalBounds = (min: Vec3, max: Vec3): void => {
+		if (!documentMin || !documentMax) {
+			documentMin = [...min] as Vec3;
+			documentMax = [...max] as Vec3;
+			return;
+		}
+		includeBounds3(documentMin, documentMax, min, max);
+	};
+
+	for (const wall of document.walls) {
+		const start = pointById.get(wall.startJunctionId);
+		const end = pointById.get(wall.endJunctionId);
+		if (!start || !end) continue;
+		const segment: DraftSegment = { id: wall.id, kind: 'line', start: [...start] as LayoutVec2, end: [...end] as LayoutVec2 };
+		let sampled: SampledSegment;
+		try {
+			sampled = sampleSegment(segment);
+		} catch {
+			continue;
+		}
+		const wallOpenings: CompilerOpening[] = document.openings
+			.filter((opening) => opening.wallId === wall.id)
+			.map((opening) => ({ ...opening, segmentId: opening.wallId }));
+		const sections = splitSampledWallAroundOpenings(sampled, segment, wallOpenings, floor.height);
+		const compiledOpenings = wallOpenings.map((opening) =>
+			compileOpening(opening, sampled, floor.id, wall.id, cacheKeyOf(['physical-wall-geometry', floor.id, wall.id]))
+		);
+		const solidSpans = buildSolidSpans(sampled.samples, sections);
+		const solidCenterlinePolylines = wallPolylinesAroundOpenings(sampled.samples, wallOpenings);
+		const wallBounds2Value = wallBounds2(sampled.samples, wall.thickness);
+		const wallBounds3Value = wallBounds3(sampled.samples, wall.thickness, floorElevation, ceilingElevation);
+		const compiled: CompiledPhysicalWall = {
+			id: geometryId(['physical-wall', floor.id, wall.id]),
+			cacheKey: cacheKeyOf(['physical-wall', floor.id, wall.id, segment, wallOpenings, wall.thickness, floor.elevation, floor.height]),
+			wallId: wall.id,
+			role: wall.role,
+			floorId: floor.id,
+			thickness: wall.thickness,
+			length: sampled.length,
+			samples: sampled.samples,
+			sections,
+			solidSpans,
+			openings: compiledOpenings,
+			solidCenterlinePolylines,
+			bounds2: wallBounds2Value,
+			bounds3: wallBounds3Value
+		};
+		physicalWalls.push(compiled);
+		emitPhysicalWallQueryRecords(queryBuilder, floor, wall, sampled, compiledOpenings, solidSpans);
+		queryBuilder.aabbs.push(aabbRecord('wall', wall.id, ['wall', floor.id, wall.id], wallBounds3Value.min, wallBounds3Value.max));
+		includePhysicalBounds(wallBounds3Value.min, wallBounds3Value.max);
+	}
+
+	physicalWalls.sort((a, b) => (a.wallId < b.wallId ? -1 : a.wallId > b.wallId ? 1 : 0));
+	const bounds = documentMin && documentMax ? finiteBounds3(documentMin, documentMax) : null;
+	// Strip room-path wall detail for wall-first documents: rooms keep
+	// identity, floor/ceiling semantics, floor polygons and bounds, but their
+	// `walls`/`openings` are views the canonical collection now owns. Every
+	// physical Wall therefore has exactly one compiled + query representation.
+	const rooms = geometry.rooms.map((room) => ({ ...room, walls: [], openings: [] }));
+	// Aggregate bounds must include canonical physical Walls too: the shared
+	// core derives `floors[].bounds3` and the `floor`/`document` query AABBs
+	// from Rooms + objects only, so a roomless open Wall would otherwise
+	// leave them null/stale while top-level `bounds` already includes it.
+	// Seed from the compiled floor bounds (rooms + objects carry over), then
+	// expand by every physical Wall; rebuild the floor record (bounds +
+	// cacheKey, same components as the core) and the two aggregate AABBs.
+	let floorMin: Vec3 | null = null;
+	let floorMax: Vec3 | null = null;
+	const existingFloor = geometry.floors.find((candidate) => candidate.floorId === floor.id);
+	if (existingFloor?.bounds3) {
+		floorMin = [...existingFloor.bounds3.min] as Vec3;
+		floorMax = [...existingFloor.bounds3.max] as Vec3;
+	}
+	const includeFloorBounds = (min: Vec3, max: Vec3): void => {
+		if (!floorMin || !floorMax) {
+			floorMin = [...min] as Vec3;
+			floorMax = [...max] as Vec3;
+			return;
+		}
+		includeBounds3(floorMin, floorMax, min, max);
+	};
+	for (const wall of physicalWalls) includeFloorBounds(wall.bounds3.min, wall.bounds3.max);
+	const floorBounds = floorMin && floorMax ? finiteBounds3(floorMin, floorMax) : null;
+	const floors =
+		geometry.floors.some((candidate) => candidate.floorId === floor.id)
+			? geometry.floors.map((candidate) =>
+					candidate.floorId !== floor.id
+						? candidate
+						: {
+								...candidate,
+								bounds3: floorBounds,
+								cacheKey: cacheKeyOf([
+									'floor',
+									floor.id,
+									candidate.elevation,
+									candidate.height,
+									candidate.roomIds,
+									floorBounds
+								])
+							}
+				)
+			: [
+					...geometry.floors,
+					{
+						id: geometryId(['floor', floor.id]),
+						cacheKey: cacheKeyOf(['floor', floor.id, floorElevation, floor.height, [], floorBounds]),
+						floorId: floor.id,
+						elevation: floorElevation,
+						height: floor.height,
+						roomIds: [],
+						bounds3: floorBounds
+					}
+				];
+	const aabbs = queryBuilder.aabbs.filter((aabb) => aabb.kind !== 'floor' && aabb.kind !== 'document');
+	if (floorBounds) {
+		aabbs.push(aabbRecord('floor', floor.id, ['floor', floor.id], floorBounds.min, floorBounds.max));
+	}
+	if (bounds) {
+		aabbs.push(aabbRecord('document', 'document', ['document'], bounds.min, bounds.max));
+	}
+	return {
+		geometry: {
+			...geometry,
+			floors,
+			rooms,
+			walls: physicalWalls,
+			queries: {
+				points: queryBuilder.points,
+				spans: queryBuilder.spans,
+				polygons: queryBuilder.polygons,
+				aabbs
+			},
+			bounds
+		},
+		issues: result.issues
+	};
+}
+
+/** Query records for one canonical physical Wall — no fake `roomId`. */
+function emitPhysicalWallQueryRecords(
+	queryBuilder: QueryGeometryBuilder,
+	floor: CompilerFloorSource,
+	wall: LayoutDocumentWallFirst['walls'][number],
+	sampled: SampledSegment,
+	openings: readonly CompiledOpening[],
+	solidSpans: readonly CompiledSolidSpan[]
+): void {
+	const wallKey = wall.id;
+	queryBuilder.points.push(
+		pointRecordPhysical(floor.id, wall.id, 'vertex', wall.id, 0, [...sampled.samples[0]!.point] as LayoutVec2, wallKey),
+		pointRecordPhysical(floor.id, wall.id, 'vertex', wall.id, 1, [...sampled.samples.at(-1)!.point] as LayoutVec2, wallKey)
+	);
+	for (let index = 1; index < sampled.samples.length; index += 1) {
+		const start = sampled.samples[index - 1]!;
+		const end = sampled.samples[index]!;
+		queryBuilder.spans.push(
+			spanRecordPhysical(
+				'wall',
+				['wall-span', floor.id, wall.id, String(index - 1)],
+				start.point,
+				end.point,
+				start.distance,
+				end.distance,
+				wall.id,
+				floor.id,
+				wall.id,
+				undefined,
+				start.t,
+				end.t,
+				wallKey
+			)
+		);
+	}
+	for (const opening of openings) {
+		const start = pointAlongSamples(sampled.samples, opening.offset);
+		const end = pointAlongSamples(sampled.samples, opening.offset + opening.width);
+		queryBuilder.spans.push(
+			spanRecordPhysical(
+				'opening',
+				['opening-span', floor.id, opening.openingId],
+				start,
+				end,
+				opening.offset,
+				opening.offset + opening.width,
+				opening.openingId,
+				floor.id,
+				wall.id,
+				opening.openingId
+			)
+		);
+		queryBuilder.aabbs.push(
+			aabb2Record('opening', opening.openingId, ['opening', floor.id, opening.openingId], opening.bounds2)
+		);
+	}
+	for (const [index, span] of solidSpans.entries()) {
+		queryBuilder.spans.push(
+			spanRecordPhysical(
+				'solid',
+				['solid-span', floor.id, wall.id, String(index)],
+				span.start,
+				span.end,
+				span.startDistance,
+				span.endDistance,
+				wall.id,
+				floor.id,
+				wall.id,
+				undefined,
+				undefined,
+				undefined,
+				wallKey
+			)
+		);
+	}
+}
+
+function pointRecordPhysical(
+	floorId: string,
+	segmentId: string,
+	kind: 'vertex' | 'interior-anchor',
+	sourceId: string,
+	sourceIndex: number,
+	point: LayoutVec2,
+	wallKey?: string
+) {
+	const parts = ['query-point', floorId, segmentId, kind, sourceId];
+	return {
+		id: geometryId(parts),
+		cacheKey: cacheKeyOf([...parts, sourceIndex, point]),
+		kind,
+		point,
+		aabb: bounds2(point[0], point[1], point[0], point[1]),
+		sourceId,
+		floorId,
+		segmentId,
+		sourceIndex,
+		...(wallKey ? { wallKey } : {})
+	};
+}
+
+function spanRecordPhysical(
+	kind: 'wall' | 'opening' | 'solid',
+	parts: readonly string[],
+	start: LayoutVec2,
+	end: LayoutVec2,
+	startDistance: number,
+	endDistance: number,
+	sourceId: string,
+	floorId: string,
+	segmentId: string,
+	openingId?: string,
+	startT?: number,
+	endT?: number,
+	wallKey?: string
+) {
+	const aabb = bounds2(Math.min(start[0], end[0]), Math.min(start[1], end[1]), Math.max(start[0], end[0]), Math.max(start[1], end[1]));
+	return {
+		id: geometryId(parts),
+		cacheKey: cacheKeyOf([
+			...parts,
+			start,
+			end,
+			startDistance,
+			endDistance,
+			startT,
+			endT,
+			sourceId,
+			floorId,
+			segmentId,
+			openingId
+		]),
+		kind,
+		start,
+		end,
+		startDistance,
+		endDistance,
+		...(startT === undefined ? {} : { startT }),
+		...(endT === undefined ? {} : { endT }),
+		aabb,
+		sourceId,
+		floorId,
+		segmentId,
+		...(openingId ? { openingId } : {}),
+		...(wallKey ? { wallKey } : {})
+	};
 }
 
 /**
@@ -298,6 +627,7 @@ export function compileLayoutGeometrySource(source: CompilerSource): CompiledLay
 	const geometry: CompiledLayoutGeometry = {
 		floors,
 		rooms,
+		walls: [],
 		objects,
 		queries: {
 			points: queryBuilder.points,

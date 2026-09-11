@@ -21,5 +21,6 @@ export * from './layout-wall-first-codec';
 export * from './layout-wall-first-precision';
 export * from './layout-wall-first-types';
 export * from './layout-wall-noding';
+export * from './layout-wall-chain';
 export * from './layout-wall-topology';
 export * from './layout-wall-topology-ops';

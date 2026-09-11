@@ -11,6 +11,7 @@ function emptyGeometry(): CompiledLayoutGeometry {
 	return {
 		floors: [],
 		rooms: [],
+		walls: [],
 		objects: [],
 		queries: { points: [], spans: [], polygons: [], aabbs: [] },
 		bounds: null

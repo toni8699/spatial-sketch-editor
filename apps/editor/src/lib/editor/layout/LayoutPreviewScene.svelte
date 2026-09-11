@@ -35,6 +35,7 @@ import type { LayoutGizmoCandidateBundle } from '../gizmo/layout-gizmo-candidate
 		model,
 		geometry,
 		wallMeshesByRoom,
+		wallMeshesByWall = new Map(),
 		interaction,
 		showCeilings = false,
 		// an optional transient candidate bundle. When set, the scene
@@ -51,6 +52,8 @@ import type { LayoutGizmoCandidateBundle } from '../gizmo/layout-gizmo-candidate
 		model: LayoutPreviewModel;
 		geometry: CompiledLayoutGeometry;
 		wallMeshesByRoom: ReadonlyMap<string, IndexedWallMesh>;
+		/** Canonical standalone wall meshes (P23.9, render-only: no pick identity). */
+		wallMeshesByWall?: ReadonlyMap<string, IndexedWallMesh>;
 		interaction: LayoutInteractionState;
 		showCeilings?: boolean;
 		transient?: LayoutGizmoCandidateBundle | null;
@@ -78,6 +81,9 @@ import type { LayoutGizmoCandidateBundle } from '../gizmo/layout-gizmo-candidate
 	const activeGeometry = $derived(transient?.geometry ?? geometry);
 	const activeModel = $derived(transient?.model ?? model);
 	const activeWallMeshes = $derived(transient?.wallMeshesByRoom ?? wallMeshesByRoom);
+	// Canonical standalone walls (P23.9): the transient gizmo bundle is
+	// legacy-only, so fall back to the committed meshes during a drag.
+	const activeWallMeshesByWall = $derived(transient?.wallMeshesByWall ?? wallMeshesByWall);
 
 	// Build each room's floor + ceiling Shape once per active geometry.
 	// Selection / drag re-renders must not reallocate shapes or rebuild geometry.
@@ -122,6 +128,23 @@ import type { LayoutGizmoCandidateBundle } from '../gizmo/layout-gizmo-candidate
 			if (mesh) built.set(room.roomId, toWallBufferGeometry(mesh, wallMaterialFactory));
 		}
 		adaptedRooms = built;
+		return () => {
+			for (const adapted of built.values()) adapted.dispose();
+		};
+	});
+
+	// P23.9 canonical standalone walls: render-only meshes with no pick
+	// identity (no `roomId` userData, so the S6 coordinator ignores them and
+	// clicks pass through — selection cutover stays with P23.6/P23.7).
+	let adaptedWalls = $state<Map<string, AdaptedRoom>>(new Map());
+
+	$effect(() => {
+		const built = new Map<string, AdaptedRoom>();
+		for (const wall of activeGeometry.walls ?? []) {
+			const mesh = activeWallMeshesByWall.get(wall.wallId);
+			if (mesh) built.set(wall.wallId, toWallBufferGeometry(mesh, wallMaterialFactory));
+		}
+		adaptedWalls = built;
 		return () => {
 			for (const adapted of built.values()) adapted.dispose();
 		};
@@ -264,6 +287,20 @@ import type { LayoutGizmoCandidateBundle } from '../gizmo/layout-gizmo-candidate
 				/>
 			{/if}
 		</T.Group>
+	{/each}
+
+	{#each activeGeometry.walls ?? [] as wall (wall.wallId)}
+		{@const adaptedWall = adaptedWalls.get(wall.wallId)}
+		{#if adaptedWall}
+			<T.Mesh
+				name={`LayoutPhysicalWall:${wall.wallId}`}
+				geometry={adaptedWall.geometry}
+				material={adaptedWall.materials}
+				castShadow
+				receiveShadow
+				userData={{ surfaceType: 'physical-wall', wallId: wall.wallId }}
+			/>
+		{/if}
 	{/each}
 
 	<!-- Deferred (2026-08-16): hover + anchor-helper shells stay off; the
