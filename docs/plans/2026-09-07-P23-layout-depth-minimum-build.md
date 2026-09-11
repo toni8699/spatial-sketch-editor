@@ -484,11 +484,15 @@ Column / Platform / Plinth remain creation defaults over existing Layout object 
 
 Presentation flows through compiled geometry / `PlanRenderModel` / existing Plan SVG authority. P23.6 may extend the existing canonical selection/hit/interaction projection to first-class Wall/Junction targets, but it adds no authored geometry, topology, mutation authority, history authority, or renderer-local state. Add wall-first Wall/Junction/Room/Opening/Partition hierarchy, topology diagnostics, truthful dimensions and transient snap/draft feedback. Do not invent door handedness/swing semantics that are absent from authored data. Never create a second selection store, hit path or renderer-local selection model.
 
+P23.6 owns the Plan-side Wall-drawing UX: live passive candidate length readout during `start → cursor` preview (presentation only, not authored state), removal of redundant Wall-drawing chrome (no Commit segment button, no Length/Commit/Cancel action bar, no editable exact-length input during drawing, keyboard-first Escape cancel), and selected-Wall exact Length/Angle editing presentation in the Inspector (reusing P23.1 canonical precision operations).
+
 ## P23.7 — Integration, compatibility and closeout
 
 [Child plan](2026-09-08-P23.7-integration-closeout.md)
 
 Runs last. Proves the complete Build loop, exact IDs/history, old save/publication compatibility, standalone Scene migration rejection/success cases, Scene/Camera exterior placement, Plan/3D parity, Save/Load, Preview and Publish. Accepts the completed Wall/Junction/Opening selection cutover: no stale Room-owned selection/hit path may remain authoritative.
+
+P23.7 owns acceptance proving the Wall-drawing UX: second-click commits the Wall (no separate Commit button), Escape cancels only the active transient candidate/run, no redundant Commit/Cancel action bar is required, successful commits do not emit noisy implementation-count messages, invalid/rejected operations still surface useful diagnostics, exact selected-Wall Length/Angle edits reuse canonical P23.1 precision/topology/history paths, and Plan UI does not obscure the XZ axis or important viewport affordances.
 
 # Execution order
 
