@@ -6,6 +6,7 @@
 	import type { LayoutPreviewModel } from './layout-mesh-factory';
 	import {
 		addPolygonPoint,
+		addWallChainPoint,
 		beginLayoutObjectDrag,
 		beginLayoutObjectRotateDrag,
 		beginLayoutRoomUnitDrag,
@@ -27,7 +28,11 @@
 		setLayoutDraftTool,
 		type LayoutDraftTool,
 		removeLastPolygonPoint,
+		removeLastWallChainPoint,
+		appendWallChainPointAtLength,
+		updateWallChainCursor,
 		resolveArrangeScenePick,
+		wallChainRoleForTool,
 		shouldBeginWallBend,
 		updateRectangle,
 		updateLayoutObjectDrag,
@@ -135,6 +140,7 @@
 		onSceneGestureCancel,
 		onSceneDelete,
 		onCommit,
+		onWallChainCommit,
 		onOpeningCreate,
 		onOpeningDelete,
 		onRoomDelete,
@@ -166,6 +172,8 @@
 		onSceneGestureCancel?: () => boolean;
 		onSceneDelete?: () => boolean;
 		onCommit: (points: LayoutVec2[]) => boolean;
+	/** P23.9 — commit a sketched wall/partition chain (one history entry). */
+	onWallChainCommit: (points: LayoutVec2[], close: boolean) => boolean;
 		onOpeningCreate: (roomId: string, segmentId: string, kind: LayoutOpeningKind, clickOffset: number) => void;
 		onOpeningDelete: (roomId: string, openingId: string) => void;
 		onRoomDelete: (roomId: string) => boolean;
@@ -549,6 +557,26 @@
 		if (!interaction.planView.snapEnabled || interaction.viewMode !== 'plan') {
 			clearLayoutSnapFeedback();
 		}
+	});
+
+	// P23.9 — any document change invalidates an in-progress sketch: its draft
+	// points carry coordinates and resolved Junction IDs computed against the
+	// document that has since changed, so the draft must never survive as a
+	// hidden active interaction ("pointer loss / workspace/domain change →
+	// cancel, never leave a hidden active draft"). Every document replacement
+	// and every layout mutation bumps `previewVersion`; sketching itself never
+	// does, so this cannot fire while the chain is being drawn. Tool changes
+	// already cancel the draft through `setLayoutDraftTool`.
+	let draftedVersion = $state<number | null>(null);
+	$effect(() => {
+		const version = preview.previewVersion;
+		if (draftedVersion === null) {
+			draftedVersion = version;
+			return;
+		}
+		if (version === draftedVersion) return;
+		draftedVersion = version;
+		if (interaction.wallChainPoints.length > 0) clearLayoutDraft(interaction);
 	});
 
 	$effect(() => {
@@ -1221,7 +1249,8 @@
 		}
 
 		if (interaction.tool === 'rectangle') {
-			if ('formatVersion' in preview.project.layout) return;
+			// P23.9 — Rectangle sketches a boundary chain on wall-first documents
+			// too; only the commit path differs by document format.
 			const snapped = draftPoint(event, null);
 			if (!snapped || !svgElement) return;
 			pointerId = event.pointerId;
@@ -1340,6 +1369,16 @@
 	}
 
 	function onPointerMove(event: PointerEvent) {
+		// P23.9 — pending chain segment preview: the draft follows the snapped
+		// cursor so the next leg reads before it is clicked.
+		if (wallChainRoleForTool(interaction.tool) !== null && interaction.planViewMode === 'layout') {
+			if (interaction.wallChainPoints.length > 0) {
+				const point = worldPoint(event);
+				updateWallChainCursor(interaction, point ? applyLayoutSnap(point) : null);
+			} else if (interaction.wallChainCursor) {
+				updateWallChainCursor(interaction, null);
+			}
+		}
 		if (stagingGesture?.pointerId === event.pointerId) {
 			previewStagingGesture(event);
 			return;
@@ -1656,8 +1695,13 @@
 		dragSnapshot = null;
 		svgElement?.releasePointerCapture(event.pointerId);
 		if (interaction.tool === 'rectangle') {
+			// P23.9 — on a wall-first document Rectangle is the bounded four-Wall
+			// chain frontend: same canonical graph as an equivalent chain. The
+			// legacy Room-polygon commit stays for legacy documents.
 			if ('formatVersion' in preview.project.layout) {
-				clearLayoutDraft(interaction);
+				const points = rectanglePoints(interaction);
+				if (points && onCommit(points)) clearLayoutDraft(interaction);
+				else clearLayoutDraft(interaction);
 				return;
 			}
 			const points = rectanglePoints(interaction);
@@ -1712,9 +1756,13 @@
 			suppressNextClick = false;
 			return;
 		}
-		if (interaction.tool !== 'polygon') return;
+		if (interaction.tool !== 'polygon' && wallChainRoleForTool(interaction.tool) === null) return;
 		const point = worldPoint(event);
 		if (!point) return;
+		if (wallChainRoleForTool(interaction.tool) !== null) {
+			commitWallChainClick(point);
+			return;
+		}
 		const anchor = interaction.polygonPoints.at(-1) ?? null;
 		let nextPoint = point;
 		if (anchor && event.shiftKey && interaction.planView.angleSnapEnabled) nextPoint = constrainToAngle(anchor, nextPoint);
@@ -1728,9 +1776,55 @@
 		addPolygonPoint(interaction, nextPoint);
 	}
 
+	/**
+	 * P23.9 — one click on a Wall/Partition chain: the first click starts the
+	 * draft, later clicks extend it. A click within the close distance of the
+	 * chain's start finishes and commits the closed chain; the committed chain
+	 * resolves junction reuse and noding through the P23.8 planner.
+	 */
+	function commitWallChainClick(rawPoint: LayoutVec2) {
+		const snapped = applyLayoutSnap(rawPoint);
+		const first = interaction.wallChainPoints[0];
+		const closeDistance = 14 / interaction.planView.pixelsPerMeter;
+		// Clicking the chain's start closes and commits (needs ≥ 3 vertices so a
+		// closed candidate can form an enclosed face).
+		if (first && interaction.wallChainPoints.length >= 3 && distance(first, snapped) <= closeDistance) {
+			commitWallChainDraft(true);
+			return;
+		}
+		// a fresh click sequence retires the previous chain outcome message.
+		if (interaction.wallChainPoints.length === 0) preview.statusMessage = null;
+		addWallChainPoint(interaction, snapped);
+	}
+
+	/** P23.9 — Finish: commit the open chain; Close: commit the closed chain. */
+	function commitWallChainDraft(close: boolean) {
+		const points = [...interaction.wallChainPoints];
+		if (points.length < (close ? 3 : 2)) return;
+		if (!onWallChainCommit(points, close)) return; // rejection keeps the draft for correction
+		clearLayoutDraft(interaction);
+	}
+
 	function finishPolygon() {
 		if (interaction.polygonPoints.length < 3) return;
 		if (onCommit([...interaction.polygonPoints])) clearLayoutDraft(interaction);
+	}
+
+	/**
+	 * P23.9 — exact draft length. The typed value bypasses gesture grid snapping
+	 * and extends the chain along the pending direction, so the committed Wall
+	 * length is the authored number exactly (P23.9 precision integration).
+	 */
+	let chainLengthDraft = $state('');
+
+	function addChainLengthLeg(event: SubmitEvent) {
+		event.preventDefault();
+		const length = Number(chainLengthDraft);
+		if (!chainLengthDraft.trim() || !Number.isFinite(length) || length <= 0) return;
+		if (appendWallChainPointAtLength(interaction, length)) {
+			chainLengthDraft = '';
+			preview.statusMessage = null;
+		}
 	}
 
 	function onWheel(event: WheelEvent) {
@@ -1870,6 +1964,16 @@
 			event.preventDefault();
 			removeLastPolygonPoint(interaction);
 		}
+		if (
+			event.key === 'Backspace' &&
+			wallChainRoleForTool(interaction.tool) !== null &&
+			interaction.wallChainPoints.length > 1
+		) {
+			// P23.9 — Backspace removes the latest draft leg; the first point
+			// stays so the chain (and its close affordance) remains defined.
+			event.preventDefault();
+			removeLastWallChainPoint(interaction);
+		}
 	}
 
 	function distance(a: LayoutVec2, b: LayoutVec2): number {
@@ -1938,6 +2042,9 @@
 			rotationHoverScreen = null;
 			arrangeLayoutRotationHoverScreen = null;
 			arrangeHover = null;
+			// P23.9 — the pending segment preview follows the pointer, so leaving
+			// the surface drops it rather than freezing a stale leg.
+			updateWallChainCursor(interaction, null);
 			clearLayoutSnapFeedback();
 		}}
 	>
@@ -1952,11 +2059,36 @@
 		{/if}
 
 	</svg>
+	{#if preview.statusMessage}
+		<p class="plan-status" role="status">{preview.statusMessage}</p>
+	{/if}
 	<div class="plan-actions">
+		{#if wallChainRoleForTool(interaction.tool) !== null && interaction.wallChainPoints.length >= 1}
+			<form class="chain-length" onsubmit={addChainLengthLeg}>
+				<label for="plan-chain-length">Length</label>
+				<input
+					id="plan-chain-length"
+					type="number"
+					min="0.01"
+					step="0.01"
+					placeholder="m"
+					aria-label="Exact chain leg length in meters"
+					value={chainLengthDraft}
+					oninput={(event) => (chainLengthDraft = event.currentTarget.value)}
+				/>
+				<button type="submit">Add leg</button>
+			</form>
+		{/if}
 		{#if interaction.tool === 'polygon' && interaction.polygonPoints.length >= 3}
 			<button type="button" onclick={finishPolygon}>Finish polygon</button>
 		{/if}
-		{#if draftPolygon && draftPolygon.length > 0}
+		{#if wallChainRoleForTool(interaction.tool) !== null && interaction.wallChainPoints.length >= 2}
+			<button type="button" onclick={() => commitWallChainDraft(false)}>Finish {wallChainRoleForTool(interaction.tool) === 'partition' ? 'partition' : 'wall'} chain</button>
+		{/if}
+		{#if wallChainRoleForTool(interaction.tool) !== null && interaction.wallChainPoints.length >= 3}
+			<button type="button" onclick={() => commitWallChainDraft(true)}>Close chain</button>
+		{/if}
+		{#if (draftPolygon && draftPolygon.length > 0) || (wallChainRoleForTool(interaction.tool) !== null && interaction.wallChainPoints.length > 0)}
 			<button type="button" class="secondary" onclick={() => clearLayoutDraft(interaction)}>Cancel draft</button>
 		{/if}
 	</div>
@@ -1986,9 +2118,12 @@
 	.plan-empty-state { position: absolute; top: 50%; left: 50%; z-index: 5; transform: translate(-50%, -50%); display: grid; gap: 0.45rem; max-width: min(24rem, calc(100% - 4rem)); padding: var(--editor-space-4) var(--editor-space-5); border: 1px solid var(--editor-plan-grid-major); border-radius: var(--editor-radius-lg); background: rgb(255 255 255 / 72%); color: var(--editor-plan-label); text-align: center; pointer-events: none; box-shadow: var(--editor-shadow-popover); }
 	.plan-empty-state strong { font-size: 0.86rem; font-weight: 650; }
 	.plan-empty-state span { font-size: 0.74rem; line-height: 1.45; color: var(--editor-plan-muted); }
+	.plan-status { position: absolute; left: 0.8rem; bottom: 0.8rem; z-index: 10; max-width: 60%; margin: 0; padding: 0.34rem 0.5rem; border: 1px solid var(--editor-border-normal); border-radius: 0.3rem; background: var(--editor-bg-panel-raised); color: var(--editor-text-secondary); font: 500 0.7rem/1.25 var(--editor-font); pointer-events: none; }
 	.plan-actions { position: absolute; right: 0.8rem; bottom: 0.8rem; z-index: 10; display: flex; gap: 0.4rem; pointer-events: auto; }
 	.plan-actions button { padding: 0.44rem 0.6rem; border: 1px solid var(--editor-accent-border); border-radius: 0.32rem; background: var(--editor-bg-selected); color: var(--editor-text-primary); font: 600 0.7rem/1 var(--editor-font); cursor: pointer; }
 	.plan-actions button.secondary { border-color: var(--editor-border-normal); background: var(--editor-bg-panel-raised); color: var(--editor-text-secondary); }
+	.chain-length { display: flex; align-items: center; gap: 0.3rem; margin: 0; padding: 0 0.35rem; border: 1px solid var(--editor-border-normal); border-radius: 0.32rem; background: var(--editor-bg-panel-raised); color: var(--editor-text-secondary); font: 600 0.7rem/1 var(--editor-font); }
+	.chain-length input { width: 4.2rem; padding: 0.3rem 0.25rem; border: 1px solid var(--editor-border-normal); border-radius: 0.25rem; background: var(--editor-bg-input, var(--editor-bg-panel-raised)); color: var(--editor-text-primary); font: 600 0.7rem/1 var(--editor-font); }
 	.plan-meta { position: absolute; left: 0.8rem; bottom: 0.8rem; z-index: 2; display: flex; gap: 0.7rem; color: var(--editor-plan-muted); font: 0.68rem/1 var(--editor-font); pointer-events: none; }
 	.plan-meta .warning { color: var(--editor-danger-fg); }
 	@media (max-width: 44rem) {

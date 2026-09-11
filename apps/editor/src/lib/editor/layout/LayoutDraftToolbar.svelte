@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { DoorOpen, Grid2x2, MousePointer2, Pentagon, Square, Trash2, X } from 'lucide-svelte';
+	import { BrickWall, DoorOpen, Grid2x2, MousePointer2, Pentagon, SeparatorVertical, Square, Trash2, X } from 'lucide-svelte';
 	import {
 		cancelLayoutPrimitiveDraft,
 		clearLayoutDraft,
@@ -47,8 +47,18 @@
 	}
 
 	function chooseTool(tool: LayoutDraftTool) {
-		if (wallFirstLayout && tool !== 'select') {
-			preview.statusMessage = 'Legacy room, opening, and primitive tools are unavailable for wall-first layouts; use Architecture · exact.';
+		// P23.9 — the chain tools and the Rect/Polygon convenience frontends all
+		// author canonical Junction/Wall records on a wall-first document; only
+		// the legacy room-owned opening and primitive tools are unavailable.
+		if (wallFirstLayout && tool !== 'select' && tool !== 'wall-chain' && tool !== 'partition-chain' && tool !== 'rectangle' && tool !== 'polygon') {
+			preview.statusMessage = 'Legacy opening and primitive tools are unavailable for wall-first layouts; use Architecture · exact.';
+			return;
+		}
+		// P23.9 — chains author the canonical wall-first Junction/Wall graph, so
+		// they need a wall-first document; a legacy room-owned layout cannot
+		// host them and the commit would reject after the whole chain was drawn.
+		if (!wallFirstLayout && (tool === 'wall-chain' || tool === 'partition-chain')) {
+			preview.statusMessage = 'Wall and Partition sketching requires a wall-first layout; this project uses the legacy room-owned layout.';
 			return;
 		}
 		if (interaction.roomUnitDrag) onCancelLayoutTransaction();
@@ -87,8 +97,10 @@
 	<div class="tool-group" aria-label="Room drafting tool">
 		<button type="button" class:active={interaction.tool === 'select'} aria-pressed={interaction.tool === 'select'} onclick={() => chooseTool('select')}><MousePointer2 size={14} aria-hidden="true" /> Select</button>
 		{#if interaction.planViewMode === 'layout'}
-			<button type="button" disabled={wallFirstLayout} title={wallFirstLayout ? 'Use Architecture · exact in the Inspector' : undefined} class:active={interaction.tool === 'rectangle'} aria-pressed={interaction.tool === 'rectangle'} onclick={() => chooseTool('rectangle')}><Square size={14} aria-hidden="true" /> Rect Room</button>
-			<button type="button" disabled={wallFirstLayout} title={wallFirstLayout ? 'Use Architecture · exact in the Inspector' : undefined} class:active={interaction.tool === 'polygon'} aria-pressed={interaction.tool === 'polygon'} onclick={() => chooseTool('polygon')}><Pentagon size={14} aria-hidden="true" /> Poly Room</button>
+			<button type="button" disabled={!wallFirstLayout} title={!wallFirstLayout ? 'Wall sketching requires a wall-first layout' : undefined} class:active={interaction.tool === 'wall-chain'} aria-pressed={interaction.tool === 'wall-chain'} onclick={() => chooseTool('wall-chain')}><BrickWall size={14} aria-hidden="true" /> Wall</button>
+			<button type="button" disabled={!wallFirstLayout} title={!wallFirstLayout ? 'Partition sketching requires a wall-first layout' : undefined} class:active={interaction.tool === 'partition-chain'} aria-pressed={interaction.tool === 'partition-chain'} onclick={() => chooseTool('partition-chain')}><SeparatorVertical size={14} aria-hidden="true" /> Partition</button>
+			<button type="button" title={wallFirstLayout ? 'Draws one closed boundary chain of canonical Walls' : undefined} class:active={interaction.tool === 'rectangle'} aria-pressed={interaction.tool === 'rectangle'} onclick={() => chooseTool('rectangle')}><Square size={14} aria-hidden="true" /> Rect Room</button>
+			<button type="button" title={wallFirstLayout ? 'Draws one closed boundary chain of canonical Walls' : undefined} class:active={interaction.tool === 'polygon'} aria-pressed={interaction.tool === 'polygon'} onclick={() => chooseTool('polygon')}><Pentagon size={14} aria-hidden="true" /> Poly Room</button>
 			<button type="button" disabled={wallFirstLayout} title={wallFirstLayout ? 'Use Architecture · exact in the Inspector' : undefined} class:active={interaction.tool === 'door'} aria-pressed={interaction.tool === 'door'} onclick={() => chooseTool('door')}><DoorOpen size={14} aria-hidden="true" /> Door</button>
 			<button type="button" disabled={wallFirstLayout} title={wallFirstLayout ? 'Use Architecture · exact in the Inspector' : undefined} class:active={interaction.tool === 'window'} aria-pressed={interaction.tool === 'window'} onclick={() => chooseTool('window')}><Grid2x2 size={14} aria-hidden="true" /> Window</button>
 		{:else if onDeleteArrange}
@@ -106,7 +118,7 @@
 	{:else}
 		<button type="button" class:active={preview.showCeilings} aria-pressed={preview.showCeilings} onclick={() => toggleLayoutCeilings(preview)}>Ceiling</button>
 	{/if}
-	{#if interaction.planViewMode === 'layout' && (interaction.polygonPoints.length > 0 || interaction.rectangleStart || interaction.primitiveDraft || interaction.roomUnitDrag || interaction.tool === 'door' || interaction.tool === 'window')}
+	{#if interaction.planViewMode === 'layout' && (interaction.polygonPoints.length > 0 || interaction.wallChainPoints.length > 0 || interaction.rectangleStart || interaction.primitiveDraft || interaction.roomUnitDrag || interaction.tool === 'door' || interaction.tool === 'window')}
 		<button type="button" class="cancel" onclick={cancel}><X size={14} aria-hidden="true" /> Cancel</button>
 	{/if}
 </div>

@@ -8,8 +8,11 @@ export type LayoutViewMode = 'plan' | '3d';
 /** Scene → Plan's local authoring authority. Camera Plan never reads this. */
 export type PlanViewMode = 'layout' | 'staging';
 export type LayoutPrimitiveTool = 'box' | 'cylinder' | 'sphere';
-export type LayoutDraftTool = 'select' | 'rectangle' | 'polygon' | 'door' | 'window' | LayoutPrimitiveTool;
+export type LayoutDraftTool = 'select' | 'rectangle' | 'polygon' | 'door' | 'window' | 'wall-chain' | 'partition-chain' | LayoutPrimitiveTool;
 export type LayoutRoomDragMode = 'room' | 'vertex';
+
+/** P23.9 — role of the active wall-chain draft (Wall vs Partition tool). */
+export type WallChainDraftRole = 'boundary' | 'partition';
 
 export type LayoutRoomUnitDrag = LayoutRoomUnitTransform & {
 	roomId: string;
@@ -128,6 +131,10 @@ export type LayoutInteractionState = {
 	planViewMode: PlanViewMode;
 	tool: LayoutDraftTool;
 	polygonPoints: LayoutVec2[];
+	/** P23.9 — sketched wall-chain draft points (click order), for both chain tools. */
+	wallChainPoints: LayoutVec2[];
+	/** P23.9 — snapped cursor the pending chain segment is drawn to (rubber band). */
+	wallChainCursor: LayoutVec2 | null;
 	rectangleStart: LayoutVec2 | null;
 	rectangleCurrent: LayoutVec2 | null;
 	primitiveDraft: LayoutPrimitiveDraft | null;
@@ -154,6 +161,8 @@ export function createLayoutInteractionState(): LayoutInteractionState {
 		planViewMode: 'layout',
 		tool: 'select',
 		polygonPoints: [],
+		wallChainPoints: [],
+		wallChainCursor: null,
 		rectangleStart: null,
 		rectangleCurrent: null,
 		primitiveDraft: null,
@@ -228,11 +237,12 @@ export function resolveArrangeScenePick(input: {
 export function hasLayoutTransientInteraction(
 	state: Pick<
 		LayoutInteractionState,
-		'polygonPoints' | 'rectangleStart' | 'primitiveDraft' | 'objectDrag' | 'roomUnitDrag' | 'editing'
+		'polygonPoints' | 'rectangleStart' | 'primitiveDraft' | 'objectDrag' | 'roomUnitDrag' | 'editing' | 'wallChainPoints'
 	>
 ): boolean {
 	return Boolean(
 		state.polygonPoints.length > 0 ||
+		state.wallChainPoints.length > 0 ||
 		state.rectangleStart ||
 		state.primitiveDraft ||
 		state.objectDrag ||
@@ -361,6 +371,63 @@ export function addPolygonPoint(state: LayoutInteractionState, point: LayoutVec2
 
 export function removeLastPolygonPoint(state: LayoutInteractionState): void {
 	state.polygonPoints = state.polygonPoints.slice(0, -1);
+}
+
+/** P23.9 — extend the active wall-chain draft by one clicked vertex. */
+export function addWallChainPoint(state: LayoutInteractionState, point: LayoutVec2): void {
+	state.wallChainPoints = [...state.wallChainPoints, [...point]];
+}
+
+/** P23.9 — pending segment preview: the snapped cursor the chain is drawn to. */
+export function updateWallChainCursor(state: LayoutInteractionState, point: LayoutVec2 | null): void {
+	state.wallChainCursor = point ? [...point] : null;
+}
+
+/**
+ * P23.9 — direction a typed-length leg follows: the previous leg's direction
+ * when the chain already has one, otherwise +X. Exact entry is a precision
+ * aid, not a constraint solver (P23.9 precision integration).
+ */
+export function wallChainPendingDirection(state: LayoutInteractionState): LayoutVec2 {
+	const points = state.wallChainPoints;
+	if (points.length >= 2) {
+		const from = points[points.length - 2];
+		const to = points[points.length - 1];
+		const dx = to[0] - from[0];
+		const dz = to[1] - from[1];
+		if (Math.hypot(dx, dz) > 0) return [dx, dz];
+	}
+	return [1, 0];
+}
+
+/**
+ * P23.9 — append the next chain vertex at an exact typed meter length,
+ * bypassing gesture grid snapping (`where supported`). The committed Wall
+ * length therefore equals the typed value exactly.
+ */
+export function appendWallChainPointAtLength(
+	state: LayoutInteractionState,
+	length: number,
+	direction?: LayoutVec2
+): boolean {
+	const last = state.wallChainPoints[state.wallChainPoints.length - 1];
+	if (!last) return false;
+	if (!Number.isFinite(length) || length <= 0) return false;
+	const dir = direction ?? wallChainPendingDirection(state);
+	const norm = Math.hypot(dir[0], dir[1]);
+	if (!(norm > 0)) return false;
+	addWallChainPoint(state, [last[0] + (dir[0] / norm) * length, last[1] + (dir[1] / norm) * length]);
+	return true;
+}
+
+/** P23.9 — remove the latest draft leg (Backspace), never the first point. */
+export function removeLastWallChainPoint(state: LayoutInteractionState): void {
+	state.wallChainPoints = state.wallChainPoints.slice(0, -1);
+}
+
+/** P23.9 — role implied by the active chain tool ('boundary' for Wall). */
+export function wallChainRoleForTool(tool: LayoutDraftTool): WallChainDraftRole | null {
+	return tool === 'wall-chain' ? 'boundary' : tool === 'partition-chain' ? 'partition' : null;
 }
 
 export function selectLayoutRoom(state: LayoutInteractionState, roomId: string | null): void {
@@ -561,6 +628,8 @@ export function cancelRoomEdit(state: LayoutInteractionState): void {
 
 export function clearLayoutDraft(state: LayoutInteractionState): void {
 	state.polygonPoints = [];
+	state.wallChainPoints = [];
+	state.wallChainCursor = null;
 	state.rectangleStart = null;
 	state.rectangleCurrent = null;
 }

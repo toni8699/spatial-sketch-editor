@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { LayoutDocument } from '$lib/layout/layout-types';	import {
-		addPolygonPoint,
+	addPolygonPoint,
+	addWallChainPoint,
+	appendWallChainPointAtLength,
 		beginLayoutObjectDrag,
 		beginLayoutObjectRotateDrag,
 		beginLayoutRoomUnitDrag,
@@ -10,10 +12,11 @@ import type { LayoutDocument } from '$lib/layout/layout-types';	import {
 	beginRectangle,
 	clearLayoutDraft,
 	createLayoutInteractionState,
-	LAYOUT_WALL_BEND_DRAG_THRESHOLD_PX,
-	reconcileLayoutSelection,
-	removeLastPolygonPoint,
-	type LayoutSelection,
+	LAYOUT_WALL_BEND_DRAG_THRESHOLD_PX,		reconcileLayoutSelection,
+		removeLastPolygonPoint,
+		removeLastWallChainPoint,
+		type LayoutSelection,
+		wallChainRoleForTool,
 	selectLayoutInteriorAnchor,
 	selectLayoutObject,
 	selectLayoutOpening,
@@ -35,10 +38,36 @@ import type { LayoutDocument } from '$lib/layout/layout-types';	import {
 	resolveArrangeScenePick,
 	updateLayoutPrimitiveDraft,
 	updateRoomEdit,
-	updateRectangle
-} from '$lib/editor/layout/layout-interaction';
+	updateRectangle,
+	updateWallChainCursor
+} from '$lib/editor/layout/layout-interaction';	describe('layout interaction', () => {
+	it('P23.9 wall-chain draft: extends, backspaces, clears, and roles from tools', () => {
+		const state = createLayoutInteractionState();
+		expect(wallChainRoleForTool('wall-chain')).toBe('boundary');
+		expect(wallChainRoleForTool('partition-chain')).toBe('partition');
+		expect(wallChainRoleForTool('select')).toBeNull();
 
-describe('layout interaction', () => {
+		setLayoutDraftTool(state, 'wall-chain');
+		expect(state.wallChainPoints).toHaveLength(0);
+		addWallChainPoint(state, [0, 0]);
+		addWallChainPoint(state, [4, 0]);
+		addWallChainPoint(state, [4, 3]);
+		expect(state.wallChainPoints).toHaveLength(3);
+
+		// Backspace removes only the latest leg; the first point stays.
+		removeLastWallChainPoint(state);
+		expect(state.wallChainPoints).toHaveLength(2);
+		expect(state.wallChainPoints[0]).toEqual([0, 0]);
+
+		// Switching tools clears the chain draft; switching to a chain tool
+		// starts from an empty draft.
+		clearLayoutDraft(state);
+		expect(state.wallChainPoints).toHaveLength(0);
+		setLayoutDraftTool(state, 'partition-chain');
+		expect(state.tool).toBe('partition-chain');
+		expect(state.wallChainPoints).toHaveLength(0);
+	});
+
 	it('toggles plan viewport options through the interaction module', () => {
 		const state = createLayoutInteractionState();
 		expect(state.planView.snapEnabled).toBe(true);
@@ -410,5 +439,68 @@ describe('reconcileLayoutSelection', () => {
 			roomId: 'room-a',
 			segmentId: 'wall-b'
 		});
+	});
+});
+
+describe('P23.9 exact chain length entry', () => {
+	it('appends the next vertex at the exact typed length along the pending direction', () => {
+		const state = createLayoutInteractionState();
+		setLayoutDraftTool(state, 'wall-chain');
+		addWallChainPoint(state, [1, 2]);
+		addWallChainPoint(state, [4, 2]); // pending direction +X
+		expect(appendWallChainPointAtLength(state, 2.5)).toBe(true);
+		expect(state.wallChainPoints[2]).toEqual([6.5, 2]);
+	});
+
+	it('continues along the previous leg direction (45°)', () => {
+		const state = createLayoutInteractionState();
+		setLayoutDraftTool(state, 'partition-chain');
+		addWallChainPoint(state, [0, 0]);
+		addWallChainPoint(state, [1, 1]); // diagonal leg
+		expect(appendWallChainPointAtLength(state, Math.SQRT2)).toBe(true);
+		const [x, z] = state.wallChainPoints[2]!;
+		expect(x).toBeCloseTo(2, 12);
+		expect(z).toBeCloseTo(2, 12);
+	});
+
+	it('first leg defaults to +X from the first point', () => {
+		const state = createLayoutInteractionState();
+		setLayoutDraftTool(state, 'wall-chain');
+		addWallChainPoint(state, [5, 5]);
+		expect(appendWallChainPointAtLength(state, 3)).toBe(true);
+		expect(state.wallChainPoints[1]).toEqual([8, 5]);
+	});
+
+	it('rejects non-positive/non-finite lengths and an empty chain', () => {
+		const state = createLayoutInteractionState();
+		expect(appendWallChainPointAtLength(state, 2)).toBe(false);
+		addWallChainPoint(state, [0, 0]);
+		expect(appendWallChainPointAtLength(state, 0)).toBe(false);
+		expect(appendWallChainPointAtLength(state, -1)).toBe(false);
+		expect(appendWallChainPointAtLength(state, Number.NaN)).toBe(false);
+		expect(state.wallChainPoints).toHaveLength(1);
+	});
+
+	it('explicit direction overrides the pending direction', () => {
+		const state = createLayoutInteractionState();
+		setLayoutDraftTool(state, 'wall-chain');
+		addWallChainPoint(state, [0, 0]);
+		addWallChainPoint(state, [1, 0]);
+		expect(appendWallChainPointAtLength(state, 2, [0, 1])).toBe(true);
+		expect(state.wallChainPoints[2]).toEqual([1, 2]);
+	});
+});
+
+describe('P23.9 chain cursor (rubber band)', () => {
+	it('tracks and clears the snapped cursor; clearLayoutDraft resets it', () => {
+		const state = createLayoutInteractionState();
+		expect(state.wallChainCursor).toBeNull();
+		setLayoutDraftTool(state, 'wall-chain');
+		addWallChainPoint(state, [0, 0]);
+		updateWallChainCursor(state, [2, 3]);
+		expect(state.wallChainCursor).toEqual([2, 3]);
+		clearLayoutDraft(state);
+		expect(state.wallChainCursor).toBeNull();
+		expect(state.wallChainPoints).toHaveLength(0);
 	});
 });

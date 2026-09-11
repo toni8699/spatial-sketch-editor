@@ -35,6 +35,7 @@ import {
 	type PrecisionPlan
 } from '$lib/layout/layout-wall-first-precision';
 import type { NodingIdAllocator } from '$lib/layout/layout-wall-noding';
+import { planWallChain, type LayoutWallRole as ChainWallRole } from '$lib/layout/layout-wall-chain';
 import { deleteInteriorAnchorOnSegment, insertInteriorAnchorOnSegment, pointInRoom, replaceRoomPoints, updateInteriorAnchorOnSegment } from './layout-editing';
 import {
 	appendRoomOpening,
@@ -128,6 +129,14 @@ export type LayoutObjectMutationResult =
 
 export type WallFirstPrecisionMutationResult =
 	| { success: true; operation: PrecisionOperation }
+	| {
+			success: true;
+			operation: 'wall-chain-commit';
+			/** Wall IDs created by the committed chain. */
+			wallIds: string[];
+			/** Room IDs born from the chain's reconciliation (boundary chains). */
+			roomIds: string[];
+	  }
 	| { success: false; message: string };
 
 export type LayoutRoomFieldPatch = Partial<
@@ -637,6 +646,45 @@ function applyWallFirstPrecisionPlan(
 		return { success: true, operation: plan.operation };
 	} catch (error) {
 		const message = error instanceof Error ? error.message : 'Could not apply precise layout operation';
+		state.lastMutationMessage = message;
+		return { success: false, message };
+	}
+}
+
+/**
+ * P23.9 — commit a sketched wall/partition chain as one Layout history entry.
+ * The planner (P23.8 engine) resolves junction reuse, T/X noding and Room
+ * reconciliation; a rejected chain leaves the document and history untouched.
+ */
+export function commitWallChain(
+	state: LayoutPreviewState,
+	points: readonly LayoutVec2[],
+	role: ChainWallRole,
+	options: { close: boolean }
+): WallFirstPrecisionMutationResult {
+	const layout = wallFirstLayoutOrError(state);
+	if (!layout) return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
+	const plan = planWallChain({ baseline: layout, points, role, close: options.close });
+	if (plan.kind === 'rejected') {
+		state.lastMutationMessage = plan.rejection.message;
+		return { success: false, message: plan.rejection.message };
+	}
+	try {
+		const bundle = derivePreviewBundle(
+			state.project.id,
+			state.project.name,
+			plan.document,
+			state.project.scene
+		);
+		state.source = 'draft';
+		commitPreviewBundle(state, bundle);
+		state.previewVersion += 1;
+		state.lastMutationMessage = null;
+		state.statusMessage = null;
+		state.importError = null;
+		return { success: true, operation: 'wall-chain-commit', wallIds: plan.createdWallIds, roomIds: plan.lineage.map((record) => record.roomId) };
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Could not commit wall chain';
 		state.lastMutationMessage = message;
 		return { success: false, message };
 	}

@@ -20,12 +20,13 @@
 	import LayoutPlanViewport from './layout/LayoutPlanViewport.svelte';
 	import LayoutDraftToolbar from './layout/LayoutDraftToolbar.svelte';
 	import LayoutRenderGate from './layout/LayoutRenderGate.svelte';
-	import type { LayoutInteractionState } from './layout/layout-interaction';
+	import { selectLayoutRoom, wallChainRoleForTool, type LayoutInteractionState } from './layout/layout-interaction';
 	import type { LayoutPreviewState } from './layout/layout-preview-state.svelte';
 	import {
 		captureLayoutPreviewSnapshot,
 		commitLayoutDraftRoom,
 		commitLayoutOpening,
+		commitWallChain,
 		deleteLayoutOpening,
 		deleteLayoutRoom
 	} from './layout/layout-preview-state.svelte';
@@ -75,6 +76,11 @@
 	let transformControls = $state<TransformControls>();
 
 	function commitDraftRoom(points: [number, number][]): boolean {
+		// P23.9 — on a wall-first document the Rect/Polygon convenience tools
+		// commit the same canonical Junction/Wall chain the chain tools do.
+		if ('formatVersion' in layoutPreview.project.layout) {
+			return commitDraftWallChain(points, true);
+		}
 		const outcome = runLayoutMutationGuarded(
 			() => commitLayoutDraftRoom(layoutPreview, points),
 			(result) => result.success
@@ -90,6 +96,45 @@
 			store.setStatusMessage(`Room draft rejected: ${result.message}`);
 		}
 		return result.success;
+	}
+
+	/** P23.9 — commit a sketched wall/partition chain (one history entry). */
+	function commitDraftWallChain(points: [number, number][], close: boolean): boolean {
+		// P23.9 — boundary (Rect/Polygon close a boundary; Wall tool) vs
+		// partition is fixed at commit time, not read from the live tool, so a
+		// tool switch mid-commit can never flip the role of a drawn chain.
+		const role = close && layoutInteraction.tool !== 'partition-chain'
+			? 'boundary'
+			: wallChainRoleForTool(layoutInteraction.tool) ?? 'boundary';
+		const commitRole = role;
+		const outcome = runLayoutMutationGuarded(
+			() => commitWallChain(layoutPreview, points, commitRole, { close }),
+			(result) => result.success
+		);
+		if (outcome.kind === 'skipped') {
+			setWallChainStatus('Finish the current layout interaction first');
+			return false;
+		}
+		const result = outcome.result;
+		if (result.success) {
+			const roomLabel = result.operation === 'wall-chain-commit' && result.roomIds.length > 0 ? ` + ${result.roomIds.length} room${result.roomIds.length === 1 ? '' : 's'}` : '';
+			setWallChainStatus(`Committed ${result.operation === 'wall-chain-commit' ? result.wallIds.length : 0}-wall chain${roomLabel}`);
+			// P23.9 — post-commit selection (recommended minimum): a chain that
+			// births a Room selects that Room through the existing authority; a
+			// free chain keeps the prior selection (no multi-select invented).
+			if (result.operation === 'wall-chain-commit' && result.roomIds.length > 0) {
+				selectLayoutRoom(layoutInteraction, result.roomIds[0]);
+			}
+		} else {
+			setWallChainStatus(`Wall chain rejected: ${result.message}`);
+		}
+		return result.success;
+	}
+
+	/** P23.9 — mirror a chain outcome onto the plan surface (see PlanWorkspace). */
+	function setWallChainStatus(message: string) {
+		layoutPreview.statusMessage = message;
+		store.setStatusMessage(message);
 	}
 
 	function createOpening(roomId: string, segmentId: string, kind: LayoutOpeningKind, clickOffset: number) {
@@ -223,6 +268,7 @@
 				preview={layoutPreview}
 				interaction={layoutInteraction}
 				onCommit={commitDraftRoom}
+				onWallChainCommit={commitDraftWallChain}
 				onOpeningCreate={createOpening}
 				onOpeningDelete={deleteOpening}
 				onRoomDelete={deleteRoom}

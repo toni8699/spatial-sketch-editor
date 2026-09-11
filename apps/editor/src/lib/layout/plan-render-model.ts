@@ -68,6 +68,9 @@ export type PlanStyleToken =
 	| 'primitive-ghost-sphere'
 	| 'primitive-ghost-invalid'
 	| 'draft-outline'
+	// P23.9 — a Partition sketch is wall-like but must never read as a
+	// semantic Room boundary while it is being drawn.
+	| 'draft-outline-partition'
 	| 'draft-point'
 	| 'snap-guide'
 	| 'snap-marker'
