@@ -662,6 +662,22 @@ here, and no implementation detail is fixed.
   existing auto-bezier sampling/evaluation machinery, and must never introduce
   a second curve geometry, snapping, selection or rendering authority.
 
+- **Canonical wall-first 3D Wall/Opening picking + highlighting** (registered
+  2026-09-12, deferred by [P23.6H](2026-09-12-P23.6H-vertical-wall-semantics.md)
+  and [P23.6b](2026-09-12-P23.6b-architecture-hierarchy-inspector-reconciliation.md)):
+  current state — canonical physical-Wall render identity exists
+  (`userData.surfaceType: 'physical-wall'` + `wallId` on compiled Wall meshes, and
+  `{kind:'physicalWall'}`/`{kind:'wallOpening'}` carry ranking/identity support),
+  but direct canonical 3D candidate production
+  (`layoutCandidatesFromIntersections()`) and the corresponding highlight shell are
+  incomplete, so hierarchy/tree selection and 3D picking do not yet agree for
+  canonical Walls/Openings. Owner: **unassigned / future scheduled slice** — no
+  slice owns it yet. Constraints: it must extend the existing one canonical pick /
+  selection path, must not build a second pick path or renderer-local identity, and
+  must not be claimed complete merely because Plan selection and hierarchy
+  continuity work. **P23.7 must restate this as an explicit open deferral** and must
+  not mark it complete.
+
 # Documentation reconciliation rule
 
 The accepted 2026-09-09 reconciliation is the architecture decision. H1/H2/H3/H5 informed it; they do not themselves supersede product contracts.
