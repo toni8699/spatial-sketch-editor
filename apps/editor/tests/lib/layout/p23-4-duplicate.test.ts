@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { extractBoundaryCandidateFaces } from '$lib/layout/layout-face-extraction';
 import {
 	LAYOUT_DUPLICATE_MAX_COPIES,
+	isSupportedDuplicateLayoutObject,
 	planDuplicateIsolatedRoom,
 	planRepeatLayoutObject,
 	planRepeatWallOpening
@@ -25,6 +26,11 @@ import {
 	restoreLayoutPreviewSnapshot
 } from '$lib/editor/layout/layout-preview-state.svelte';
 import { layoutMutationRunnerFor, runLayoutMutation } from '$lib/editor/layout/layout-mutation-runner';
+import {
+	createLayoutInteractionState,
+	selectLayoutObject,
+	selectLayoutWallOpening
+} from '$lib/editor/layout/layout-interaction';
 import { createEditorStore } from '$lib/editor/editor-store.svelte';
 import { createEmptySceneDocument } from '$lib/content/scene';
 import { createEmptyLayoutDocument } from '$lib/layout/layout-codec';
@@ -528,6 +534,48 @@ describe('P23.4 isolated Room duplicate', () => {
 		expect(rejected.code).toBe('topology_invalid');
 	});
 
+	it('rejects the old 1 m UI default delta on the 6 m fixture (explicit delta required)', () => {
+		// The 6×4 enclosure translated by only [1, 0] overlaps its own clone,
+		// so the domain correctly rejects with `topology_invalid`. The
+		// Inspector must supply an explicit creator delta (defaulting to a
+		// non-overlapping placement), never a hardcoded [1, 0].
+		const rejected = rejection(planDuplicateIsolatedRoom(ISOLATED, { roomId: 'room-1', delta: [1, 0] }));
+		expect(rejected.code).toBe('topology_invalid');
+		expect(success(planDuplicateIsolatedRoom(ISOLATED, { roomId: 'room-1', delta: [10, 0] })).createdRoomId).toBe('room-1-copy');
+	});
+
+	it('rejects the whole Room batch when an associated object is read-only profile', () => {
+		const withProfileInRoom: LayoutDocumentWallFirst = {
+			...ISOLATED,
+			objects: [
+				...ISOLATED.objects,
+				{
+					id: 'obj-profile-in-room',
+					kind: 'profile',
+					position: [3, 0, 3],
+					rotation: [0, 0, 0],
+					dimensions: [1, 1, 1],
+					profile: {
+						closed: true,
+						segments: [{ id: 'seg-1', kind: 'line', start: [0, 0] as LayoutVec2, end: [1, 0] as LayoutVec2 }]
+					},
+					roomId: 'room-1'
+				}
+			]
+		};
+		expect(validateWallFirstLayoutDocument(withProfileInRoom).success).toBe(true);
+		const rejected = rejection(planDuplicateIsolatedRoom(withProfileInRoom, { roomId: 'room-1', delta: [10, 0] }));
+		expect(rejected.code).toBe('profile_object_read_only');
+		expect(rejected.message).toContain('obj-profile-in-room');
+		// The input document is untouched — no partial batch committed.
+		expect(withProfileInRoom.objects).toHaveLength(3);
+	});
+
+	it('shares one supported-object predicate across standalone and Room-batch paths', () => {
+		expect(isSupportedDuplicateLayoutObject({ kind: 'box' })).toBe(true);
+		expect(isSupportedDuplicateLayoutObject({ kind: 'profile' })).toBe(false);
+	});
+
 	it('rejects unknown rooms and non-finite deltas', () => {
 		expect(rejection(planDuplicateIsolatedRoom(ISOLATED, { roomId: 'room-none', delta: [1, 0] }))).toMatchObject({ code: 'unknown_room' });
 		expect(rejection(planDuplicateIsolatedRoom(ISOLATED, { roomId: 'room-1', delta: [Number.NaN, 0] }))).toMatchObject({ code: 'invalid_value' });
@@ -647,5 +695,25 @@ describe('P23.4 editor surface + history', () => {
 			repeatWallFirstObject(preview, { objectId: 'obj-1', count: 3, delta: [2, 0] })
 		).kind).toBe('committed');
 		expect(JSON.stringify(preview.project.scene)).toBe(sceneBefore);
+	});
+
+	it('opening duplicate selects the first new copy through the canonical wallOpening authority', () => {
+		const seeded = withDoor(TWO_ROOM);
+		const plan = success(planRepeatWallOpening(seeded, { openingId: 'opening:door:1', count: 1, spacing: 1.5 }));
+		const firstCopyId = plan.createdOpeningIds[0]!;
+		const copy = plan.document.openings.find((opening) => opening.id === firstCopyId)!;
+		// Host wall is unchanged, so the Inspector selects (wallId, copyId).
+		expect(copy.wallId).toBe('wall-e');
+		const interaction = createLayoutInteractionState();
+		selectLayoutWallOpening(interaction, copy.wallId, firstCopyId);
+		expect(interaction.selection).toEqual({ kind: 'wallOpening', wallId: 'wall-e', openingId: firstCopyId });
+	});
+
+	it('object duplicate selects the first new copy through the object authority', () => {
+		const plan = success(planRepeatLayoutObject(ISOLATED, { objectId: 'obj-1', count: 1, delta: [1, 0] }));
+		const firstCopyId = plan.createdObjectIds[0]!;
+		const interaction = createLayoutInteractionState();
+		selectLayoutObject(interaction, firstCopyId);
+		expect(interaction.selection).toEqual({ kind: 'object', objectId: firstCopyId });
 	});
 });

@@ -54,6 +54,7 @@
 	import { layoutMutationRunnerFor, runLayoutMutation } from './layout/layout-mutation-runner';
 	import {
 		selectLayoutObject,
+		selectLayoutWallOpening,
 		selectedLayoutRoomId,
 		setLayoutDraftTool,
 		toggleLayoutAccordion,
@@ -385,6 +386,46 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 		clusterNameDraft = store.selectedCluster?.name ?? '';
 	});
 
+	// P23.4 — reset explicit repeat defaults when the selection changes. The
+	// opening spacing defaults to width + gap; the room delta defaults to a
+	// non-overlapping east placement (room AABB width + 1 m) so the Duplicate
+	// button does not defeat itself on rooms wider than 1 m.
+	$effect(() => {
+		const opening = selectedWallFirstOpening;
+		if (!opening) return;
+		if (opening.id === lastDuplicateOpeningId) return;
+		lastDuplicateOpeningId = opening.id;
+		openingRepeatCount = 3;
+		openingRepeatSpacing = opening.width + WALL_OPENING_DUPLICATE_GAP_M;
+	});
+	$effect(() => {
+		const room = selectedPrecisionRoom;
+		const layout = wallFirstLayout;
+		if (!room || !layout) return;
+		if (room.id === lastDuplicateRoomId) return;
+		lastDuplicateRoomId = room.id;
+		roomDuplicateDeltaZ = 0;
+		try {
+			const pointsById = new Map(layout.junctions.map((junction) => [junction.id, junction.point]));
+			const wallsById = new Map(layout.walls.map((wall) => [wall.id, wall]));
+			let minX = Number.POSITIVE_INFINITY;
+			let maxX = Number.NEGATIVE_INFINITY;
+			for (const ref of room.boundary) {
+				const wall = wallsById.get(ref.wallId);
+				if (!wall) continue;
+				for (const junctionId of [wall.startJunctionId, wall.endJunctionId]) {
+					const point = pointsById.get(junctionId);
+					if (!point) continue;
+					if (point[0] < minX) minX = point[0];
+					if (point[0] > maxX) maxX = point[0];
+				}
+			}
+			roomDuplicateDeltaX = Number.isFinite(minX) && Number.isFinite(maxX) ? maxX - minX + 1 : 10;
+		} catch {
+			roomDuplicateDeltaX = 10;
+		}
+	});
+
 	function saveClusterName() {
 		const cluster = store.selectedCluster;
 		if (!cluster) return;
@@ -636,7 +677,7 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 		return outcome.result;
 	}
 
-	/** Duplicate the selected layout object (one copy, 1 m X offset default). */
+	/** Duplicate the selected layout object (one copy at the explicit X/Z delta). */
 	function duplicateSelectedLayoutObject() {
 		const object = selectedLayoutObject;
 		if (!object || object.kind === 'profile') return;
@@ -644,7 +685,7 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 			() => repeatWallFirstObject(layoutPreview, {
 				objectId: object.id,
 				count: 1,
-				delta: [1, 0]
+				delta: [objectRepeatDeltaX, objectRepeatDeltaZ]
 			}),
 			(result) => `Duplicated object · ${result.createdObjectIds[0] ?? ''}`
 		);
@@ -654,15 +695,15 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 		}
 	}
 
-	/** Linear repeat of the selected layout object (count × exact delta). */
-	function repeatSelectedLayoutObject(count: number, deltaX: number, deltaZ: number) {
+	/** Linear repeat of the selected layout object (explicit count × delta). */
+	function repeatSelectedLayoutObject() {
 		const object = selectedLayoutObject;
 		if (!object || object.kind === 'profile') return;
 		commitDuplicateEdit(
 			() => repeatWallFirstObject(layoutPreview, {
 				objectId: object.id,
-				count,
-				delta: [deltaX, deltaZ]
+				count: objectRepeatCount,
+				delta: [objectRepeatDeltaX, objectRepeatDeltaZ]
 			}),
 			(result) => `Repeated object × ${result.createdObjectIds.length}`
 		);
@@ -672,7 +713,7 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 	function duplicateSelectedWallOpening() {
 		const opening = selectedWallFirstOpening;
 		if (!opening) return;
-		commitDuplicateEdit(
+		const committed = commitDuplicateEdit(
 			() => repeatWallFirstOpening(layoutPreview, {
 				openingId: opening.id,
 				count: 1,
@@ -680,30 +721,35 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 			}),
 			(result) => `Duplicated opening · ${result.createdOpeningIds[0] ?? ''}`
 		);
+		// Select the first new copy through the canonical wallOpening
+		// authority; a failed batch keeps the prior selection.
+		if (committed?.createdOpeningIds[0]) {
+			selectLayoutWallOpening(layoutInteraction, opening.wallId, committed.createdOpeningIds[0]);
+		}
 	}
 
-	/** Linear repeat of the selected canonical Opening along its Wall. */
-	function repeatSelectedWallOpening(count: number, spacing: number) {
+	/** Linear repeat of the selected canonical Opening (explicit count × spacing). */
+	function repeatSelectedWallOpening() {
 		const opening = selectedWallFirstOpening;
 		if (!opening) return;
 		commitDuplicateEdit(
 			() => repeatWallFirstOpening(layoutPreview, {
 				openingId: opening.id,
-				count,
-				spacing
+				count: openingRepeatCount,
+				spacing: openingRepeatSpacing
 			}),
 			(result) => `Repeated opening × ${result.createdOpeningIds.length}`
 		);
 	}
 
-	/** Duplicate the selected isolated Room (1 m X offset default). */
+	/** Duplicate the selected isolated Room (explicit creator-supplied X/Z delta). */
 	function duplicateSelectedPrecisionRoom() {
 		const room = selectedPrecisionRoom;
 		if (!room) return;
 		const committed = commitDuplicateEdit(
 			() => duplicateWallFirstRoom(layoutPreview, {
 				roomId: room.id,
-				delta: [1, 0]
+				delta: [roomDuplicateDeltaX, roomDuplicateDeltaZ]
 			}),
 			(result) => `Duplicated room · ${result.createdRoomId ?? ''}`
 		);
@@ -881,6 +927,21 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 	);
 
 	let alignReferenceId = $state('');
+
+	// P23.4 — explicit creator-supplied duplicate/repeat inputs (plan input
+	// contract: object X/Z delta + count, opening count + spacing, room X/Z
+	// delta). Defaults reset per selection (see effects below); the domain
+	// still validates every value and rejects the whole batch on any invalid
+	// copy.
+	let objectRepeatCount = $state(3);
+	let objectRepeatDeltaX = $state(1);
+	let objectRepeatDeltaZ = $state(0);
+	let openingRepeatCount = $state(3);
+	let openingRepeatSpacing = $state(1.1);
+	let roomDuplicateDeltaX = $state(10);
+	let roomDuplicateDeltaZ = $state(0);
+	let lastDuplicateOpeningId: string | null = null;
+	let lastDuplicateRoomId: string | null = null;
 
 	const activeAlignReference = $derived.by<AlignReferenceOption | null>(() => {
 		if (alignReferenceOptions.length === 0) return null;
@@ -1418,6 +1479,8 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 								<label>Width Wall<select value={precisionRectangleWidthWall ?? selectedPrecisionRectangle.widthWallId} onchange={(event) => precisionRectangleWidthWall = (event.currentTarget as HTMLSelectElement).value || null}>{#each precisionRectangleWidthWallOptions as wallId}<option value={wallId}>{wallId}</option>{/each}</select></label>
 								<label>Width (m)<input type="number" min="0.001" step="0.01" value={selectedPrecisionRectangle.width} onchange={(event) => updatePrecisionRectangle('width', event)} /></label>
 								<label>Depth (m)<input type="number" min="0.001" step="0.01" value={selectedPrecisionRectangle.depth} onchange={(event) => updatePrecisionRectangle('depth', event)} /></label>
+								<label>Duplicate Δ X (m)<input type="number" step="0.1" value={roomDuplicateDeltaX} onchange={(event) => roomDuplicateDeltaX = Number((event.currentTarget as HTMLInputElement).value)} /></label>
+								<label>Duplicate Δ Z (m)<input type="number" step="0.1" value={roomDuplicateDeltaZ} onchange={(event) => roomDuplicateDeltaZ = Number((event.currentTarget as HTMLInputElement).value)} /></label>
 								<button type="button" onclick={duplicateSelectedPrecisionRoom}>Duplicate room</button>
 								{#if layoutPreview.lastMutationMessage}<p class="layout-opening-warning" role="status">{layoutPreview.lastMutationMessage}</p>{/if}
 							</div>
@@ -1500,9 +1563,15 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 					<div class="object-room-meta"><span>Room ownership</span><strong>{layoutRooms.find((room) => room.id === selectedLayoutObject.roomId)?.name ?? 'Unassigned'} · {selectedLayoutObject.roomId ?? 'none'}</strong></div>
 					{#if layoutPreview.lastMutationMessage}<p class="layout-opening-warning" role="status">{layoutPreview.lastMutationMessage}</p>{/if}
 					{#if isWallFirstLayout}
+						<fieldset class="staging-transform-fields">
+							<legend>Duplicate / repeat</legend>
+							<label>Copies (1–50)<input type="number" min="1" max="50" step="1" value={objectRepeatCount} onchange={(event) => objectRepeatCount = Number((event.currentTarget as HTMLInputElement).value)} /></label>
+							<label>Δ X (m)<input type="number" step="0.1" value={objectRepeatDeltaX} onchange={(event) => objectRepeatDeltaX = Number((event.currentTarget as HTMLInputElement).value)} /></label>
+							<label>Δ Z (m)<input type="number" step="0.1" value={objectRepeatDeltaZ} onchange={(event) => objectRepeatDeltaZ = Number((event.currentTarget as HTMLInputElement).value)} /></label>
+						</fieldset>
 						<div class="layout-opening-actions">
 							<button type="button" disabled={selectedLayoutObject.kind === 'profile'} onclick={duplicateSelectedLayoutObject}>Duplicate</button>
-							<button type="button" disabled={selectedLayoutObject.kind === 'profile'} onclick={() => repeatSelectedLayoutObject(3, 1, 0)}>Repeat ×3</button>
+							<button type="button" disabled={selectedLayoutObject.kind === 'profile'} onclick={repeatSelectedLayoutObject}>Repeat ×{objectRepeatCount}</button>
 						</div>
 					{/if}
 					<button type="button" class="layout-danger" disabled={selectedLayoutObject.kind === 'profile'} onclick={removeSelectedObject}>Delete object</button>
@@ -1552,7 +1621,14 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 					<div class="layout-opening-actions">
 						<button type="button" onclick={centerSelectedWallFirstOpening}>Center on wall</button>
 						<button type="button" onclick={duplicateSelectedWallOpening}>Duplicate</button>
-						<button type="button" onclick={() => repeatSelectedWallOpening(3, selectedWallFirstOpening.width + 0.2)}>Repeat ×3</button>
+					</div>
+					<fieldset class="staging-transform-fields">
+						<legend>Linear repeat</legend>
+						<label>Copies (1–50)<input type="number" min="1" max="50" step="1" value={openingRepeatCount} onchange={(event) => openingRepeatCount = Number((event.currentTarget as HTMLInputElement).value)} /></label>
+						<label>Spacing (m)<input type="number" step="0.05" value={openingRepeatSpacing} onchange={(event) => openingRepeatSpacing = Number((event.currentTarget as HTMLInputElement).value)} /></label>
+					</fieldset>
+					<div class="layout-opening-actions">
+						<button type="button" onclick={repeatSelectedWallOpening}>Repeat ×{openingRepeatCount}</button>
 						<button type="button" class="layout-danger" onclick={removeSelectedWallFirstOpening}>Delete opening</button>
 					</div>
 				</div>

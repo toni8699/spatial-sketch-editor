@@ -253,6 +253,16 @@ function cloneObject(object: LayoutObject): LayoutObject {
 	};
 }
 
+/**
+ * Shared supported-object predicate for P23.4 duplicate paths: profile
+ * objects are read-only compatibility placeholders and reject explicitly.
+ * Both the standalone object repeat and the isolated-Room batch (which
+ * clones every associated object) use this — never silently strip.
+ */
+export function isSupportedDuplicateLayoutObject(object: Pick<LayoutObject, 'kind'>): boolean {
+	return object.kind !== 'profile';
+}
+
 // ---------------------------------------------------------------------------
 // Layout object duplicate / linear repeat
 // ---------------------------------------------------------------------------
@@ -281,7 +291,7 @@ export function planRepeatLayoutObject(
 	if (!source) {
 		return reject('unknown_object', `Unknown layout object '${intent.objectId}'`, [intent.objectId]);
 	}
-	if (source.kind === 'profile') {
+	if (!isSupportedDuplicateLayoutObject(source)) {
 		return reject(
 			'profile_object_read_only',
 			`Profile object '${intent.objectId}' is read-only and cannot be duplicated`,
@@ -418,7 +428,8 @@ export type RoomDuplicateIntent = {
  *
  * Rejections: shared boundary Walls or subgraph junctions shared with
  * non-cloned walls (`room_not_isolated`), any external portal relation on a
- * hosted Opening (`external_portal_relation`), and a cloned subgraph that
+ * hosted Opening (`external_portal_relation`), any read-only/profile
+ * associated object (`profile_object_read_only`), and a cloned subgraph that
  * would cross/overlap existing walls (`topology_invalid`).
  */
 export function planDuplicateIsolatedRoom(
@@ -584,7 +595,18 @@ export function planDuplicateIsolatedRoom(
 
 	// Associated Layout objects only: explicit roomId equals the source Room.
 	// Unassociated objects inside the face never copy; Floor ownership is
-	// never inferred from coordinates.
+	// never inferred from coordinates. A read-only/profile associated object
+	// rejects the whole Room batch (never silently stripped).
+	for (const object of document.objects) {
+		if (object.roomId !== intent.roomId) continue;
+		if (!isSupportedDuplicateLayoutObject(object)) {
+			return reject(
+				'profile_object_read_only',
+				`Room '${intent.roomId}' contains read-only profile object '${object.id}'; resolve or remove it before duplicating`,
+				[intent.roomId, object.id]
+			);
+		}
+	}
 	const objectTaken = new Set(document.objects.map((object) => object.id));
 	const clonedObjects: LayoutObject[] = [];
 	const createdObjectIds: string[] = [];
