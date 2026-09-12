@@ -61,6 +61,16 @@ import {
 	type WallOpeningPatch,
 	type WallOpeningPlan
 } from '$lib/layout/layout-wall-openings';
+import {
+	planDuplicateIsolatedRoom,
+	planRepeatLayoutObject,
+	planRepeatWallOpening,
+	type DuplicateOperation,
+	type DuplicatePlan,
+	type RoomDuplicateIntent,
+	type LayoutObjectRepeatIntent,
+	type WallOpeningRepeatIntent
+} from '$lib/layout/layout-duplicate';
 import { hasBlockingLayoutIssues, validateLayoutDocumentGeometry, validateLineRoom, type LayoutGeometryIssue } from '$lib/layout/layout-geometry-validation';
 import { deleteLayoutRoom as deleteRoomFromDocument } from './layout-room-editing';
 import {
@@ -179,6 +189,20 @@ export type WallFirstPrecisionMutationResult =
 			startJunctionId: string;
 			/** Canonical resolved end Junction (next continuation start). */
 			endJunctionId: string;
+	  }
+	| { success: false; message: string };
+
+/** P23.4 duplicate/repeat results carry the created IDs for selection. */
+export type WallFirstDuplicateMutationResult =
+	| {
+			success: true;
+			operation: DuplicateOperation;
+			createdObjectIds: readonly string[];
+			createdOpeningIds: readonly string[];
+			/** Set only by Room duplicate. */
+			createdRoomId?: string;
+			/** Set only by Room duplicate: canonical selection continuation. */
+			createdWallIds?: readonly string[];
 	  }
 	| { success: false; message: string };
 
@@ -1109,6 +1133,92 @@ export function deleteWallFirstOpening(
 		state,
 		planDeleteWallFirstOpening(layout, openingId)
 	);
+}
+
+/**
+ * Apply one P23.4 duplicate/repeat plan through the preview bundle atomically.
+ * A rejection installs nothing (invalid/no-op → no history).
+ */
+function applyWallFirstDuplicatePlan(
+	state: LayoutPreviewState,
+	plan: DuplicatePlan
+): WallFirstDuplicateMutationResult {
+	if (plan.kind === 'rejected') {
+		state.lastMutationMessage = plan.rejection.message;
+		return { success: false, message: plan.rejection.message };
+	}
+	try {
+		const bundle = derivePreviewBundle(
+			state.project.id,
+			state.project.name,
+			plan.document,
+			state.project.scene
+		);
+		state.source = 'draft';
+		commitPreviewBundle(state, bundle);
+		state.previewVersion += 1;
+		state.lastMutationMessage = null;
+		state.statusMessage = null;
+		state.importError = null;
+		return {
+			success: true,
+			operation: plan.operation,
+			createdObjectIds: plan.createdObjectIds,
+			createdOpeningIds: plan.createdOpeningIds,
+			...(plan.createdRoomId !== undefined ? { createdRoomId: plan.createdRoomId } : {}),
+			...(plan.createdWallIds.length > 0 ? { createdWallIds: plan.createdWallIds } : {})
+		};
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Could not apply duplicate operation';
+		state.lastMutationMessage = message;
+		return { success: false, message };
+	}
+}
+
+/**
+ * P23.4 — repeat one supported document-level Layout object (`count` copies
+ * at exact `index × delta` positions from the original source).
+ */
+export function repeatWallFirstObject(
+	state: LayoutPreviewState,
+	intent: LayoutObjectRepeatIntent
+): WallFirstDuplicateMutationResult {
+	const layout = wallFirstLayoutOrError(state);
+	if (!layout) {
+		return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
+	}
+	return applyWallFirstDuplicatePlan(state, planRepeatLayoutObject(layout, intent));
+}
+
+/**
+ * P23.4 — repeat one Wall-hosted Opening along its canonical Wall (`count`
+ * copies at `source.offset + i × spacing`); the whole final opening set on
+ * the Wall validates as one batch.
+ */
+export function repeatWallFirstOpening(
+	state: LayoutPreviewState,
+	intent: WallOpeningRepeatIntent
+): WallFirstDuplicateMutationResult {
+	const layout = wallFirstLayoutOrError(state);
+	if (!layout) {
+		return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
+	}
+	return applyWallFirstDuplicatePlan(state, planRepeatWallOpening(layout, intent));
+}
+
+/**
+ * P23.4 — duplicate one isolated Room (bounded Junction/Wall/Opening subgraph
+ * + associated Layout objects, translated by one exact X/Z delta).
+ */
+export function duplicateWallFirstRoom(
+	state: LayoutPreviewState,
+	intent: RoomDuplicateIntent
+): WallFirstDuplicateMutationResult {
+	const layout = wallFirstLayoutOrError(state);
+	if (!layout) {
+		return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
+	}
+	return applyWallFirstDuplicatePlan(state, planDuplicateIsolatedRoom(layout, intent));
 }
 
 /**
