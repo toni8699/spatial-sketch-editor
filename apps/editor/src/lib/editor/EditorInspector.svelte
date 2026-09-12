@@ -17,6 +17,7 @@
 	import { degreesToRadians, radiansToDegrees, type PlacementTransform } from './editor-transform';
 	import {
 		centerWallFirstOpening,
+		duplicateWallFirstRoom,
 		deleteLayoutObject,
 		deleteLayoutOpening,
 		deleteLayoutRoom,
@@ -26,6 +27,8 @@
 		layoutRoomSceneReferenceSummary,
 		layoutRoomSceneReferenceTotal,
 		listLayoutRoomSceneReferences,
+		repeatWallFirstObject,
+		repeatWallFirstOpening,
 		updateWallFirstOpening,
 		updateLayoutObjectFields,
 		layoutPreviewDocument,
@@ -75,6 +78,10 @@ import {
 	type AlignReference
 } from '$lib/layout/layout-wall-first-precision';
 import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall, LayoutWallFirstRoom } from '$lib/layout/layout-wall-first-types';
+import type { WallFirstDuplicateMutationResult } from './layout/layout-preview-state.svelte';
+
+/** Gap between an opening and its duplicate (meters) — clear, canonical spacing. */
+const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 
 	let {
 		store,
@@ -603,6 +610,108 @@ import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall, LayoutWallFir
 		)) {
 			// No canonical wall selection target yet (cutover deferred) → clear.
 			layoutInteraction.selection = { kind: 'none' };
+		}
+	}
+
+	// -----------------------------------------------------------------------
+	// P23.4 — duplicate and linear repeat (one command → one history entry;
+	// a rejected batch restores the prior selection and writes no history).
+	// -----------------------------------------------------------------------
+
+	/** Shared runner: one guarded layout mutation with a status surface. */
+	function commitDuplicateEdit(
+		mutate: () => WallFirstDuplicateMutationResult,
+		successMessage: (result: Extract<WallFirstDuplicateMutationResult, { success: true }>) => string
+	): Extract<WallFirstDuplicateMutationResult, { success: true }> | null {
+		const outcome = runLayoutMutationGuarded(mutate, (result) => result.success);
+		if (outcome.kind === 'skipped') {
+			store.setStatusMessage('Finish the current layout interaction first');
+			return null;
+		}
+		if (!outcome.result.success) {
+			store.setStatusMessage(`Duplicate rejected: ${outcome.result.message}`);
+			return null;
+		}
+		store.setStatusMessage(successMessage(outcome.result));
+		return outcome.result;
+	}
+
+	/** Duplicate the selected layout object (one copy, 1 m X offset default). */
+	function duplicateSelectedLayoutObject() {
+		const object = selectedLayoutObject;
+		if (!object || object.kind === 'profile') return;
+		const committed = commitDuplicateEdit(
+			() => repeatWallFirstObject(layoutPreview, {
+				objectId: object.id,
+				count: 1,
+				delta: [1, 0]
+			}),
+			(result) => `Duplicated object · ${result.createdObjectIds[0] ?? ''}`
+		);
+		// Select the first new copy; a failed batch restores prior selection.
+		if (committed?.createdObjectIds[0]) {
+			selectLayoutObject(layoutInteraction, committed.createdObjectIds[0]);
+		}
+	}
+
+	/** Linear repeat of the selected layout object (count × exact delta). */
+	function repeatSelectedLayoutObject(count: number, deltaX: number, deltaZ: number) {
+		const object = selectedLayoutObject;
+		if (!object || object.kind === 'profile') return;
+		commitDuplicateEdit(
+			() => repeatWallFirstObject(layoutPreview, {
+				objectId: object.id,
+				count,
+				delta: [deltaX, deltaZ]
+			}),
+			(result) => `Repeated object × ${result.createdObjectIds.length}`
+		);
+	}
+
+	/** Duplicate the selected canonical Opening (one copy beside the source). */
+	function duplicateSelectedWallOpening() {
+		const opening = selectedWallFirstOpening;
+		if (!opening) return;
+		commitDuplicateEdit(
+			() => repeatWallFirstOpening(layoutPreview, {
+				openingId: opening.id,
+				count: 1,
+				spacing: opening.width + WALL_OPENING_DUPLICATE_GAP_M
+			}),
+			(result) => `Duplicated opening · ${result.createdOpeningIds[0] ?? ''}`
+		);
+	}
+
+	/** Linear repeat of the selected canonical Opening along its Wall. */
+	function repeatSelectedWallOpening(count: number, spacing: number) {
+		const opening = selectedWallFirstOpening;
+		if (!opening) return;
+		commitDuplicateEdit(
+			() => repeatWallFirstOpening(layoutPreview, {
+				openingId: opening.id,
+				count,
+				spacing
+			}),
+			(result) => `Repeated opening × ${result.createdOpeningIds.length}`
+		);
+	}
+
+	/** Duplicate the selected isolated Room (1 m X offset default). */
+	function duplicateSelectedPrecisionRoom() {
+		const room = selectedPrecisionRoom;
+		if (!room) return;
+		const committed = commitDuplicateEdit(
+			() => duplicateWallFirstRoom(layoutPreview, {
+				roomId: room.id,
+				delta: [1, 0]
+			}),
+			(result) => `Duplicated room · ${result.createdRoomId ?? ''}`
+		);
+		if (!committed) return;
+		// A failed operation restores prior selection; success may select the
+		// first new Room through the existing authority.
+		if (committed.createdRoomId) {
+			precisionTarget = { kind: 'room', id: committed.createdRoomId };
 		}
 	}
 
@@ -1309,6 +1418,7 @@ import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall, LayoutWallFir
 								<label>Width Wall<select value={precisionRectangleWidthWall ?? selectedPrecisionRectangle.widthWallId} onchange={(event) => precisionRectangleWidthWall = (event.currentTarget as HTMLSelectElement).value || null}>{#each precisionRectangleWidthWallOptions as wallId}<option value={wallId}>{wallId}</option>{/each}</select></label>
 								<label>Width (m)<input type="number" min="0.001" step="0.01" value={selectedPrecisionRectangle.width} onchange={(event) => updatePrecisionRectangle('width', event)} /></label>
 								<label>Depth (m)<input type="number" min="0.001" step="0.01" value={selectedPrecisionRectangle.depth} onchange={(event) => updatePrecisionRectangle('depth', event)} /></label>
+								<button type="button" onclick={duplicateSelectedPrecisionRoom}>Duplicate room</button>
 								{#if layoutPreview.lastMutationMessage}<p class="layout-opening-warning" role="status">{layoutPreview.lastMutationMessage}</p>{/if}
 							</div>
 						{/if}
@@ -1389,6 +1499,12 @@ import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall, LayoutWallFir
 					{/if}
 					<div class="object-room-meta"><span>Room ownership</span><strong>{layoutRooms.find((room) => room.id === selectedLayoutObject.roomId)?.name ?? 'Unassigned'} · {selectedLayoutObject.roomId ?? 'none'}</strong></div>
 					{#if layoutPreview.lastMutationMessage}<p class="layout-opening-warning" role="status">{layoutPreview.lastMutationMessage}</p>{/if}
+					{#if isWallFirstLayout}
+						<div class="layout-opening-actions">
+							<button type="button" disabled={selectedLayoutObject.kind === 'profile'} onclick={duplicateSelectedLayoutObject}>Duplicate</button>
+							<button type="button" disabled={selectedLayoutObject.kind === 'profile'} onclick={() => repeatSelectedLayoutObject(3, 1, 0)}>Repeat ×3</button>
+						</div>
+					{/if}
 					<button type="button" class="layout-danger" disabled={selectedLayoutObject.kind === 'profile'} onclick={removeSelectedObject}>Delete object</button>
 				</div>
 			{:else if selectedWallFirstOpening && selectedWallFirstOpeningMetrics}
@@ -1435,6 +1551,8 @@ import type { LayoutDocumentWallFirst, LayoutJunction, LayoutWall, LayoutWallFir
 					{/if}
 					<div class="layout-opening-actions">
 						<button type="button" onclick={centerSelectedWallFirstOpening}>Center on wall</button>
+						<button type="button" onclick={duplicateSelectedWallOpening}>Duplicate</button>
+						<button type="button" onclick={() => repeatSelectedWallOpening(3, selectedWallFirstOpening.width + 0.2)}>Repeat ×3</button>
 						<button type="button" class="layout-danger" onclick={removeSelectedWallFirstOpening}>Delete opening</button>
 					</div>
 				</div>
