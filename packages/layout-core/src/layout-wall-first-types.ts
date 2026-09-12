@@ -50,6 +50,12 @@ export type LayoutJunction = {
 /**
  * One physical Wall between two explicit Junctions. A Wall exists once even
  * when it bounds two Rooms; no Wall stores or infers Room ownership.
+ *
+ * `height` is the birth default (floor height) carried as data. Authored
+ * height editing is deferred: the canonical compiler, bounds, mesh, and
+ * opening-fit validation all derive vertical geometry from the floor, so an
+ * editor for this field would violate authored-state → compiler → render
+ * until partial-height Wall semantics are designed (post-P23.6).
  */
 export type LayoutWall = {
   id: string;

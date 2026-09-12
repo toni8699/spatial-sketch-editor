@@ -1,5 +1,5 @@
 import type { LayoutRoom, LayoutVec2 } from '$lib/layout/layout-types';
-import { LAYOUT_PLAN_SNAP_RADIUS_CSS_PX } from '@portfolio/layout-core';
+import { LAYOUT_PLAN_SNAP_RADIUS_CSS_PX, pointStrictlyInsidePolygon } from '@portfolio/layout-core';
 import type { LayoutPreviewModel } from './layout-mesh-factory';
 import {
 	primitiveDraftFootprint,
@@ -55,6 +55,85 @@ export type PlanWallFirstContext = {
 	issues: readonly { code: string; message: string; targetId?: string; path?: string }[];
 };
 
+/**
+ * P23.6 — guaranteed-interior Room label anchor. The area centroid is exact
+ * for convex faces; on concave faces it can land in a notch/outside, so fall
+ * back to the largest ear-triangle centroid (ear clipping over the simple
+ * polygon — always strictly inside the face). Deterministic: ties keep the
+ * lowest vertex order. Never a general annotation solver.
+ */
+export function interiorLabelPoint(polygon: readonly LayoutVec2[]): LayoutVec2 {
+	const mean: LayoutVec2 = [
+		polygon.reduce((sum, point) => sum + point[0], 0) / polygon.length,
+		polygon.reduce((sum, point) => sum + point[1], 0) / polygon.length
+	];
+	let twiceArea = 0;
+	let cx = 0;
+	let cz = 0;
+	for (let index = 0; index < polygon.length; index += 1) {
+		const current = polygon[index]!;
+		const next = polygon[(index + 1) % polygon.length]!;
+		const cross = current[0] * next[1] - next[0] * current[1];
+		twiceArea += cross;
+		cx += (current[0] + next[0]) * cross;
+		cz += (current[1] + next[1]) * cross;
+	}
+	const centroid: LayoutVec2 =
+		Math.abs(twiceArea) > 1e-12
+			? [cx / (3 * twiceArea), cz / (3 * twiceArea)]
+			: mean;
+	if (pointStrictlyInsidePolygon(polygon, centroid)) return centroid;
+	// Concave face with an exterior centroid: largest ear wins.
+	const orient = twiceArea >= 0 ? 1 : -1;
+	const remaining = polygon.map((_, index) => index);
+	let best: { area: number; point: LayoutVec2 } | null = null;
+	const triArea2 = (a: LayoutVec2, b: LayoutVec2, c: LayoutVec2): number =>
+		(b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+	const triCentroid = (a: LayoutVec2, b: LayoutVec2, c: LayoutVec2): LayoutVec2 => [
+		(a[0] + b[0] + c[0]) / 3,
+		(a[1] + b[1] + c[1]) / 3
+	];
+	for (let guard = 0; guard < polygon.length * polygon.length && remaining.length > 3; guard += 1) {
+		let clipAt = -1;
+		let clipArea = Number.POSITIVE_INFINITY;
+		for (let slot = 0; slot < remaining.length; slot += 1) {
+			const a = polygon[remaining[(slot + remaining.length - 1) % remaining.length]!]!;
+			const b = polygon[remaining[slot]!]!;
+			const c = polygon[remaining[(slot + 1) % remaining.length]!]!;
+			// Convex under the face orientation?
+			if (triArea2(a, b, c) * orient <= 0) continue;
+			// Ear: no other vertex strictly inside the candidate triangle.
+			let blocked = false;
+			for (const other of remaining) {
+				const p = polygon[other]!;
+				if (p === a || p === b || p === c) continue;
+				const s1 = triArea2(a, b, p) * orient;
+				const s2 = triArea2(b, c, p) * orient;
+				const s3 = triArea2(c, a, p) * orient;
+				if (s1 > 0 && s2 > 0 && s3 > 0) {
+					blocked = true;
+					break;
+				}
+			}
+			if (blocked) continue;
+			const area = Math.abs(triArea2(a, b, c)) / 2;
+			if (!best || area > best.area) best = { area, point: triCentroid(a, b, c) };
+			if (area < clipArea) {
+				clipArea = area;
+				clipAt = slot;
+			}
+		}
+		if (clipAt < 0) break;
+		remaining.splice(clipAt, 1);
+	}
+	if (remaining.length === 3) {
+		const [a, b, c] = remaining.map((index) => polygon[index]!) as [LayoutVec2, LayoutVec2, LayoutVec2];
+		const area = Math.abs(triArea2(a, b, c)) / 2;
+		if (!best || area > best.area) best = { area, point: triCentroid(a, b, c) };
+	}
+	return best?.point ?? mean;
+}
+
 /** P23.6 — snap marker radius per winning family (screen-constant, zoom-stable). */
 export function snapMarkerRadiusPx(kind: string): number {
 	switch (kind) {
@@ -73,6 +152,13 @@ export const ROOM_LABEL_MIN_AREA_M2 = 1;
 export const ROOM_LABEL_MIN_PX_PER_M = 6;
 /** P23.6 — Junction handles hide below this Plan scale (mirrors grid-minor culling). */
 export const JUNCTION_HANDLES_MIN_PX_PER_M = 6;
+/**
+ * P23.6 — label suppression radius in screen px. A Room-name candidate whose
+ * anchor falls inside this radius of a higher-priority label/marker (or an
+ * already accepted Room label) is hidden. Screen-constant so the density
+ * rule is zoom-stable; document order wins ties deterministically.
+ */
+export const ROOM_LABEL_SUPPRESSION_RADIUS_PX = 24;
 
 function roomVertices(room: LayoutRoom): LayoutVec2[] {
 	return room.boundary.segments.map((segment) => [...segment.start] as LayoutVec2);
@@ -472,7 +558,8 @@ export function buildPlanInteractionProjection(
 	interaction: LayoutInteractionState,
 	rooms: readonly LayoutRoom[],
 	model: LayoutPreviewModel,
-	wallFirst?: PlanWallFirstContext
+	wallFirst?: PlanWallFirstContext,
+	hovered?: PlanHitIdentity
 ): PlanInteractionProjection {
 	const selection: PlanRenderPrimitive[] = [];
 	const handles: PlanRenderPrimitive[] = [];
@@ -718,14 +805,16 @@ export function buildPlanInteractionProjection(
 		if (editContext && interaction.planView.pixelsPerMeter >= JUNCTION_HANDLES_MIN_PX_PER_M) {
 			for (const junction of wallFirst.junctions) {
 				if (wallFirst.junctionFocus && !wallFirst.junctionFocus.has(junction.id)) continue;
+				const selected = selection.kind === 'junction' && selection.junctionId === junction.id;
 				handles.push({
 					kind: 'circle',
 					key: geometryId(['plan', 'overlay', 'junction-handle', junction.id]),
 					center: [...junction.point] as LayoutVec2,
 					radiusPx: 5,
-					style:
-						selection.kind === 'junction' && selection.junctionId === junction.id
-							? 'vertex-handle-selected'
+					style: selected
+						? 'vertex-handle-selected'
+						: hovered?.kind === 'junction' && hovered.junctionId === junction.id
+							? 'vertex-handle-hovered'
 							: 'vertex-handle',
 					hit: { kind: 'junction', junctionId: junction.id }
 				});
@@ -733,12 +822,44 @@ export function buildPlanInteractionProjection(
 		}
 	}
 
+	// P23.6 — committed topology/geometry diagnostics as Plan markers (state,
+	// not transient preview). Positioned from the affected source Wall/Room;
+	// the concise reason lives in the Inspector topology section. Issues
+	// without a resolvable target keep their count only — never a guess.
+	// Markers land before Room labels so diagnostics outrank names.
+	const diagnosticPoints: LayoutVec2[] = [];
+	if (wallFirst) {
+		for (const issue of wallFirst.issues) {
+			const point = diagnosticPoint(model, issue.targetId);
+			if (!point) continue;
+			diagnosticPoints.push(point);
+			handles.push({
+				kind: 'circle',
+				key: geometryId(['plan', 'overlay', 'diagnostic', issue.code, issue.targetId ?? 'document']),
+				center: point,
+				radiusPx: 6,
+				style: 'layout-diagnostic'
+			});
+		}
+	}
+
 	// P23.6 — persistent Room names as presentation-only labels (never
-	// separately persisted annotations). Bounded density: only Rooms with a
-	// legible face area, hidden below the Plan scale floor. Lowest priority —
-	// the labels layer renders beneath selection/dimension feedback.
+	// separately persisted annotations). Bounded density, lowest priority:
+	// legible face area + Plan scale floor, a guaranteed-interior anchor, and
+	// deterministic suppression inside the screen-constant radius of any
+	// higher-priority label/marker (dimensions, selection feedback,
+	// diagnostics) or already accepted Room label — document order wins.
 	{
 		const legacyNames = new Map(rooms.map((room) => [room.id, room.name] as const));
+		const pixelsPerMeter = Math.max(interaction.planView.pixelsPerMeter, 1e-6);
+		const suppressionRadius = ROOM_LABEL_SUPPRESSION_RADIUS_PX / pixelsPerMeter;
+		const blockers: LayoutVec2[] = [...diagnosticPoints];
+		for (const primitive of labels) {
+			if (primitive.kind === 'text' && primitive.style !== 'room-name') blockers.push(primitive.anchor);
+		}
+		for (const primitive of [...selection, ...handles, ...drafts]) {
+			if (primitive.kind === 'circle') blockers.push(primitive.center);
+		}
 		for (const room of model.rooms) {
 			const name = wallFirst?.roomNames.get(room.roomId) ?? legacyNames.get(room.roomId) ?? room.roomId;
 			const polygon = room.floorPolygon;
@@ -751,41 +872,26 @@ export function buildPlanInteractionProjection(
 			}
 			if (Math.abs(twiceArea) / 2 < ROOM_LABEL_MIN_AREA_M2) continue;
 			if (interaction.planView.pixelsPerMeter < ROOM_LABEL_MIN_PX_PER_M) continue;
-			let x = 0;
-			let z = 0;
-			for (const point of polygon) {
-				x += point[0];
-				z += point[1];
+			const anchor = interiorLabelPoint(polygon);
+			if (
+				blockers.some(
+					(blocked) => Math.hypot(blocked[0] - anchor[0], blocked[1] - anchor[1]) <= suppressionRadius
+				)
+			) {
+				continue;
 			}
+			blockers.push(anchor);
 			labels.push({
 				kind: 'text',
 				key: geometryId(['plan', 'overlay', 'room-name', room.roomId]),
-				anchor: [x / polygon.length, z / polygon.length],
+				anchor,
 				text: name,
 				style: 'room-name'
 			});
 		}
 	}
 
-	// P23.6 — committed topology/geometry diagnostics as Plan markers (state,
-	// not transient preview). Positioned from the affected source Wall/Room;
-	// the concise reason lives in the Inspector topology section. Issues
-	// without a resolvable target keep their count only — never a guess.
-	if (wallFirst) {
-		for (const issue of wallFirst.issues) {
-			const point = diagnosticPoint(model, issue.targetId);
-			if (!point) continue;
-			handles.push({
-				kind: 'circle',
-				key: geometryId(['plan', 'overlay', 'diagnostic', issue.code, issue.targetId ?? 'document']),
-				center: point,
-				radiusPx: 6,
-				style: 'layout-diagnostic'
-			});
-		}
-	}
-
-	return { selected: toPlanSelection(interaction.selection), selection, handles, drafts, labels, roomOverrides, objectOverrides };
+	return { selected: toPlanSelection(interaction.selection), hovered, selection, handles, drafts, labels, roomOverrides, objectOverrides };
 }
 
 /**

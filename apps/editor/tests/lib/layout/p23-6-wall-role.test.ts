@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
 	createEmptyWallFirstLayoutDocument,
-	planExactWallHeight,
 	planWallChain,
 	planWallRoleChange,
 	type LayoutDocumentWallFirst
@@ -111,24 +110,3 @@ describe('P23.6 wall role change — partition to boundary', () => {
 	});
 });
 
-describe('P23.6 exact wall height', () => {
-	it('sets height, preserves identity, and rejects no-ops and bad values', () => {
-		const document = commitChain(baseDocument(), [p(0, 0), p(4, 0)], 'boundary');
-		const wallId = document.walls[0]!.id;
-		const previous = document.walls[0]!.height;
-		const plan = planExactWallHeight(document, wallId, previous + 0.5);
-		if (plan.kind !== 'success') throw new Error(`expected success: ${JSON.stringify(plan)}`);
-		expect(plan.operation).toBe('wall-height');
-		expect(plan.document.walls.find((wall) => wall.id === wallId)?.height).toBe(previous + 0.5);
-		expect(plan.changedWallIds).toContain(wallId);
-		if (planExactWallHeight(plan.document, wallId, previous + 0.5).kind !== 'rejected') {
-			throw new Error('expected no-op rejection');
-		}
-		expect(planExactWallHeight(document, 'wall:missing', 3).kind).toBe('rejected');
-		for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
-			const rejected = planExactWallHeight(document, wallId, bad);
-			if (rejected.kind !== 'rejected') throw new Error(`expected rejection for ${bad}`);
-			expect(rejected.rejection.code).toBe('invalid_value');
-		}
-	});
-});

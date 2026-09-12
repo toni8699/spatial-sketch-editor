@@ -20,7 +20,9 @@
 		'room-outline-selected': 'room-outline selected',
 		'wall-line-selected': 'wall-line selected',
 		'wall-line-opening-selected': 'wall-line opening-selected',
+		'wall-line-hovered': 'wall-line hovered',
 		'opening-line-selected': 'opening-line opening-selected',
+		'opening-line-hovered': 'opening-line hovered',
 		'scene-footprint-bridge-hover': 'scene-footprint bridge-hover',
 		'scene-footprint-active': 'scene-footprint active',
 		'scene-footprint-selected': 'scene-footprint selected',
@@ -31,6 +33,7 @@
 		'arrange-hover': 'arrange-hover',
 		'interior-anchor-selected': 'interior-anchor selected',
 		'vertex-handle-selected': 'vertex-handle selected',
+		'vertex-handle-hovered': 'vertex-handle hovered',
 		'primitive-ghost-circle': 'primitive-ghost circle',
 		'primitive-ghost-sphere': 'primitive-ghost sphere',
 		'primitive-ghost-invalid': 'primitive-ghost invalid',
@@ -90,6 +93,7 @@
 	function wallStateClass(style: PlanStyleToken): string {
 		if (style === 'wall-line-selected') return 'selected';
 		if (style === 'wall-line-opening-selected') return 'opening-selected';
+		if (style === 'wall-line-hovered') return 'hovered';
 		return '';
 	}
 
@@ -107,6 +111,10 @@
 
 	function openingSelected(style: PlanStyleToken): boolean {
 		return style === 'opening-line-selected';
+	}
+
+	function openingHovered(style: PlanStyleToken): boolean {
+		return style === 'opening-line-hovered';
 	}
 
 	type OpeningSymbol = {
@@ -177,17 +185,18 @@
 						<polyline
 							class="opening-void"
 							class:selected={openingSelected(primitive.style)}
+							class:hovered={openingHovered(primitive.style)}
 							points={pointsAttr(symbol.span)}
 							style={architecturalStrokeStyle(primitive)}
 						/>
-						<polyline class="opening-jamb" class:selected={openingSelected(primitive.style)} points={pointsAttr(symbol.jambStart)} />
-						<polyline class="opening-jamb" class:selected={openingSelected(primitive.style)} points={pointsAttr(symbol.jambEnd)} />
+						<polyline class="opening-jamb" class:selected={openingSelected(primitive.style)} class:hovered={openingHovered(primitive.style)} points={pointsAttr(symbol.jambStart)} />
+						<polyline class="opening-jamb" class:selected={openingSelected(primitive.style)} class:hovered={openingHovered(primitive.style)} points={pointsAttr(symbol.jambEnd)} />
 						{#if symbol.windowFrames}
 							{#each symbol.windowFrames as frame, index (`${primitive.key}:window-frame:${index}`)}
-								<polyline class="window-frame" class:selected={openingSelected(primitive.style)} points={pointsAttr(frame)} />
+								<polyline class="window-frame" class:selected={openingSelected(primitive.style)} class:hovered={openingHovered(primitive.style)} points={pointsAttr(frame)} />
 							{/each}
 						{:else}
-							<polyline class="door-threshold" points={pointsAttr(symbol.span)} />
+							<polyline class="door-threshold" class:hovered={openingHovered(primitive.style)} points={pointsAttr(symbol.span)} />
 						{/if}
 					{/if}
 				{:else}
@@ -247,21 +256,29 @@
 	/* P23.6 — non-room-bounding Walls stay physical and wall-like with a subtle
 	   muted distinction (same selection language; `.selected` below wins). */
 	.wall-casing.partition { stroke: var(--editor-plan-muted); }
+	/* P23.6 — hover uses the hover language, never selection blue; states below win ties. */
+	.wall-casing.hovered { stroke: var(--editor-plan-hover-stroke); }
 	.wall-casing.selected { stroke: var(--editor-plan-selection); stroke-width: calc(var(--architecture-width) + 4px); }
 	.wall-casing.opening-selected { stroke: var(--editor-plan-hover-stroke); }
 	.wall-line { stroke: var(--editor-plan-wall-fill); stroke-width: var(--architecture-width); stroke-linecap: square; stroke-linejoin: miter; }
 	.wall-line.partition { stroke: color-mix(in srgb, var(--editor-plan-muted) 38%, var(--editor-plan-wall-fill)); }
+	.wall-line.hovered { stroke: color-mix(in srgb, var(--editor-plan-hover-stroke) 42%, var(--editor-plan-wall-fill)); }
 	.wall-line.selected { stroke: color-mix(in srgb, var(--editor-plan-selection) 42%, var(--editor-plan-wall-fill)); }
 	.wall-line.opening-selected { stroke: color-mix(in srgb, var(--editor-plan-hover-stroke) 34%, var(--editor-plan-wall-fill)); }
 	.opening-void { stroke: var(--editor-plan-room-bg); stroke-width: calc(var(--architecture-width) + 4px); }
+	.opening-void.hovered { stroke: color-mix(in srgb, var(--editor-plan-hover-stroke) 14%, var(--editor-plan-room-bg)); }
 	.opening-void.selected { stroke: color-mix(in srgb, var(--editor-plan-selection) 14%, var(--editor-plan-room-bg)); }
 	.opening-jamb { stroke: var(--editor-plan-wall); stroke-width: 2; }
 	.window-frame { stroke: var(--editor-plan-wall); stroke-width: 1.35; }
 	.door-threshold { stroke: var(--editor-plan-object-stroke); stroke-width: 1; }
+	.opening-jamb.hovered,
+	.window-frame.hovered,
+	.door-threshold.hovered { stroke: var(--editor-plan-hover-stroke); }
 	.opening-jamb.selected,
 	.window-frame.selected { stroke: var(--editor-plan-selection); }
 	/* Fallback for renderer-neutral projections without architecture metadata. */
 	.opening-line { stroke: var(--editor-plan-object); stroke-width: 7; vector-effect: non-scaling-stroke; pointer-events: none; }
+	.opening-line.hovered { stroke: var(--editor-plan-hover-stroke); stroke-width: 8; }
 	.opening-line.opening-selected { stroke: var(--editor-plan-selection); stroke-width: 9; }
 	.layout-object { fill: var(--plan-layout-object-fill, var(--editor-plan-object-fill)); stroke: var(--plan-layout-object-stroke, var(--editor-plan-object-stroke)); stroke-width: 2; stroke-dasharray: var(--plan-layout-object-dasharray, none); vector-effect: non-scaling-stroke; pointer-events: none; }
 	.layout-object.selected { fill: rgb(47 140 255 / 24%); stroke: var(--editor-plan-selection); stroke-width: 3; }
@@ -344,6 +361,7 @@
 	/* P23.6 — committed diagnostic state marker; the reason lives in Inspector. */
 	.layout-diagnostic { fill: rgb(239 98 108 / 14%); stroke: var(--editor-danger); stroke-width: 2; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; pointer-events: none; }
 	.vertex-handle.selected, .vertex-handle-selected { fill: var(--editor-plan-selection); stroke: var(--editor-plan-canvas-bg); }
+	.vertex-handle.hovered, .vertex-handle-hovered { fill: var(--editor-plan-hover-stroke); stroke: var(--editor-plan-canvas-bg); }
 	.draft-point { fill: var(--editor-plan-handle-fill); stroke: var(--editor-plan-handle-stroke); stroke-width: 2; vector-effect: non-scaling-stroke; }
 	/* P23.2 — session-only snap feedback (semantic rank above grid fallback). */
 	.snap-guide { fill: none; stroke: var(--editor-plan-selection); stroke-width: 1.25; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; pointer-events: none; }

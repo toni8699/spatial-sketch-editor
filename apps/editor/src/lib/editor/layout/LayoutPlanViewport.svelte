@@ -103,6 +103,7 @@
 	import type { LayoutDocumentWallFirst } from '$lib/layout/layout-wall-first-types';
 	import { layoutRoomUnitPivot } from './layout-room-transform';
 	import { buildPlanRenderModel } from '$lib/layout/plan-render-model';
+	import type { PlanHitIdentity } from '$lib/layout/plan-render-model';
 	import { buildPlanSceneFootprintProjection } from './plan-scene-footprint';
 	import { resolvePlanSceneHitAtZoom, PLAN_SCENE_HIT_HALO_PX } from './plan-scene-hit';
 	import { resolveArrangeHit } from './arrange-hit';
@@ -301,6 +302,10 @@
 	} | null>(null);
 	let stagingRotationHoverScreen = $state<LayoutVec2 | null>(null);
 	let arrangeLayoutRotationHoverScreen = $state<LayoutVec2 | null>(null);
+	// P23.6 — transient canonical hover (presentation only, never a selection
+	// slot): the same owner-aware hit the click path uses, resolved on
+	// pointermove and cleared on leave/click/drag. Hover never looks selected.
+	let layoutHover = $state<PlanHitIdentity | null>(null);
 	// P3.3 — presentation-only Arrange hover (which footprint/object the
 	// pointer is over). Derived from the same resolveArrangeHit call the click
 	// path uses; it never writes selection or document state.
@@ -351,7 +356,7 @@
 		};
 	});
 	const baseInteractionProjection = $derived(
-		buildPlanInteractionProjection(interaction, rooms, model, wallFirstContext)
+		buildPlanInteractionProjection(interaction, rooms, model, wallFirstContext, layoutHover ?? undefined)
 	);
 	const cameraProjection = $derived.by(() => {
 		if (interaction.planViewMode !== 'layout' || !interaction.planView.showTourOverlay) return undefined;
@@ -1685,6 +1690,35 @@
 		} else if (arrangeHover) {
 			arrangeHover = null;
 		}
+		// P23.6 — canonical Wall/Junction/Opening hover in layout mode: same
+		// hit priority as click, presentation only. Quiescent select tool
+		// only; any drag, transaction gesture, or armed tool clears it.
+		if (
+			interaction.tool === 'select' &&
+			interaction.planViewMode === 'layout' &&
+			pointerId === null &&
+			panPointerId === null &&
+			!stagingGesture &&
+			!interaction.objectDrag &&
+			!interaction.roomUnitDrag &&
+			!interaction.editing &&
+			!interaction.wallOpeningDrag &&
+			!openingDrag &&
+			!pendingWallBend
+		) {
+			const hoverPoint = worldPoint(event);
+			const hoverHit =
+				hoverPoint === null
+					? null
+					: resolvePlanHit(
+							model.queries,
+							hoverPoint,
+							LAYOUT_PLAN_HIT_RADIUS_PX / interaction.planView.pixelsPerMeter
+						);
+			layoutHover = toLayoutHover(hoverHit);
+		} else if (layoutHover) {
+			layoutHover = null;
+		}
 		if (interaction.tool === 'select' && !interaction.roomUnitDrag) {
 			rotationHoverScreen = screenPoint(event);
 		}
@@ -2176,6 +2210,38 @@
 		return endpoint === 0 ? wall.startJunctionId : wall.endJunctionId;
 	}
 
+	/**
+	 * P23.6 — reduce a Plan hit to its hover identity. Only Walls, Junctions
+	 * and Openings carry hover affordances; every other hit (rooms, objects,
+	 * vertices, anchors) hovers nothing. Never writes selection or document.
+	 */
+	function toLayoutHover(
+		hit: ReturnType<typeof resolvePlanHit>
+	): PlanHitIdentity | null {
+		if (!hit) return null;
+		switch (hit.kind) {
+			case 'physicalWall':
+				return { kind: 'physicalWall', wallId: hit.wallId };
+			case 'wall':
+				return { kind: 'wall', roomId: hit.roomId, segmentId: hit.segmentId };
+			case 'wallOpening':
+				return { kind: 'wallOpening', wallId: hit.wallId, openingId: hit.openingId };
+			case 'opening':
+				return {
+					kind: 'opening',
+					roomId: hit.roomId,
+					segmentId: hit.segmentId,
+					openingId: hit.openingId
+				};
+			case 'wallEndpoint': {
+				const junctionId = wallEndpointJunctionId(hit.wallId, hit.endpoint);
+				return junctionId ? { kind: 'junction', junctionId } : null;
+			}
+			default:
+				return null;
+		}
+	}
+
 	function finishPolygon() {
 		if (interaction.polygonPoints.length < 3) return;
 		if (onCommit([...interaction.polygonPoints])) clearLayoutDraft(interaction);
@@ -2417,6 +2483,7 @@
 			rotationHoverScreen = null;
 			arrangeLayoutRotationHoverScreen = null;
 			arrangeHover = null;
+			layoutHover = null;
 			// P23.9 — the pending segment preview follows the pointer, so leaving
 			// the surface drops it rather than freezing a stale leg.
 			updateWallChainCursor(interaction, null);

@@ -11,6 +11,7 @@ import {
 } from '@portfolio/layout-core';
 import {
 	buildPlanRenderModel,
+	type PlanHitIdentity,
 	type PlanPolylinePrimitive,
 	type PlanSelection
 } from '$lib/layout/plan-render-model';
@@ -51,13 +52,17 @@ function twoWallDocument(): LayoutDocumentWallFirst {
 	return commitChain(first, [p(0, 2), p(4, 2)], 'partition');
 }
 
-function wallPrimitives(document: LayoutDocumentWallFirst, selected?: PlanSelection) {
+function wallPrimitives(
+	document: LayoutDocumentWallFirst,
+	selected?: PlanSelection,
+	hovered?: PlanHitIdentity
+) {
 	const { geometry } = compileWallFirstLayoutGeometry(document);
 	const model = buildPlanRenderModel(
 		geometry,
 		undefined,
-		selected
-			? { selected, selection: [], handles: [], drafts: [], labels: [] }
+		selected || hovered
+			? { selected, hovered, selection: [], handles: [], drafts: [], labels: [] }
 			: undefined
 	);
 	const primitives = model.layers
@@ -272,5 +277,60 @@ describe('P23.6 wall-first Room selection', () => {
 		const lib = fileURLToPath(new URL('../../../src/lib', import.meta.url));
 		const tree = fs.readFileSync(path.join(lib, 'editor/UnifiedProjectTree.svelte'), 'utf8');
 		expect(tree).toContain('model.wallFirstRooms.map((room) => room.roomId)');
+	});
+});
+
+describe('P23.6 hover affordances — selection always wins', () => {
+	it('tints the hovered Wall without touching the other Wall', () => {
+		const document = twoWallDocument();
+		const [first, second] = document.walls;
+		const { primitives } = wallPrimitives(
+			document,
+			undefined,
+			{ kind: 'physicalWall', wallId: first!.id }
+		);
+		const styles = new Map(
+			primitives.map((primitive) => [
+				(primitive.hit as { wallId: string }).wallId,
+				primitive.style
+			])
+		);
+		expect(styles.get(first!.id)).toBe('wall-line-hovered');
+		expect(styles.get(second!.id)).toBe('wall-line');
+	});
+
+	it('keeps selection over hover on the same Wall', () => {
+		const document = twoWallDocument();
+		const [first] = document.walls;
+		const { primitives } = wallPrimitives(
+			document,
+			{ kind: 'physicalWall', wallId: first!.id },
+			{ kind: 'physicalWall', wallId: first!.id }
+		);
+		expect(
+			primitives.find(
+				(primitive) => (primitive.hit as { wallId: string }).wallId === first!.id
+			)?.style
+		).toBe('wall-line-selected');
+	});
+
+	it('tints the hovered Opening and its host with the hover language', () => {
+		const document = twoWallDocument();
+		const [first] = document.walls;
+		const { model } = wallPrimitives(
+			document,
+			undefined,
+			{ kind: 'wallOpening', wallId: first!.id, openingId: 'opening:hover' }
+		);
+		const walls = model.layers
+			.flatMap((layer) => layer.primitives)
+			.filter(
+				(primitive): primitive is PlanPolylinePrimitive =>
+					primitive.kind === 'polyline' && primitive.architecture?.kind === 'wall'
+			);
+		expect(
+			walls.find((primitive) => (primitive.hit as { wallId: string }).wallId === first!.id)
+				?.style
+		).toBe('wall-line-hovered');
 	});
 });

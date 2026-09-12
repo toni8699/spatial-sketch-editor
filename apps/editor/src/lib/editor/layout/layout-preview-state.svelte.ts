@@ -28,7 +28,6 @@ import {
 	planExactLayoutObjectTransform,
 	planExactRectangleDimensions,
 	planExactWallAngle,
-	planExactWallHeight,
 	planExactWallLength,
 	planExactWallThickness,
 	planWallSubdivision,
@@ -1023,16 +1022,6 @@ export function updateWallFirstWallThickness(
 	const layout = wallFirstLayoutOrError(state);
 	if (!layout) return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
 	return applyWallFirstPrecisionPlan(state, planExactWallThickness(layout, wallId, thickness));
-}
-
-export function updateWallFirstWallHeight(
-	state: LayoutPreviewState,
-	wallId: string,
-	height: number
-): WallFirstPrecisionMutationResult {
-	const layout = wallFirstLayoutOrError(state);
-	if (!layout) return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
-	return applyWallFirstPrecisionPlan(state, planExactWallHeight(layout, wallId, height));
 }
 
 /**

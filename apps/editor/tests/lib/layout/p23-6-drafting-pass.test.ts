@@ -3,11 +3,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import * as layoutCoreModule from '@portfolio/layout-core';
 import {
 	createEmptyWallFirstLayoutDocument,
 	planExactWallLength,
 	planExactWallThickness,
 	planWallChain,
+	pointStrictlyInsidePolygon,
 	serializeWallFirstLayoutDocument,
 	type LayoutDocumentWallFirst
 } from '@portfolio/layout-core';
@@ -18,12 +20,14 @@ import {
 	reconcileLayoutSelection,
 	selectLayoutJunction,
 	selectLayoutPhysicalWall,
+	selectLayoutRoom,
 	selectedLayoutJunction,
 	setLayoutDraftTool,
 	updateWallChainCursor
 } from '$lib/editor/layout/layout-interaction';
 import {
 	buildPlanInteractionProjection,
+	interiorLabelPoint,
 	withLayoutSnapFeedback,
 	snapMarkerRadiusPx,
 	type PlanWallFirstContext
@@ -36,8 +40,7 @@ import {
 	createEmptyLayoutPreviewState,
 	importLayoutPreviewJson,
 	layoutPreviewDocument,
-	restoreLayoutPreviewSnapshot,
-	updateWallFirstWallHeight
+	restoreLayoutPreviewSnapshot
 } from '$lib/editor/layout/layout-preview-state.svelte';
 import { createEditorStore } from '$lib/editor/editor-store.svelte';
 import { createEmptySceneDocument } from '$lib/content/scene';
@@ -399,12 +402,10 @@ function exactWallJunctionInputs(): string[] {
 		'updatePrecisionWallLength',
 		'updatePrecisionWallAngle',
 		'updatePrecisionWallThickness',
-		'updatePrecisionWallHeight',
 		'addPrecisionVertex',
 		'updateSelectedWallLength',
 		'updateSelectedWallAngle',
 		'updateSelectedWallThickness',
-		'updateSelectedWallHeight',
 		'updateSelectedJunction',
 		'selectedPrecisionWallEndpoints',
 		'selectedPrecisionJunction',
@@ -420,7 +421,7 @@ function exactWallJunctionInputs(): string[] {
 describe('P23.6 exact inputs — presentation formatting, planner-owned validity', () => {
 	it('binds every exact wall/junction input to a bounded formatted value', () => {
 		const inputs = exactWallJunctionInputs();
-		expect(inputs.length).toBeGreaterThanOrEqual(13);
+		expect(inputs.length).toBeGreaterThanOrEqual(11);
 		for (const input of inputs) {
 			if (input.includes('Angle')) expect(input).toContain('formatDegrees(');
 			else expect(input).toContain('formatMeters(');
@@ -429,7 +430,7 @@ describe('P23.6 exact inputs — presentation formatting, planner-owned validity
 
 	it('never lets browser step/min arithmetic reject a planner-valid value', () => {
 		const inputs = exactWallJunctionInputs();
-		expect(inputs.length).toBeGreaterThanOrEqual(13);
+		expect(inputs.length).toBeGreaterThanOrEqual(11);
 		for (const input of inputs) {
 			expect(input).toContain('step="any"');
 			expect(input).not.toContain('min="');
@@ -449,6 +450,13 @@ describe('P23.6 exact inputs — presentation formatting, planner-owned validity
 		const thickness = planExactWallThickness(document, wallId, 0.25);
 		if (thickness.kind !== 'success') throw new Error(`expected success: ${JSON.stringify(thickness)}`);
 		expect(thickness.document.walls.find((wall) => wall.id === wallId)?.thickness).toBe(0.25);
+	});
+
+	it('defers Height editing: no wall Height control, floor-derived height stands', () => {
+		expect(INSPECTOR_SOURCE).not.toContain('updatePrecisionWallHeight');
+		expect(INSPECTOR_SOURCE).not.toContain('updateSelectedWallHeight');
+		expect(INSPECTOR_SOURCE).not.toContain('planExactWallHeight');
+		expect(layoutCoreModule).not.toHaveProperty('planExactWallHeight');
 	});
 });
 
@@ -515,20 +523,127 @@ describe('P23.6 role commit history', () => {
 		expect(outcome.kind).toBe('cancelled');
 		expect(store.canUndo).toBe(false);
 	});
+});
 
-	it('commits a height edit through the guarded precision path', () => {
-		const seed = commitChain(baseDocument(), [p(0, 0), p(4, 0)], 'boundary');
-		const wallId = seed.walls[0]!.id;
-		const previous = seed.walls[0]!.height;
-		const { store, preview } = roleStore(seed);
-		const outcome = runLayoutMutation(
-			layoutMutationRunnerFor(store, preview),
-			() => updateWallFirstWallHeight(preview, wallId, previous + 0.5),
-			(result) => result.success
+describe('P23.6 hover affordances — projection and viewport wiring', () => {
+	function hoveredHandles(
+		hovered: { kind: 'junction'; junctionId: string },
+		tool: 'wall-chain' | 'select' = 'wall-chain'
+	) {
+		const first = commitChain(baseDocument(), [p(0, 0), p(4, 0)], 'boundary');
+		const document = commitChain(first, [p(0, 2), p(4, 2)], 'partition');
+		const model = buildLayoutPreviewModel(document).model;
+		const state = createLayoutInteractionState();
+		setLayoutDraftTool(state, tool);
+		const junctions = document.junctions.map((junction) => ({
+			id: junction.id,
+			point: [...junction.point] as [number, number]
+		}));
+		return buildPlanInteractionProjection(state, [], model, emptyContext({ junctions }), hovered);
+	}
+
+	it('marks the hovered Junction handle with the hover language', () => {
+		const first = commitChain(baseDocument(), [p(0, 0), p(4, 0)], 'boundary');
+		const junctionId = first.junctions[0]!.id;
+		const projection = hoveredHandles({ kind: 'junction', junctionId });
+		const hovered = projection.handles.filter((primitive) => primitive.style === 'vertex-handle-hovered');
+		expect(hovered).toHaveLength(1);
+		expect(hovered[0]).toMatchObject({ hit: { kind: 'junction', junctionId } });
+	});
+
+	it('tints hovered legacy Walls through the same hover language', () => {
+		const document = g2LineRectangleDocument();
+		const { geometry } = buildLayoutPreviewModel(document);
+		const model = buildPlanRenderModel(geometry, undefined, {
+			selected: undefined,
+			hovered: { kind: 'wall', roomId: 'room-rectangle', segmentId: 'room-rectangle:wall:0' },
+			selection: [],
+			handles: [],
+			drafts: [],
+			labels: []
+		});
+		expect(
+			model.layers[2]!.primitives.filter((primitive) => primitive.style === 'wall-line-hovered')
+		).toHaveLength(1);
+	});
+
+	it('resolves hover on pointermove and clears it on leave', () => {
+		const viewport = fs.readFileSync(
+			path.join(
+				fileURLToPath(new URL('../../../src/lib', import.meta.url)),
+				'editor/layout/LayoutPlanViewport.svelte'
+			),
+			'utf8'
 		);
-		expect(outcome.kind).toBe('committed');
-		expect(liveWallFirst(preview).walls.find((wall) => wall.id === wallId)?.height).toBe(previous + 0.5);
-		expect(store.undo()).toBe(true);
-		expect(liveWallFirst(preview).walls.find((wall) => wall.id === wallId)?.height).toBe(previous);
+		expect(viewport).toContain('layoutHover = toLayoutHover(');
+		expect(viewport).toContain(
+			'buildPlanInteractionProjection(interaction, rooms, model, wallFirstContext, layoutHover)'
+		);
+		// Cleared both when another tool/gesture takes over and on pointerleave.
+		expect(viewport.split('layoutHover = null').length - 1).toBeGreaterThanOrEqual(2);
+	});
+});
+
+describe('P23.6 room label interior anchors and suppression', () => {
+	it('lands strictly inside a concave face whose centroid escapes', () => {
+		// C-shape: both the vertex mean and the area centroid fall in the
+		// notch, so only the ear-clip fallback can answer interior.
+		const c: [number, number][] = [
+			[0, 0],
+			[6, 0],
+			[6, 2],
+			[2, 2],
+			[2, 4],
+			[6, 4],
+			[6, 6],
+			[0, 6]
+		];
+		expect(pointStrictlyInsidePolygon(c, [3.5, 3])).toBe(false);
+		// Area centroid (76/28, 3) sits in the notch: documents the fallback trigger.
+		expect(pointStrictlyInsidePolygon(c, [76 / 28, 3])).toBe(false);
+		const anchor = interiorLabelPoint(c);
+		expect(pointStrictlyInsidePolygon(c, anchor)).toBe(true);
+	});
+
+	it('suppresses the Room name under a diagnostic marker at low zoom', () => {
+		const document = commitChain(baseDocument(), [...RECT], 'boundary', true);
+		const model = buildLayoutPreviewModel(document).model;
+		const names = new Map(document.rooms.map((room) => [room.id, room.name] as const));
+		const wallId = document.walls[0]!.id;
+		const context = emptyContext({
+			roomNames: names,
+			issues: [{ path: `walls.${wallId}`, code: 'zero_length_wall', message: 'degenerate', targetId: wallId }]
+		});
+		const near = createLayoutInteractionState();
+	 expect(
+			textsOf(buildPlanInteractionProjection(near, [], model, context)).filter(
+				(primitive) => primitive.style === 'room-name'
+			)
+		).toHaveLength(1);
+		const far = createLayoutInteractionState();
+		far.planView.pixelsPerMeter = 6;
+		expect(
+			textsOf(buildPlanInteractionProjection(far, [], model, context)).filter(
+				(primitive) => primitive.style === 'room-name'
+			)
+		).toHaveLength(0);
+	});
+
+	it('lets selected-room dimensions outrank the Room name at low zoom', () => {
+		const document = g2LineRectangleDocument();
+		const model = buildLayoutPreviewModel(document).model;
+		const state = createLayoutInteractionState();
+		selectLayoutRoom(state, 'room-rectangle');
+		const roomName = (projection: ReturnType<typeof buildPlanInteractionProjection>) =>
+			textsOf(projection).filter((primitive) => primitive.style === 'room-name');
+		const dimensions = (projection: ReturnType<typeof buildPlanInteractionProjection>) =>
+			textsOf(projection).filter((primitive) => primitive.style === 'dimension-label');
+		const near = buildPlanInteractionProjection(state, document.floors[0]!.rooms, model);
+		expect(dimensions(near).length).toBeGreaterThan(0);
+		expect(roomName(near)).toHaveLength(1);
+		state.planView.pixelsPerMeter = 6;
+		const far = buildPlanInteractionProjection(state, document.floors[0]!.rooms, model);
+		expect(dimensions(far).length).toBeGreaterThan(0);
+		expect(roomName(far)).toHaveLength(0);
 	});
 });
