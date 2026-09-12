@@ -16,11 +16,13 @@ capability already exists.
 plus project-level **Assets** and **Publish** surfaces. Not-yet-built
 capabilities here are direction only; nothing here claims they exist today.
 **Ratified 2026-09-09:** P23's wall-first spatial-ownership reconciliation is
-the destination: first-class Junctions/Walls, Wall-hosted Openings, persistent
+the destination and is now the current authoring foundation (F0 shipped
+2026-09-10): first-class Junctions/Walls, Wall-hosted Openings, persistent
 Rooms over derived boundary-Wall faces, document-level/world-local Layout
-objects, and project/world-local Scene/Camera physical placement. Current
-Room-owned/Room-local mechanics remain the shipped implementation contract
-until the P23 Foundation Gate actually lands.
+objects, and project/world-local Scene/Camera physical placement. Legacy
+Room-owned/Room-local mechanics remain the compatibility read path for
+recognized legacy Projects; legacy local values resolve through explicit
+trusted context exactly once and never double-transform migrated content.
 
 ## Product vision
 
@@ -216,6 +218,45 @@ revolve, roof helpers, general constraint sophistication) stays in the North
 Star as demand/evidence-gated follow-ups, not prerequisites for the first
 Experience proof.
 
+### P23 `LayoutRoom` is the current enclosed-region minimum, not the universal spatial abstraction
+
+`LayoutRoom` is the current P23 semantic region produced and reconciled over supported enclosed topology. It is **not intended to become the universal recursive spatial abstraction.** Broader spatial semantics are defined here and are outside P23 scope.
+
+The long-term spatial model may distinguish several separable layers:
+
+```text
+Physical architecture
+- Walls
+- Openings
+- floors / architectural elements
+
+Derived spatial topology
+- faces / regions
+- adjacency
+- enclosure
+
+Semantic spatial model
+- Space
+- nonphysical SpaceBoundary where needed
+- Site
+- Building / Facility
+- Level / Storey
+- Zone
+```
+
+The exact future schema is not ratified yet; this document states principles, not implementation types or a new plan.
+
+Principles:
+
+- **Physical Walls and semantic spatial boundaries are separate concepts.** A physical Wall may participate in spatial boundary extraction or may be decorative/non-room-bounding.
+- **A physical Wall may or may not participate in Room face extraction.** The internal non-room-bounding role is `partition`; the user-facing model is one Wall concept with optional Room-boundary participation.
+- **Future semantic regions may exist without a physical Wall where needed.** Do not fake those future regions with invisible physical Walls.
+- **Indoor Rooms are only one possible kind/use of semantic Space.** Future outdoor/open regions such as courtyards, yards, plazas, or sites must not require pretending the world is one giant Room.
+- **Hierarchical containment such as Site → Building → Level → Space should remain conceptually separate from cross-cutting/overlapping Zones.**
+- **Zones may eventually span multiple Spaces and should not be confused with transform ownership.**
+- **`LayoutRoom` should evolve/generalize only when a real future capability requires it.** Do not prematurely rename `LayoutRoom` to `Space` during P23.
+- The exact future schema is not ratified yet. Do not create implementation types, new P-numbers, or speculative schema now.
+
 The wall-first ownership principle is:
 
 ```text
@@ -255,13 +296,15 @@ existing objects without merging `LayoutDocument` and `SceneDocument`
 ownership.
 
 P23 changes physical coordinate ownership without merging those documents. The
-target after the P23 Foundation Gate is project/world-local Scene entity and
+target — now the current authoring foundation after F0 shipped — is
+project/world-local Scene entity and
 Camera physical placement; Room association becomes derived or optional
 semantic context where useful rather than mandatory transform ownership. This
 lets Scene/Camera content exist outside enclosed Rooms and prevents ordinary
-Wall/Room topology edits from implicitly moving staged content. Until that gate
-ships, the current Room-local implementation and Room-frame resolution remain
-current behavior and current component/architecture docs remain correct.
+Wall/Room topology edits from implicitly moving staged content. Legacy
+Room-local implementation and Room-frame resolution remain the compatibility
+read path for recognized legacy Projects; current component/architecture docs
+remain correct for that compatibility behavior.
 
 The finished product supports:
 
@@ -433,8 +476,8 @@ migration stays inside the existing Camera domain with one route system and
 one motion evaluator. The P23 target removes Room containment as the mandatory
 Camera coordinate root: Camera physical placement becomes project/world-local,
 while Room context may still be derived for labels, semantic destinations or
-experience logic. Until P23 Foundation ships, current Room-based Camera storage
-remains the implementation contract.
+experience logic. Legacy Room-based Camera storage remains the compatibility
+read path for recognized legacy Projects.
 
 ## Experience mode — how visitors understand and navigate the world
 
@@ -993,14 +1036,14 @@ Portable package
 ```
 
 `LayoutDocument` and `SceneDocument` remain separate sources of truth. Unified
-3D composes both. The P23 destination stores Scene/Camera physical placement in
+3D composes both. P23 stores Scene/Camera physical placement in
 project/world-local coordinates; Room association becomes derived or optional
 semantic context where useful, not mandatory transform ownership. Layout
-objects remain document-level/project-world-local. Until the P23 Foundation
-Gate ships, current Room-local Scene/Camera storage and Room-frame resolution
-remain current behavior. Legacy read-only Projects may continue to retain
-Room-local values/frames behind explicit compatibility/runtime preparation and
-must resolve them exactly once rather than double-transform migrated content.
+objects remain document-level/project-world-local. This is now the current
+authoring foundation after F0 shipped. Legacy read-only Projects may continue
+to retain Room-local values/frames behind explicit compatibility/runtime
+preparation and must resolve them exactly once rather than double-transform
+migrated content.
 Generated geometry, Three objects, renderer handles, decoded runtime objects,
 gizmo proxies, selection, hover/transient gesture state, and undo history are
 not serialized as authored project truth.
@@ -1037,10 +1080,11 @@ now.
    renaming or flattening these canonical axes.
 3. **Separate document ownership; world-local physical-placement target.**
    `LayoutDocument` and `SceneDocument` stay distinct; Arrange may route to
-   either owner without merging them. After P23, Scene/Camera physical placement
-   is project/world-local and Room association is derived/semantic where useful.
-   Current Room-local storage remains the compatibility/shipped baseline until
-   the Foundation migration lands.
+   either owner without merging them. In the wall-first model, Scene/Camera
+   physical placement is project/world-local and Room association is
+   derived/semantic where useful.
+   Legacy Room-local storage remains the compatibility read path for recognized
+   legacy Projects; the Foundation migration has landed.
 4. **One geometry compiler.** Plan and 3D derive authored layout geometry from
    `compileLayoutGeometry()` (or its evolved canonical successor), never from
    competing consumer-specific reconstructions.
@@ -1213,7 +1257,7 @@ today:
    `SceneDocument`; cross-document operations require an explicitly designed
    atomic contract rather than accidental side effects.
 4. Plan-level transforms preserve state owned exclusively by 3D authoring.
-5. New Scene/Camera physical placement is project/world-local after P23;
+5. New Scene/Camera physical placement is project/world-local;
    Junction/Wall/Room relationships are explicit/semantic and never inferred
    merely from coordinates. Legacy Room-local data is resolved only through
    explicit trusted compatibility context and never double-transformed.

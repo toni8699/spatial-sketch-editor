@@ -12,7 +12,7 @@ This is the reconciled P23 umbrella. The accepted reconciliation — informed by
 
 ## User outcome
 
-A creator can sketch a small architectural layout from explicit Walls, divide it into persistent semantic Rooms, add doors/windows and non-room-dividing partitions, dimension and snap architecture precisely, place reusable architectural objects, and preserve the result through Undo, Save/Load, Preview and Publish.
+A creator can sketch a small architectural layout from explicit Walls, divide it into persistent semantic Rooms, add doors/windows and non-room-bounding Walls, dimension and snap architecture precisely, place reusable architectural objects, and preserve the result through Undo, Save/Load, Preview and Publish.
 
 The minimum is deliberately architectural rather than BIM/CAD-complete. It establishes one durable wall-first spatial model that later Build depth can extend.
 
@@ -42,17 +42,19 @@ Core principles:
 - `LayoutObject[]` remains document-level; P23 does not move Layout objects under Floors.
 - A physical Wall exists once even when it bounds two Rooms.
 - Openings are hosted by Walls, not duplicated Room-owned segments.
-- `boundary` Walls participate in Room face extraction.
-- `partition` Walls use the same canonical physical/compiler machinery but do not split semantic Rooms.
-- Scene/Camera physical placement migrates to project/world-local coordinates; Room containment becomes derived or optional semantic context where useful.
-- Moving/editing architecture does not implicitly move staged Scene/Camera content after the migration.
+- There is one primary Wall concept in the P23 UX. A physical Wall may or may not participate in Room face extraction.
+- `boundary` (internal) Walls participate in Room face extraction.
+- `partition` (internal) Walls use the same canonical physical/compiler machinery but do not split semantic Rooms. The user-facing model is one Wall concept with optional Room-boundary participation via the **Defines room boundary** control.
+- `LayoutRoom` is the current enclosed-region minimum. Broader spatial semantics are defined by the North Star and are outside P23 scope.
+- Scene/Camera physical placement is project/world-local; Room containment becomes derived or optional semantic context where useful.
+- Moving/editing architecture does not implicitly move staged Scene/Camera content.
 - Plan, 3D and visitor all consume one canonical `compileLayoutGeometry()` pipeline.
 
 ## Current implementation versus target
 
-Current code still stores Room-owned boundary segments/openings and requires Room ownership for Scene entities, clusters and Camera nodes. Current Room frames still resolve Scene/Camera world meaning. Existing component/architecture docs that describe those mechanics remain correct **current-behavior documentation until P23 Foundation ships**.
+F0 has shipped; wall-first writes are enabled. Legacy Room-owned boundary segments/openings and Room-required Scene/Camera ownership persist only as the compatibility read path for recognized legacy Projects. Current Room frames still resolve legacy Scene/Camera world meaning through explicit trusted context. Existing component/architecture docs that describe those mechanics remain correct **current-behavior documentation for the compatibility read path**.
 
-P23 changes the target architecture; it does not pretend that target already exists.
+Wall-first authoring is now the current editable state. Legacy compatibility remains separate.
 
 ## Evidence authority
 
@@ -450,15 +452,15 @@ Retain exact numeric LayoutObject editing. Reinterpret architectural precision a
 
 **Status:** shipped on `main` via PR #13 (`a369a15`).
 
-Keep H2's deterministic snap/acquisition/guide model and map it to Junctions, Walls, Openings, Partitions and compiled object geometry. Snap suggestions never create topology until the committed operation records explicit Junction/Wall relationships.
+Keep H2's deterministic snap/acquisition/guide model and map it to Junctions, Walls, Openings, internal Wall roles and compiled object geometry. Snap suggestions never create topology until the committed operation records explicit Junction/Wall relationships.
 
 ## P23.9 — Wall / Partition sketching
 
 [Child plan](2026-09-09-P23.9-wall-partition-sketching.md)
 
-**Status:** shipped on `main` via PR #18 (`5f20aaa`); **current slice: P23.3**.
+**Status:** merged on `main` via PR #18 (`5f20aaa`); **current slice: P23.3**.
 
-Primary architectural authoring workflow (segment-first, ratified 2026-09-11): continuous Wall/Partition drawing where each completed segment commits immediately as one authored Wall and one Layout transaction, with only the current candidate segment transient; the committed endpoint becomes the next start without tool re-entry; Escape cancels only the active preview; H2 snap/precision integration; and Rectangle/Polygon convenience tools that produce the same canonical Walls/Junctions (Rectangle stays one bounded atomic transaction; Polygon may stay a bounded compound transient). Valid open Walls need not create Rooms.
+Primary architectural authoring workflow (segment-first, ratified 2026-09-11): continuous Wall drawing where each completed segment commits immediately as one authored Wall and one Layout transaction, with only the current candidate segment transient; the committed endpoint becomes the next start without tool re-entry; newly drawn Walls default to `boundary` (room-bounding); Escape cancels only the active preview; H2 snap/precision integration; and Rectangle/Polygon convenience tools that produce the same canonical Walls/Junctions (Rectangle stays one bounded atomic transaction; Polygon may stay a bounded compound transient). Valid open Walls need not create Rooms. The separate Partition primary tool is removed from the polished P23 UX per P23.6; `partition` remains an internal Wall semantic. P23.9's underlying `boundary | partition` semantics, segment-first lifecycle, and planner/noding/topology/history behavior remain authoritative.
 
 ## P23.3 — Wall-hosted openings that fit
 
@@ -476,19 +478,23 @@ Keep deterministic two-pass clone/remap semantics for objects/openings. Room dup
 
 [Child plan](2026-09-08-P23.5-architectural-presets.md)
 
-Column / Platform / Plinth remain creation defaults over existing Layout object kinds. Do not ship a fake box `Partition`; Partition is first-class Wall authoring in P23.9.
+Column / Platform / Plinth remain creation defaults over existing Layout object kinds. Do not ship a fake box `Partition`; a non-room-bounding Wall remains a physical Wall with the internal `partition` role.
 
 ## P23.6 — Architectural drafting visual pass
 
 [Child plan](2026-09-08-P23.6-architectural-drafting-visual-pass.md)
 
-Presentation flows through compiled geometry / `PlanRenderModel` / existing Plan SVG authority. P23.6 may extend the existing canonical selection/hit/interaction projection to first-class Wall/Junction targets, but it adds no authored geometry, topology, mutation authority, history authority, or renderer-local state. Add wall-first Wall/Junction/Room/Opening/Partition hierarchy, topology diagnostics, truthful dimensions and transient snap/draft feedback. Do not invent door handedness/swing semantics that are absent from authored data. Never create a second selection store, hit path or renderer-local selection model.
+Presentation flows through compiled geometry / `PlanRenderModel` / existing Plan SVG authority. P23.6 may extend the existing canonical selection/hit/interaction projection to first-class Wall/Junction targets, but it adds no authored geometry, topology, mutation authority, history authority, or renderer-local state. Add wall-first Wall/Junction/Room/Opening hierarchy, topology diagnostics, truthful dimensions and transient snap/draft feedback. Do not invent door handedness/swing semantics that are absent from authored data. Never create a second selection store, hit path or renderer-local selection model.
+
+P23.6 owns the Plan-side Wall-drawing UX: live passive candidate length readout during `start → cursor` preview (presentation only, not authored state), removal of redundant Wall-drawing chrome (no Commit segment button, no Length/Commit/Cancel action bar, no editable exact-length input during drawing, keyboard-first Escape cancel), and selected-Wall exact Length/Angle editing presentation in the Inspector (reusing P23.1 canonical precision operations).
 
 ## P23.7 — Integration, compatibility and closeout
 
 [Child plan](2026-09-08-P23.7-integration-closeout.md)
 
 Runs last. Proves the complete Build loop, exact IDs/history, old save/publication compatibility, standalone Scene migration rejection/success cases, Scene/Camera exterior placement, Plan/3D parity, Save/Load, Preview and Publish. Accepts the completed Wall/Junction/Opening selection cutover: no stale Room-owned selection/hit path may remain authoritative.
+
+P23.7 owns acceptance proving the Wall-drawing UX: second-click commits the Wall (no separate Commit button), Escape cancels only the active transient candidate/run, no redundant Commit/Cancel action bar is required, successful commits do not emit noisy implementation-count messages, invalid/rejected operations still surface useful diagnostics, exact selected-Wall Length/Angle edits reuse canonical P23.1 precision/topology/history paths, and Plan UI does not obscure the XZ axis or important viewport affordances.
 
 # Execution order
 
@@ -588,7 +594,7 @@ Whole P23 closeout additionally proves:
 - empty floor → outer Wall loop → one Room;
 - add dividing boundary Wall → two persistent Rooms;
 - add one shared-Wall door → one physical Opening;
-- add interior Partition → physical Wall without Room split;
+- draw an interior Wall, disable **Defines room boundary** → physical Wall without Room split;
 - exact Wall/Junction dimensions and deterministic snaps;
 - Scene object and Camera may exist outside every Room;
 - architecture edits do not move world-local staged content;
