@@ -32,6 +32,12 @@ import {
 	snapMarkerRadiusPx,
 	type PlanWallFirstContext
 } from '$lib/editor/layout/plan-overlays';
+import {
+	formatDegrees,
+	formatMeters,
+	parseExactNumber
+} from '$lib/editor/layout/layout-exact-input';
+import { degreesToRadians } from '$lib/editor/editor-transform';
 import { resolvePlanHit } from '$lib/editor/layout/plan-hit';
 import { buildPlanRenderModel } from '$lib/layout/plan-render-model';
 import {
@@ -40,7 +46,8 @@ import {
 	createEmptyLayoutPreviewState,
 	importLayoutPreviewJson,
 	layoutPreviewDocument,
-	restoreLayoutPreviewSnapshot
+	restoreLayoutPreviewSnapshot,
+	updateWallFirstWallAngle
 } from '$lib/editor/layout/layout-preview-state.svelte';
 import { createEditorStore } from '$lib/editor/editor-store.svelte';
 import { createEmptySceneDocument } from '$lib/content/scene';
@@ -576,9 +583,7 @@ describe('P23.6 hover affordances — projection and viewport wiring', () => {
 			'utf8'
 		);
 		expect(viewport).toContain('layoutHover = toLayoutHover(');
-		expect(viewport).toContain(
-			'buildPlanInteractionProjection(interaction, rooms, model, wallFirstContext, layoutHover)'
-		);
+		expect(viewport).toContain('wallFirstContext, layoutHover ?? undefined');
 		// Cleared both when another tool/gesture takes over and on pointerleave.
 		expect(viewport.split('layoutHover = null').length - 1).toBeGreaterThanOrEqual(2);
 	});
@@ -645,5 +650,70 @@ describe('P23.6 room label interior anchors and suppression', () => {
 		const far = buildPlanInteractionProjection(state, document.floors[0]!.rooms, model);
 		expect(dimensions(far).length).toBeGreaterThan(0);
 		expect(roomName(far)).toHaveLength(0);
+	});
+});
+
+describe('P23.6 blank exact inputs leave document and history untouched', () => {
+	it('blank Junction X/Z changes nothing', () => {
+		const seed = commitChain(baseDocument(), [...RECT], 'boundary', true);
+		const { store, preview } = roleStore(seed);
+		const before = JSON.stringify(liveWallFirst(preview));
+		const junction = liveWallFirst(preview).junctions[0]!;
+		for (const raw of ['', '   ']) {
+			const parsed = parseExactNumber(raw, junction.point[0], formatMeters);
+			expect(parsed.ok).toBe(false);
+		}
+		expect(JSON.stringify(liveWallFirst(preview))).toBe(before);
+		expect(store.canUndo).toBe(false);
+	});
+
+	it('blank Wall Angle changes nothing while a valid Angle commits once', () => {
+		const seed = commitChain(baseDocument(), [p(0, 0), p(4, 0)], 'boundary');
+		const wallId = seed.walls[0]!.id;
+		const { store, preview } = roleStore(seed);
+		const before = JSON.stringify(liveWallFirst(preview));
+		const blank = parseExactNumber('', 0, formatDegrees);
+		expect(blank.ok).toBe(false);
+		expect(JSON.stringify(liveWallFirst(preview))).toBe(before);
+		expect(store.canUndo).toBe(false);
+		// Positive control: the harness commits a real Angle exactly once.
+		const outcome = runLayoutMutation(
+			layoutMutationRunnerFor(store, preview),
+			() => updateWallFirstWallAngle(preview, wallId, degreesToRadians(45), 'start'),
+			(result) => result.success
+		);
+		expect(outcome.kind).toBe('committed');
+		expect(store.canUndo).toBe(true);
+		expect(store.undo()).toBe(true);
+		expect(store.canUndo).toBe(false);
+	});
+});
+
+describe('P23.6 idle-select Junction hover reveals its own handle', () => {
+	it('renders only the hovered Junction with no edit context', () => {
+		const first = commitChain(baseDocument(), [p(0, 0), p(4, 0)], 'boundary');
+		const document = commitChain(first, [p(0, 2), p(4, 2)], 'partition');
+		const model = buildLayoutPreviewModel(document).model;
+		// Idle select: default tool, no selection, no Wall focus.
+		const state = createLayoutInteractionState();
+		expect(state.tool).toBe('select');
+		const junctions = document.junctions.map((junction) => ({
+			id: junction.id,
+			point: [...junction.point] as [number, number]
+		}));
+		const hoveredId = document.junctions[0]!.id;
+		const projection = buildPlanInteractionProjection(
+			state,
+			[],
+			model,
+			emptyContext({ junctions }),
+			{ kind: 'junction', junctionId: hoveredId }
+		);
+		const handles = projection.handles.filter((primitive) => hitKind(primitive) === 'junction');
+		expect(handles).toHaveLength(1);
+		expect(handles[0]).toMatchObject({
+			style: 'vertex-handle-hovered',
+			hit: { kind: 'junction', junctionId: hoveredId }
+		});
 	});
 });

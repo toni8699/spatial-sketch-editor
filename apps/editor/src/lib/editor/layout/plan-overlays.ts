@@ -791,9 +791,11 @@ export function buildPlanInteractionProjection(
 
 	// P23.6 — canonical Junction handles: normally quiet, visible and
 	// interactive when tool/selection context requires them (chain sketching,
-	// or a Wall/Opening/Junction selected). Never global clutter: hidden below
-	// the Plan scale floor, and focused to the selected Wall's endpoints when
-	// a Wall selection owns the context.
+	// or a Wall/Opening/Junction selected). A lone hover also reveals its own
+	// Junction — and only that one — so an endpoint quietly appears before the
+	// click that selects it. Never global clutter: hidden below the Plan scale
+	// floor, and focused to the selected Wall's endpoints when a Wall selection
+	// owns the context.
 	if (wallFirst) {
 		const chainArmed = wallChainRoleForTool(interaction.tool) !== null;
 		const selection = interaction.selection;
@@ -802,9 +804,12 @@ export function buildPlanInteractionProjection(
 			selection.kind === 'physicalWall' ||
 			selection.kind === 'wallOpening' ||
 			selection.kind === 'junction';
-		if (editContext && interaction.planView.pixelsPerMeter >= JUNCTION_HANDLES_MIN_PX_PER_M) {
+		const hoveredJunctionId = hovered?.kind === 'junction' ? hovered.junctionId : null;
+		const showJunctions = editContext || hoveredJunctionId !== null;
+		if (showJunctions && interaction.planView.pixelsPerMeter >= JUNCTION_HANDLES_MIN_PX_PER_M) {
 			for (const junction of wallFirst.junctions) {
-				if (wallFirst.junctionFocus && !wallFirst.junctionFocus.has(junction.id)) continue;
+				if (!editContext && junction.id !== hoveredJunctionId) continue;
+				if (editContext && wallFirst.junctionFocus && !wallFirst.junctionFocus.has(junction.id)) continue;
 				const selected = selection.kind === 'junction' && selection.junctionId === junction.id;
 				handles.push({
 					kind: 'circle',

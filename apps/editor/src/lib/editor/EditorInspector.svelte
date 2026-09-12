@@ -53,6 +53,7 @@
 	} from '$lib/layout/layout-wall-openings';
 	import { wallFirstAdjacentRooms } from '$lib/layout/layout-portals';
 	import { layoutMutationRunnerFor, runLayoutMutation } from './layout/layout-mutation-runner';
+	import { formatDegrees, formatMeters, parseExactNumber } from './layout/layout-exact-input';
 	import {
 		selectLayoutJunction,
 		selectLayoutObject,
@@ -343,7 +344,7 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 		)
 	);
 	// P23.6 — canonical wall-first Wall Inspector target: the Plan selection
-	// drives exact Length/Angle/Thickness/Height editing plus the
+	// drives exact Length/Angle/Thickness editing plus the
 	// Defines-room-boundary role control (same operations as Architecture ·
 	// exact, one history entry each).
 	const selectedWallFirstWallSelection = $derived(
@@ -1231,28 +1232,15 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 		format: (value: number) => string = String
 	): number | null {
 		const input = event.currentTarget as HTMLInputElement;
-		const value = Number(input.value);
-		if (!Number.isFinite(value)) {
-			input.value = format(fallback);
-			store.setStatusMessage('Exact value must be finite');
+		const parsed = parseExactNumber(input.value, fallback, format);
+		if (!parsed.ok) {
+			input.value = parsed.display;
+			store.setStatusMessage(
+				parsed.reason === 'blank' ? 'Exact value is blank' : 'Exact value must be finite'
+			);
 			return null;
 		}
-		return value;
-	}
-
-	/**
-	 * P23.6 — presentation formatting for exact numeric inputs. Display is
-	 * bounded (`3.00`, `121.6`) while stored precision never mutates: change
-	 * handlers parse the full typed value and the canonical planners own all
-	 * validity. Inputs use `step="any"` with no `min`/`max` so browser
-	 * arithmetic can never reject a planner-valid value.
-	 */
-	function formatMeters(value: number): string {
-		return value.toFixed(2);
-	}
-
-	function formatDegrees(value: number): string {
-		return value.toFixed(1);
+		return parsed.value;
 	}
 
 	function updatePrecisionJunction(index: 0 | 1, event: Event): void {
