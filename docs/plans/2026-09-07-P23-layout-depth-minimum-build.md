@@ -6,7 +6,7 @@
 **Depends on:** P22 complete, including hosted cold-visitor acceptance.  
 **Owner reconciliation ratified:** 2026-09-09.  
 **Evidence basis:** completed `P23-H1`, `P23-H2`, `P23-H3`, `P23-H5`, current Museum Editor code, and the staging wall-first proposal.  
-**Implementation status:** Foundation Gate shipped — P23.0/P23.8 F0 acceptance passed 2026-09-10 and the stage-6 flip (branch `p23-stage6-flip`) enabled wall-first writes; legacy room-owned behavior persists only as the compatibility read path. The Build-set slices below (P23.1 → P23.2 → P23.9 → P23.3 → P23.4/P23.5 → P23.6 → P23.7) are the live implementation order; P23.1 and P23.2 are merged on `main` (PRs #9 and #13); **P23.9 merged via PR #18 (`5f20aaa`)**; **P23.3 merged via PR #19 (`d1705b7`)**; **P23.4 merged via PR #21 (`c6601f2`)**; **P23.5 in review via PR #22**.
+**Implementation status:** Foundation Gate shipped — P23.0/P23.8 F0 acceptance passed 2026-09-10 and the stage-6 flip (branch `p23-stage6-flip`) enabled wall-first writes; legacy room-owned behavior persists only as the compatibility read path. The Build-set slices below (P23.1 → P23.2 → P23.9 → P23.3 → P23.4/P23.5 → P23.6 → P23.6a → P23.7) are the live implementation order; P23.1 and P23.2 are merged on `main` (PRs #9 and #13); **P23.9 merged via PR #18 (`5f20aaa`)**; **P23.3 merged via PR #19 (`d1705b7`)**; **P23.4 merged via PR #21 (`c6601f2`)**; **P23.5 merged via PR #22 (`75a32ca`)**; **P23.6 in review via PR #23**.
 
 This is the reconciled P23 umbrella. The accepted reconciliation — informed by the harvests — supersedes conflicting earlier P23 and North-Star direction. Harvest artifacts remain evidence, not implementation authority.
 
@@ -484,9 +484,15 @@ Column / Platform / Plinth remain creation defaults over existing Layout object 
 
 [Child plan](2026-09-08-P23.6-architectural-drafting-visual-pass.md)
 
-Presentation flows through compiled geometry / `PlanRenderModel` / existing Plan SVG authority. P23.6 may extend the existing canonical selection/hit/interaction projection to first-class Wall/Junction targets, but it adds no authored geometry, topology, mutation authority, history authority, or renderer-local state. Add wall-first Wall/Junction/Room/Opening hierarchy, topology diagnostics, truthful dimensions and transient snap/draft feedback. Do not invent door handedness/swing semantics that are absent from authored data. Never create a second selection store, hit path or renderer-local selection model.
+Presentation flows through compiled geometry / `PlanRenderModel` / existing Plan SVG authority. P23.6 may extend the existing canonical selection/hit/interaction projection to first-class Wall/Junction targets, but it adds no authored geometry, topology, mutation authority, history authority, or renderer-local state. Add topology diagnostics, truthful dimensions and transient snap/draft feedback. (The wall-first Wall/Junction/Room/Opening hierarchy moved to P23.6a below.) Do not invent door handedness/swing semantics that are absent from authored data. Never create a second selection store, hit path or renderer-local selection model.
 
 P23.6 owns the Plan-side Wall-drawing UX: live passive candidate length readout during `start → cursor` preview (presentation only, not authored state), removal of redundant Wall-drawing chrome (no Commit segment button, no Length/Commit/Cancel action bar, no editable exact-length input during drawing, keyboard-first Escape cancel), and selected-Wall exact Length/Angle editing presentation in the Inspector (reusing P23.1 canonical precision operations).
+
+## P23.6a — Architecture Inspector + canonical hierarchy reconciliation
+
+[Scope stub](2026-09-11-P23.6a-architecture-inspector-hierarchy.md) (`seed` — detailed design reconciled separately after P23.6 merges)
+
+Owner-review follow-up before P23.7: selected-entity Architecture Inspector plus the ownership-truthful hierarchy for document-global Walls/Openings/LayoutObjects (no duplicated shared Walls, subordinate topology inventory, same `LayoutSelection` authority, no second store/path/model). UX/presentation + hierarchy reconciliation, not another geometry migration.
 
 ## P23.7 — Integration, compatibility and closeout
 
@@ -520,6 +526,8 @@ P23.4 ─┐
 P23.5 ─┘
       ↓
 P23.6
+      ↓
+P23.6a
       ↓
 P23.7
 ```

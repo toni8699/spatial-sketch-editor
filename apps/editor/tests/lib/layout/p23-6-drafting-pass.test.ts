@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import {
 	createEmptyWallFirstLayoutDocument,
+	planExactWallLength,
+	planExactWallThickness,
 	planWallChain,
 	serializeWallFirstLayoutDocument,
 	type LayoutDocumentWallFirst
@@ -379,8 +384,73 @@ describe('P23.6 density purity', () => {
 });
 
 // ---------------------------------------------------------------------------
-// P23.6 role + height commits — one history entry, exact Undo/Redo
+// P23.6 exact inputs — bounded presentation, planner-owned validity
 // ---------------------------------------------------------------------------
+
+const INSPECTOR_SOURCE = fs.readFileSync(
+	path.join(fileURLToPath(new URL('../../../src/lib', import.meta.url)), 'editor/EditorInspector.svelte'),
+	'utf8'
+);
+
+/** Number inputs bound to the P23.6 wall/junction exact handlers or values. */
+function exactWallJunctionInputs(): string[] {
+	const markers = [
+		'updatePrecisionJunction',
+		'updatePrecisionWallLength',
+		'updatePrecisionWallAngle',
+		'updatePrecisionWallThickness',
+		'updatePrecisionWallHeight',
+		'addPrecisionVertex',
+		'updateSelectedWallLength',
+		'updateSelectedWallAngle',
+		'updateSelectedWallThickness',
+		'updateSelectedWallHeight',
+		'updateSelectedJunction',
+		'selectedPrecisionWallEndpoints',
+		'selectedPrecisionJunction',
+		'selectedWallFirstWallEndpoints',
+		'selectedWallFirstJunction'
+	];
+	return INSPECTOR_SOURCE.split('\n').filter(
+		(line) =>
+			line.includes('<input type="number"') && markers.some((marker) => line.includes(marker))
+	);
+}
+
+describe('P23.6 exact inputs — presentation formatting, planner-owned validity', () => {
+	it('binds every exact wall/junction input to a bounded formatted value', () => {
+		const inputs = exactWallJunctionInputs();
+		expect(inputs.length).toBeGreaterThanOrEqual(13);
+		for (const input of inputs) {
+			if (input.includes('Angle')) expect(input).toContain('formatDegrees(');
+			else expect(input).toContain('formatMeters(');
+		}
+	});
+
+	it('never lets browser step/min arithmetic reject a planner-valid value', () => {
+		const inputs = exactWallJunctionInputs();
+		expect(inputs.length).toBeGreaterThanOrEqual(13);
+		for (const input of inputs) {
+			expect(input).toContain('step="any"');
+			expect(input).not.toContain('min="');
+			expect(input).not.toContain('max="');
+		}
+	});
+
+	it('keeps full stored precision behind the rounded display', () => {
+		const document = commitChain(baseDocument(), [p(0, 0), p(4, 0)], 'boundary');
+		const wallId = document.walls[0]!.id;
+		// What the user types parses fully: the planner stores exactly what it
+		// is given — display rounding never feeds back into the document.
+		const length = planExactWallLength(document, wallId, 2.9999999999999999, 'start');
+		if (length.kind !== 'success') throw new Error(`expected success: ${JSON.stringify(length)}`);
+		const moved = length.document.walls.find((wall) => wall.id === wallId)!;
+		expect(moved).toBeDefined();
+		const thickness = planExactWallThickness(document, wallId, 0.25);
+		if (thickness.kind !== 'success') throw new Error(`expected success: ${JSON.stringify(thickness)}`);
+		expect(thickness.document.walls.find((wall) => wall.id === wallId)?.thickness).toBe(0.25);
+	});
+});
 
 function roleStore(seed: LayoutDocumentWallFirst) {
 	const store = createEditorStore({

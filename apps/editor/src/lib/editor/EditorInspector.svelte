@@ -1215,22 +1215,41 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 		}
 	}
 
-	function precisionNumber(event: Event, fallback: number): number | null {
+	function precisionNumber(
+		event: Event,
+		fallback: number,
+		format: (value: number) => string = String
+	): number | null {
 		const input = event.currentTarget as HTMLInputElement;
 		const value = Number(input.value);
 		if (!Number.isFinite(value)) {
-			input.value = String(fallback);
+			input.value = format(fallback);
 			store.setStatusMessage('Exact value must be finite');
 			return null;
 		}
 		return value;
 	}
 
+	/**
+	 * P23.6 — presentation formatting for exact numeric inputs. Display is
+	 * bounded (`3.00`, `121.6`) while stored precision never mutates: change
+	 * handlers parse the full typed value and the canonical planners own all
+	 * validity. Inputs use `step="any"` with no `min`/`max` so browser
+	 * arithmetic can never reject a planner-valid value.
+	 */
+	function formatMeters(value: number): string {
+		return value.toFixed(2);
+	}
+
+	function formatDegrees(value: number): string {
+		return value.toFixed(1);
+	}
+
 	function updatePrecisionJunction(index: 0 | 1, event: Event): void {
 		const junction = selectedPrecisionJunction;
 		if (!junction) return;
 		const previous = junction.point[index];
-		const value = precisionNumber(event, previous);
+		const value = precisionNumber(event, previous, formatMeters);
 		if (value === null) return;
 		const point = [...junction.point] as [number, number];
 		point[index] = value;
@@ -1239,11 +1258,11 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 			(result) => result.success
 		);
 		if (outcome.kind === 'skipped') {
-			(event.currentTarget as HTMLInputElement).value = String(previous);
+			(event.currentTarget as HTMLInputElement).value = formatMeters(previous);
 			store.setStatusMessage('Finish the current layout interaction first');
 			return;
 		}
-		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = String(previous);
+		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = formatMeters(previous);
 		store.setStatusMessage(outcome.result.success ? `Updated Junction ${junction.id}` : `Junction rejected: ${outcome.result.message}`);
 	}
 
@@ -1252,18 +1271,18 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 		const endpoints = selectedPrecisionWallEndpoints;
 		if (!wall || !endpoints) return;
 		const previous = endpoints.length;
-		const value = precisionNumber(event, previous);
+		const value = precisionNumber(event, previous, formatMeters);
 		if (value === null) return;
 		const outcome = runLayoutMutationGuarded(
 			() => updateWallFirstWallLength(layoutPreview, wall.id, value, precisionFixedEndpoint),
 			(result) => result.success
 		);
 		if (outcome.kind === 'skipped') {
-			(event.currentTarget as HTMLInputElement).value = String(previous);
+			(event.currentTarget as HTMLInputElement).value = formatMeters(previous);
 			store.setStatusMessage('Finish the current layout interaction first');
 			return;
 		}
-		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = String(previous);
+		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = formatMeters(previous);
 		store.setStatusMessage(outcome.result.success ? `Updated Wall ${wall.id} length` : `Wall rejected: ${outcome.result.message}`);
 	}
 
@@ -1272,18 +1291,18 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 		const endpoints = selectedPrecisionWallEndpoints;
 		if (!wall || !endpoints) return;
 		const previous = endpoints.angleDegrees;
-		const value = precisionNumber(event, previous);
+		const value = precisionNumber(event, previous, formatDegrees);
 		if (value === null) return;
 		const outcome = runLayoutMutationGuarded(
 			() => updateWallFirstWallAngle(layoutPreview, wall.id, degreesToRadians(value), precisionFixedEndpoint),
 			(result) => result.success
 		);
 		if (outcome.kind === 'skipped') {
-			(event.currentTarget as HTMLInputElement).value = String(previous);
+			(event.currentTarget as HTMLInputElement).value = formatDegrees(previous);
 			store.setStatusMessage('Finish the current layout interaction first');
 			return;
 		}
-		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = String(previous);
+		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = formatDegrees(previous);
 		store.setStatusMessage(outcome.result.success ? `Updated Wall ${wall.id} angle` : `Wall rejected: ${outcome.result.message}`);
 	}
 
@@ -1291,18 +1310,18 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 		const wall = selectedPrecisionWall;
 		if (!wall) return;
 		const previous = wall.thickness;
-		const value = precisionNumber(event, previous);
+		const value = precisionNumber(event, previous, formatMeters);
 		if (value === null) return;
 		const outcome = runLayoutMutationGuarded(
 			() => updateWallFirstWallThickness(layoutPreview, wall.id, value),
 			(result) => result.success
 		);
 		if (outcome.kind === 'skipped') {
-			(event.currentTarget as HTMLInputElement).value = String(previous);
+			(event.currentTarget as HTMLInputElement).value = formatMeters(previous);
 			store.setStatusMessage('Finish the current layout interaction first');
 			return;
 		}
-		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = String(previous);
+		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = formatMeters(previous);
 		store.setStatusMessage(outcome.result.success ? `Updated Wall ${wall.id} thickness` : `Wall rejected: ${outcome.result.message}`);
 	}
 
@@ -1310,18 +1329,18 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 		const wall = selectedPrecisionWall;
 		if (!wall) return;
 		const previous = wall.height;
-		const value = precisionNumber(event, previous);
+		const value = precisionNumber(event, previous, formatMeters);
 		if (value === null) return;
 		const outcome = runLayoutMutationGuarded(
 			() => updateWallFirstWallHeight(layoutPreview, wall.id, value),
 			(result) => result.success
 		);
 		if (outcome.kind === 'skipped') {
-			(event.currentTarget as HTMLInputElement).value = String(previous);
+			(event.currentTarget as HTMLInputElement).value = formatMeters(previous);
 			store.setStatusMessage('Finish the current layout interaction first');
 			return;
 		}
-		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = String(previous);
+		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = formatMeters(previous);
 		store.setStatusMessage(outcome.result.success ? `Updated Wall ${wall.id} height` : `Wall rejected: ${outcome.result.message}`);
 	}
 
@@ -1335,18 +1354,18 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 		const endpoints = selectedWallFirstWallEndpoints;
 		if (!wall || !endpoints) return;
 		const previous = endpoints.length;
-		const value = precisionNumber(event, previous);
+		const value = precisionNumber(event, previous, formatMeters);
 		if (value === null) return;
 		const outcome = runLayoutMutationGuarded(
 			() => updateWallFirstWallLength(layoutPreview, wall.id, value, precisionFixedEndpoint),
 			(result) => result.success
 		);
 		if (outcome.kind === 'skipped') {
-			(event.currentTarget as HTMLInputElement).value = String(previous);
+			(event.currentTarget as HTMLInputElement).value = formatMeters(previous);
 			store.setStatusMessage('Finish the current layout interaction first');
 			return;
 		}
-		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = String(previous);
+		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = formatMeters(previous);
 		store.setStatusMessage(outcome.result.success ? `Updated Wall ${wall.id} length` : `Wall rejected: ${outcome.result.message}`);
 	}
 
@@ -1355,18 +1374,18 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 		const endpoints = selectedWallFirstWallEndpoints;
 		if (!wall || !endpoints) return;
 		const previous = endpoints.angleDegrees;
-		const value = precisionNumber(event, previous);
+		const value = precisionNumber(event, previous, formatDegrees);
 		if (value === null) return;
 		const outcome = runLayoutMutationGuarded(
 			() => updateWallFirstWallAngle(layoutPreview, wall.id, degreesToRadians(value), precisionFixedEndpoint),
 			(result) => result.success
 		);
 		if (outcome.kind === 'skipped') {
-			(event.currentTarget as HTMLInputElement).value = String(previous);
+			(event.currentTarget as HTMLInputElement).value = formatDegrees(previous);
 			store.setStatusMessage('Finish the current layout interaction first');
 			return;
 		}
-		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = String(previous);
+		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = formatDegrees(previous);
 		store.setStatusMessage(outcome.result.success ? `Updated Wall ${wall.id} angle` : `Wall rejected: ${outcome.result.message}`);
 	}
 
@@ -1374,18 +1393,18 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 		const wall = selectedWallFirstWall;
 		if (!wall) return;
 		const previous = wall.thickness;
-		const value = precisionNumber(event, previous);
+		const value = precisionNumber(event, previous, formatMeters);
 		if (value === null) return;
 		const outcome = runLayoutMutationGuarded(
 			() => updateWallFirstWallThickness(layoutPreview, wall.id, value),
 			(result) => result.success
 		);
 		if (outcome.kind === 'skipped') {
-			(event.currentTarget as HTMLInputElement).value = String(previous);
+			(event.currentTarget as HTMLInputElement).value = formatMeters(previous);
 			store.setStatusMessage('Finish the current layout interaction first');
 			return;
 		}
-		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = String(previous);
+		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = formatMeters(previous);
 		store.setStatusMessage(outcome.result.success ? `Updated Wall ${wall.id} thickness` : `Wall rejected: ${outcome.result.message}`);
 	}
 
@@ -1393,18 +1412,18 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 		const wall = selectedWallFirstWall;
 		if (!wall) return;
 		const previous = wall.height;
-		const value = precisionNumber(event, previous);
+		const value = precisionNumber(event, previous, formatMeters);
 		if (value === null) return;
 		const outcome = runLayoutMutationGuarded(
 			() => updateWallFirstWallHeight(layoutPreview, wall.id, value),
 			(result) => result.success
 		);
 		if (outcome.kind === 'skipped') {
-			(event.currentTarget as HTMLInputElement).value = String(previous);
+			(event.currentTarget as HTMLInputElement).value = formatMeters(previous);
 			store.setStatusMessage('Finish the current layout interaction first');
 			return;
 		}
-		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = String(previous);
+		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = formatMeters(previous);
 		store.setStatusMessage(outcome.result.success ? `Updated Wall ${wall.id} height` : `Wall rejected: ${outcome.result.message}`);
 	}
 
@@ -1442,7 +1461,7 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 		const junction = selectedWallFirstJunction;
 		if (!junction) return;
 		const previous = junction.point[index];
-		const value = precisionNumber(event, previous);
+		const value = precisionNumber(event, previous, formatMeters);
 		if (value === null) return;
 		const point = [...junction.point] as [number, number];
 		point[index] = value;
@@ -1451,11 +1470,11 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 			(result) => result.success
 		);
 		if (outcome.kind === 'skipped') {
-			(event.currentTarget as HTMLInputElement).value = String(previous);
+			(event.currentTarget as HTMLInputElement).value = formatMeters(previous);
 			store.setStatusMessage('Finish the current layout interaction first');
 			return;
 		}
-		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = String(previous);
+		if (!outcome.result.success) (event.currentTarget as HTMLInputElement).value = formatMeters(previous);
 		store.setStatusMessage(outcome.result.success ? `Updated Junction ${junction.id}` : `Junction rejected: ${outcome.result.message}`);
 	}
 
@@ -1688,8 +1707,8 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 							<div class="layout-selected-room" aria-label="Exact Junction editor">
 								<strong>Junction {selectedPrecisionJunction.id}</strong>
 								<span>Connected Wall geometry follows this Junction.</span>
-								<label>X (m)<input type="number" step="0.01" value={selectedPrecisionJunction.point[0]} onchange={(event) => updatePrecisionJunction(0, event)} /></label>
-								<label>Z (m)<input type="number" step="0.01" value={selectedPrecisionJunction.point[1]} onchange={(event) => updatePrecisionJunction(1, event)} /></label>
+								<label>X (m)<input type="number" step="any" value={formatMeters(selectedPrecisionJunction.point[0])} onchange={(event) => updatePrecisionJunction(0, event)} /></label>
+								<label>Z (m)<input type="number" step="any" value={formatMeters(selectedPrecisionJunction.point[1])} onchange={(event) => updatePrecisionJunction(1, event)} /></label>
 								{#if layoutPreview.lastMutationMessage}<p class="layout-opening-warning" role="status">{layoutPreview.lastMutationMessage}</p>{/if}
 							</div>
 						{:else if selectedPrecisionWall && selectedPrecisionWallEndpoints}
@@ -1698,11 +1717,11 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 								<span>Canonical: {selectedPrecisionWallEndpoints.start.id} → {selectedPrecisionWallEndpoints.end.id}</span>
 								<span>Start {selectedPrecisionWallEndpoints.start.point[0].toFixed(3)}, {selectedPrecisionWallEndpoints.start.point[1].toFixed(3)} · End {selectedPrecisionWallEndpoints.end.point[0].toFixed(3)}, {selectedPrecisionWallEndpoints.end.point[1].toFixed(3)}</span>
 								<label>Fixed endpoint<select value={precisionFixedEndpoint} onchange={(event) => precisionFixedEndpoint = (event.currentTarget as HTMLSelectElement).value as 'start' | 'end'}><option value="start">Start</option><option value="end">End</option></select></label>
-								<label>Length (m)<input type="number" min="0.001" step="0.01" value={selectedPrecisionWallEndpoints.length} onchange={updatePrecisionWallLength} /></label>
-								<label>Angle (°)<input type="number" step="1" value={selectedPrecisionWallEndpoints.angleDegrees} onchange={updatePrecisionWallAngle} /></label>
-								<label>Thickness (m)<input type="number" min="0.001" step="0.01" value={selectedPrecisionWall.thickness} onchange={updatePrecisionWallThickness} /></label>
-								<label>Height (m)<input type="number" min="0.001" step="0.05" value={selectedPrecisionWall.height} onchange={updatePrecisionWallHeight} /></label>
-								<label>Add Vertex at (m)<input type="number" min="0.001" step="0.01" value={selectedPrecisionWallEndpoints.length / 2} onchange={addPrecisionVertex} /></label>
+								<label>Length (m)<input type="number" step="any" value={formatMeters(selectedPrecisionWallEndpoints.length)} onchange={updatePrecisionWallLength} /></label>
+								<label>Angle (°)<input type="number" step="any" value={formatDegrees(selectedPrecisionWallEndpoints.angleDegrees)} onchange={updatePrecisionWallAngle} /></label>
+								<label>Thickness (m)<input type="number" step="any" value={formatMeters(selectedPrecisionWall.thickness)} onchange={updatePrecisionWallThickness} /></label>
+								<label>Height (m)<input type="number" step="any" value={formatMeters(selectedPrecisionWall.height)} onchange={updatePrecisionWallHeight} /></label>
+								<label>Add Vertex at (m)<input type="number" step="any" value={formatMeters(selectedPrecisionWallEndpoints.length / 2)} onchange={addPrecisionVertex} /></label>
 								<span>Openings stay on physical Wall meters and are rejected if the edit would make them invalid.</span>
 								{#if layoutPreview.lastMutationMessage}<p class="layout-opening-warning" role="status">{layoutPreview.lastMutationMessage}</p>{/if}
 							</div>
@@ -1834,10 +1853,10 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 					<span>{selectedWallFirstWall.role === 'boundary' ? 'Defines a room boundary' : 'Partition — does not divide rooms'}</span>
 					<span>{selectedWallFirstWallEndpoints.start.id} → {selectedWallFirstWallEndpoints.end.id} · {selectedWallFirstWallEndpoints.length.toFixed(2)} m</span>
 					<label>Fixed endpoint<select value={precisionFixedEndpoint} onchange={(event) => precisionFixedEndpoint = (event.currentTarget as HTMLSelectElement).value as 'start' | 'end'}><option value="start">Start</option><option value="end">End</option></select></label>
-					<label>Length (m)<input type="number" min="0.001" step="0.01" value={selectedWallFirstWallEndpoints.length} onchange={updateSelectedWallLength} /></label>
-					<label>Angle (°)<input type="number" step="1" value={selectedWallFirstWallEndpoints.angleDegrees} onchange={updateSelectedWallAngle} /></label>
-					<label>Thickness (m)<input type="number" min="0.001" step="0.01" value={selectedWallFirstWall.thickness} onchange={updateSelectedWallThickness} /></label>
-					<label>Height (m)<input type="number" min="0.001" step="0.05" value={selectedWallFirstWall.height} onchange={updateSelectedWallHeight} /></label>
+					<label>Length (m)<input type="number" step="any" value={formatMeters(selectedWallFirstWallEndpoints.length)} onchange={updateSelectedWallLength} /></label>
+					<label>Angle (°)<input type="number" step="any" value={formatDegrees(selectedWallFirstWallEndpoints.angleDegrees)} onchange={updateSelectedWallAngle} /></label>
+					<label>Thickness (m)<input type="number" step="any" value={formatMeters(selectedWallFirstWall.thickness)} onchange={updateSelectedWallThickness} /></label>
+					<label>Height (m)<input type="number" step="any" value={formatMeters(selectedWallFirstWall.height)} onchange={updateSelectedWallHeight} /></label>
 					<label><input type="checkbox" checked={selectedWallFirstWall.role === 'boundary'} onchange={updateSelectedWallRole} /> Defines room boundary</label>
 					{#if layoutPreview.lastMutationMessage}<p class="layout-opening-warning" role="status">{layoutPreview.lastMutationMessage}</p>{/if}
 				</div>
@@ -1845,8 +1864,8 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 				<div class="layout-selected-room" aria-label="Selected wall-first junction">
 					<strong>Junction {selectedWallFirstJunction.id}</strong>
 					<span>Connected Wall geometry follows this Junction.</span>
-					<label>X (m)<input type="number" step="0.01" value={selectedWallFirstJunction.point[0]} onchange={(event) => updateSelectedJunction(0, event)} /></label>
-					<label>Z (m)<input type="number" step="0.01" value={selectedWallFirstJunction.point[1]} onchange={(event) => updateSelectedJunction(1, event)} /></label>
+					<label>X (m)<input type="number" step="any" value={formatMeters(selectedWallFirstJunction.point[0])} onchange={(event) => updateSelectedJunction(0, event)} /></label>
+					<label>Z (m)<input type="number" step="any" value={formatMeters(selectedWallFirstJunction.point[1])} onchange={(event) => updateSelectedJunction(1, event)} /></label>
 					{#if layoutPreview.lastMutationMessage}<p class="layout-opening-warning" role="status">{layoutPreview.lastMutationMessage}</p>{/if}
 				</div>
 			{:else if selectedWallFirstOpening && selectedWallFirstOpeningMetrics}
