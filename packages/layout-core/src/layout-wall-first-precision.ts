@@ -74,6 +74,8 @@ export type PrecisionOperation =
 	| 'wall-length'
 	| 'wall-angle'
 	| 'wall-thickness'
+	| 'wall-height'
+	| 'wall-role'
 	| 'wall-subdivision'
 	| 'rectangle-dimensions'
 	| 'layout-object-transform'
@@ -224,6 +226,26 @@ export function planExactWallThickness(
 	const candidate = cloneDocument(document);
 	candidate.walls.find((entry) => entry.id === wallId)!.thickness = thickness;
 	return finalizeCandidate(candidate, 'wall-thickness', [], [wallId]);
+}
+
+/**
+ * P23.6 — set a Wall-owned physical height, preserving Wall and Opening
+ * identity. Same candidate gates as thickness: the wall-first codec owns
+ * floor/opening height rules, the compiler proves the result.
+ */
+export function planExactWallHeight(
+	document: LayoutDocumentWallFirst,
+	wallId: string,
+	height: number
+): PrecisionPlan {
+	const wall = document.walls.find((candidate) => candidate.id === wallId);
+	if (!wall) return reject('unknown_wall', `Unknown wall '${wallId}'`, [wallId]);
+	if (!finitePositive(height)) return reject('invalid_value', 'Wall height must be finite and greater than zero', [wallId]);
+	if (wall.height === height) return reject('no_op', `Wall '${wallId}' already has that height`, [wallId]);
+
+	const candidate = cloneDocument(document);
+	candidate.walls.find((entry) => entry.id === wallId)!.height = height;
+	return finalizeCandidate(candidate, 'wall-height', [], [wallId]);
 }
 
 /**

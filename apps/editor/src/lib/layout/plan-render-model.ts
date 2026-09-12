@@ -71,7 +71,11 @@ export type PlanStyleToken =
 	// P23.9 — a Partition sketch is wall-like but must never read as a
 	// semantic Room boundary while it is being drawn.
 	| 'draft-outline-partition'
+	// P23.6 — a degenerate (zero-length) candidate leg: invalid before commit.
+	| 'draft-outline-invalid'
 	| 'draft-point'
+	// P23.6 — selected canonical Junction handle (same blue language).
+	| 'vertex-handle-selected'
 	// P23.3 — canonical Opening width-handle affordances + transient drag preview.
 	| 'opening-handle'
 	| 'opening-drag-preview'
@@ -81,6 +85,12 @@ export type PlanStyleToken =
 	| 'snap-marker-grid'
 	| 'dimension-label'
 	| 'selection-label'
+	// P23.6 — persistent Room name (presentation of Room metadata, never a
+	// separately persisted annotation).
+	| 'room-name'
+	// P23.6 — committed topology/geometry diagnostic marker (state, not
+	// transient preview: distinct from draft/invalid blue/red language below).
+	| 'layout-diagnostic'
 	| 'scale-label';
 
 export type PlanHitIdentity =
@@ -101,7 +111,9 @@ export type PlanHitIdentity =
 	 * `(wallId/junctionId)` cutover starts here with the Wall slot; legacy
 	 * room-anchored `wall` hits stay untouched for legacy documents.
 	 */
-	| { kind: 'physicalWall'; wallId: string };
+	| { kind: 'physicalWall'; wallId: string }
+	/** P23.6 — canonical wall-first Junction identity (`junctionId`). */
+	| { kind: 'junction'; junctionId: string };
 
 /**
  * Renderer-neutral selection descriptor. Mirrors the editor's selection shape
@@ -119,7 +131,9 @@ export type PlanSelection =
 	/** P23.3 — minimal canonical wall-first opening target (`wallId` + `openingId`). */
 	| { kind: 'wallOpening'; wallId: string; openingId: string }
 	/** P23.6 — canonical wall-first Wall target (`wallId`, no `roomId`). */
-	| { kind: 'physicalWall'; wallId: string };
+	| { kind: 'physicalWall'; wallId: string }
+	/** P23.6 — canonical wall-first Junction target (`junctionId`). */
+	| { kind: 'junction'; junctionId: string };
 
 export type PlanPolygonPrimitive = {
 	kind: 'polygon';

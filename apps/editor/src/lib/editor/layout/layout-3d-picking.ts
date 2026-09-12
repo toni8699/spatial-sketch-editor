@@ -291,6 +291,8 @@ export function layoutCandidatesFromIntersections(
 function layoutSelectionPriority(selection: LayoutSelection): number {
 	switch (selection.kind) {
 		case 'interiorAnchor':
+		// P23.6 canonical wall-first Junction selection shares the anchor rank.
+		case 'junction':
 			return 0;
 		case 'opening':
 		// P23.3 canonical wall-first Opening selection shares the opening rank.
@@ -423,6 +425,8 @@ export function layoutSelectionKey(selection: LayoutSelection | null): string {
 			return `wallOpening:${selection.wallId}:${selection.openingId}`;
 		case 'physicalWall':
 			return `physicalWall:${selection.wallId}`;
+		case 'junction':
+			return `junction:${selection.junctionId}`;
 		case 'interiorAnchor':
 			return `anchor:${selection.roomId}:${selection.segmentId}:${selection.anchorId}`;
 		case 'object':

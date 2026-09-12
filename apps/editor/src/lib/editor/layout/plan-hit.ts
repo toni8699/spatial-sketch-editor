@@ -31,6 +31,12 @@ export type PlanHitResult =
 	 */
 	| { kind: 'wallOpening'; wallId: string; openingId: string; projection: PlanWallProjection }
 	| { kind: 'physicalWall'; wallId: string; projection: PlanWallProjection }
+	/**
+	 * P23.6 — canonical wall-first Wall endpoint (a real Junction). The caller
+	 * resolves `junctionId` from the document (`start/endJunctionId` by
+	 * `endpoint`); the record itself never carries Room context.
+	 */
+	| { kind: 'wallEndpoint'; wallId: string; endpoint: 0 | 1; point: LayoutVec2 }
 	| null;
 
 /** Canonical (non-room-derived) span groups keyed by document-global `wallId`. */
@@ -121,6 +127,31 @@ function nearestPointHit(
 		}
 	}
 	return best;
+}
+
+/** Canonical wall-first Wall endpoint hit: roomless `vertex` records only. */
+function nearestCanonicalEndpointHit(
+	queries: CompiledLayoutQueryGeometry,
+	point: LayoutVec2,
+	tolerance: number
+): PlanHitResult {
+	let best: { wallId: string; endpoint: 0 | 1; at: LayoutVec2 } | null = null;
+	let bestDistance = tolerance;
+	for (const record of queries.points) {
+		if (record.kind !== 'vertex') continue;
+		if (record.roomId !== undefined) continue;
+		if (record.sourceIndex !== 0 && record.sourceIndex !== 1) continue;
+		const distance = Math.hypot(record.point[0] - point[0], record.point[1] - point[1]);
+		if (distance <= bestDistance) {
+			best = {
+				wallId: record.wallKey ?? record.segmentId,
+				endpoint: record.sourceIndex,
+				at: [...record.point] as LayoutVec2
+			};
+			bestDistance = distance;
+		}
+	}
+	return best ? { kind: 'wallEndpoint', wallId: best.wallId, endpoint: best.endpoint, point: best.at } : null;
 }
 
 function nearestOpeningHit(
@@ -250,6 +281,8 @@ export function resolvePlanHit(
 ): PlanHitResult {
 	const vertex = nearestPointHit(queries, point, tolerance, 'vertex');
 	if (vertex) return vertex;
+	const endpoint = nearestCanonicalEndpointHit(queries, point, tolerance);
+	if (endpoint) return endpoint;
 	const anchor = nearestPointHit(queries, point, tolerance, 'interior-anchor');
 	if (anchor) return anchor;
 	const opening = nearestOpeningHit(queries, point, tolerance);

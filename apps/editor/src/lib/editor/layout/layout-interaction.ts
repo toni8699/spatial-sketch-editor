@@ -163,7 +163,13 @@ export type LayoutSelection =
 	 * Never a faked room-anchored `wall` hit. Junction selection and the full
 	 * legacy `(roomId, segmentId)` retirement stay deferred to P23.7.
 	 */
-	| { kind: 'physicalWall'; wallId: string };
+	| { kind: 'physicalWall'; wallId: string }
+	/**
+	 * P23.6 — canonical wall-first Junction target on the same selection
+	 * authority: document-global `junctionId`. Click-select only (exact moves
+	 * stay in the Inspector); never a second store.
+	 */
+	| { kind: 'junction'; junctionId: string };
 
 /** P23.3 — which part of a canonical Opening a drag gesture is moving. */
 export type LayoutWallOpeningDragMode = 'body' | 'start-edge' | 'end-edge';
@@ -829,6 +835,15 @@ export function selectLayoutPhysicalWall(state: LayoutInteractionState, wallId: 
 	cancelRoomEdit(state);
 }
 
+/**
+ * P23.6 — select one canonical wall-first Junction by document-global
+ * `junctionId` on the existing selection authority.
+ */
+export function selectLayoutJunction(state: LayoutInteractionState, junctionId: string): void {
+	state.selection = { kind: 'junction', junctionId };
+	cancelRoomEdit(state);
+}
+
 export function clearLayoutSelection(state: LayoutInteractionState): void {
 	state.selection = { kind: 'none' };
 	cancelRoomEdit(state);
@@ -843,7 +858,8 @@ export function selectedLayoutRoomId(state: Pick<LayoutInteractionState, 'select
 	return state.selection.kind === 'none' ||
 		state.selection.kind === 'object' ||
 		state.selection.kind === 'wallOpening' ||
-		state.selection.kind === 'physicalWall'
+		state.selection.kind === 'physicalWall' ||
+		state.selection.kind === 'junction'
 		? null
 		: state.selection.roomId;
 }
@@ -862,6 +878,13 @@ export function selectedLayoutPhysicalWall(
 	state: Pick<LayoutInteractionState, 'selection'>
 ): { wallId: string } | null {
 	return state.selection.kind === 'physicalWall' ? { wallId: state.selection.wallId } : null;
+}
+
+/** P23.6 — the canonical wall-first Junction selection, or `null`. */
+export function selectedLayoutJunction(
+	state: Pick<LayoutInteractionState, 'selection'>
+): { junctionId: string } | null {
+	return state.selection.kind === 'junction' ? { junctionId: state.selection.junctionId } : null;
 }
 
 export function beginLayoutObjectDrag(
@@ -1135,6 +1158,12 @@ export function reconcileLayoutSelection(
 				? selection
 				: { kind: 'none' };
 		}
+		if (selection.kind === 'junction') {
+			const wallFirst = layout as unknown as LayoutDocumentWallFirst;
+			return wallFirst.junctions.some((candidate) => candidate.id === selection.junctionId)
+				? selection
+				: { kind: 'none' };
+		}
 		return { kind: 'none' };
 	}
 	switch (selection.kind) {
@@ -1175,6 +1204,7 @@ export function reconcileLayoutSelection(
 		// Room-owned document: clear rather than guess.
 		case 'wallOpening':
 		case 'physicalWall':
+		case 'junction':
 			return { kind: 'none' };
 	}
 }

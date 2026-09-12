@@ -124,8 +124,8 @@
 		}
 		const result = outcome.result;
 		if (result.success) {
-			const roomLabel = result.operation === 'wall-chain-commit' && result.roomIds.length > 0 ? ` + ${result.roomIds.length} room${result.roomIds.length === 1 ? '' : 's'}` : '';
-			setWallChainStatus(`Committed ${result.operation === 'wall-chain-commit' ? result.wallIds.length : 0} walls${roomLabel}`);
+			// P23.6 — no verbose success messaging (see PlanWorkspace).
+			setWallChainStatus('');
 			if (result.operation === 'wall-chain-commit' && result.roomIds.length > 0) {
 				selectLayoutRoom(layoutInteraction, result.roomIds[0]);
 			}
@@ -163,9 +163,8 @@
 			setWallChainStatus(`Wall rejected: unexpected commit result`);
 			return { success: false };
 		}
-		const roomLabel = result.roomIds.length > 0 ? ` + ${result.roomIds.length} room${result.roomIds.length === 1 ? '' : 's'}` : '';
-		const kindLabel = role === 'partition' ? 'partition' : 'wall';
-		setWallChainStatus(`Committed ${kindLabel}${roomLabel}`);
+		// P23.6 — the committed Wall on Plan is the confirmation; no counts.
+		setWallChainStatus('');
 		const effectiveRunStart = runStartBefore ?? result.startJunctionId;
 		const closedRun = role === 'boundary' && result.endJunctionId === effectiveRunStart;
 		return {

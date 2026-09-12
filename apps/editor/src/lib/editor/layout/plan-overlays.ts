@@ -1,4 +1,5 @@
 import type { LayoutRoom, LayoutVec2 } from '$lib/layout/layout-types';
+import { LAYOUT_PLAN_SNAP_RADIUS_CSS_PX } from '@portfolio/layout-core';
 import type { LayoutPreviewModel } from './layout-mesh-factory';
 import {
 	primitiveDraftFootprint,
@@ -32,6 +33,46 @@ const SNAP_MARKER_RADIUS_PX = 4;
 const ROTATION_HANDLE_OFFSET_PX = 28;
 const ROTATION_FEEDBACK_OFFSET_PX = 40;
 const DIMENSION_LABEL_OFFSET_PX = 5;
+
+/**
+ * P23.6 — wall-first Plan context for presentation-only projections. Every
+ * field derives from the live document/preview; nothing here is authored
+ * truth and nothing is persisted.
+ */
+export type PlanWallFirstContext = {
+	/** Canonical Junctions for edit-context handles. */
+	junctions: readonly { id: string; point: LayoutVec2 }[];
+	/**
+	 * Junctions to show when a Wall is selected (`null` = all). The viewport
+	 * focuses the selected Wall's endpoints so selection context stays quiet.
+	 */
+	junctionFocus: ReadonlySet<string> | null;
+	/** Room display names by compiled `roomId` (presentation of Room metadata). */
+	roomNames: ReadonlyMap<string, string>;
+	/** Resolved run-start Junction point for the closure cue (`null` when none). */
+	runStartPoint: LayoutVec2 | null;
+	/** Committed compiler issues with positioned targets for diagnostic markers. */
+	issues: readonly { code: string; message: string; targetId?: string; path?: string }[];
+};
+
+/** P23.6 — snap marker radius per winning family (screen-constant, zoom-stable). */
+export function snapMarkerRadiusPx(kind: string): number {
+	switch (kind) {
+		case 'junction':
+		case 'wall-intersection':
+			return 5;
+		case 'grid':
+			return 3;
+		default:
+			return SNAP_MARKER_RADIUS_PX;
+	}
+}
+
+/** P23.6 — legibility floors for persistent Room name labels. */
+export const ROOM_LABEL_MIN_AREA_M2 = 1;
+export const ROOM_LABEL_MIN_PX_PER_M = 6;
+/** P23.6 — Junction handles hide below this Plan scale (mirrors grid-minor culling). */
+export const JUNCTION_HANDLES_MIN_PX_PER_M = 6;
 
 function roomVertices(room: LayoutRoom): LayoutVec2[] {
 	return room.boundary.segments.map((segment) => [...segment.start] as LayoutVec2);
@@ -81,6 +122,8 @@ function toPlanSelection(selection: LayoutSelection): PlanSelection {
 			return { kind: 'wallOpening', wallId: selection.wallId, openingId: selection.openingId };
 		case 'physicalWall':
 			return { kind: 'physicalWall', wallId: selection.wallId };
+		case 'junction':
+			return { kind: 'junction', junctionId: selection.junctionId };
 	}
 }
 
@@ -327,7 +370,7 @@ export function withLayoutSnapFeedback(
 		kind: 'circle',
 		key: geometryId(['plan', 'snap-feedback', 'marker', candidate.sourceId]),
 		center: candidate.point,
-		radiusPx: SNAP_MARKER_RADIUS_PX,
+		radiusPx: snapMarkerRadiusPx(candidate.kind),
 		style: candidate.kind === 'grid' ? 'snap-marker-grid' : 'snap-marker'
 	});
 	return { ...projection, drafts: [...projection.drafts, ...primitives] };
@@ -428,7 +471,8 @@ function presetGhostPoints(interaction: LayoutInteractionState): LayoutVec2[] | 
 export function buildPlanInteractionProjection(
 	interaction: LayoutInteractionState,
 	rooms: readonly LayoutRoom[],
-	model: LayoutPreviewModel
+	model: LayoutPreviewModel,
+	wallFirst?: PlanWallFirstContext
 ): PlanInteractionProjection {
 	const selection: PlanRenderPrimitive[] = [];
 	const handles: PlanRenderPrimitive[] = [];
@@ -548,11 +592,40 @@ export function buildPlanInteractionProjection(
 
 	const draft = draftPolyline(interaction);
 	if (draft) {
+		// P23.6 — the pending candidate leg carries a live passive length
+		// readout (presentation only, never authored state), a run-closure cue
+		// when the cursor sits on the run's starting Junction, and an invalid
+		// treatment for the degenerate zero-length leg.
+		const chainLeg =
+			wallChainRoleForTool(interaction.tool) !== null &&
+			interaction.wallChainStart &&
+			interaction.wallChainCursor &&
+			draft.length === 2
+				? {
+						start: interaction.wallChainStart,
+						cursor: interaction.wallChainCursor,
+						length: Math.hypot(
+							interaction.wallChainCursor[0] - interaction.wallChainStart[0],
+							interaction.wallChainCursor[1] - interaction.wallChainStart[1]
+						)
+					}
+				: null;
+		const snapTolerance =
+			LAYOUT_PLAN_SNAP_RADIUS_CSS_PX / Math.max(interaction.planView.pixelsPerMeter, 1e-6);
+		const closing =
+			chainLeg !== null &&
+			wallFirst?.runStartPoint !== null &&
+			wallFirst?.runStartPoint !== undefined &&
+			Math.hypot(
+				chainLeg.cursor[0] - wallFirst.runStartPoint[0],
+				chainLeg.cursor[1] - wallFirst.runStartPoint[1]
+			) <= snapTolerance;
+		const degenerate = chainLeg !== null && !closing && chainLeg.length <= 1e-6;
 		drafts.push({
 			kind: 'polyline',
 			key: geometryId(['plan', 'overlay', 'draft-outline']),
 			points: draft,
-			style: draftStyle(interaction)
+			style: degenerate ? 'draft-outline-invalid' : draftStyle(interaction)
 		});
 		for (const [index, point] of draft.entries()) {
 			drafts.push({
@@ -562,6 +635,29 @@ export function buildPlanInteractionProjection(
 				radiusPx: 5,
 				style: 'draft-point'
 			});
+		}
+		if (chainLeg && !degenerate) {
+			const midpoint: LayoutVec2 = [
+				(chainLeg.start[0] + chainLeg.cursor[0]) / 2,
+				(chainLeg.start[1] + chainLeg.cursor[1]) / 2
+			];
+			labels.push({
+				kind: 'text',
+				key: geometryId(['plan', 'overlay', 'candidate-length']),
+				anchor: midpoint,
+				text: closing ? `Close · ${chainLeg.length.toFixed(2)} m` : `${chainLeg.length.toFixed(2)} m`,
+				offsetPx: [0, -DIMENSION_LABEL_OFFSET_PX],
+				style: 'dimension-label'
+			});
+			if (closing && wallFirst?.runStartPoint) {
+				drafts.push({
+					kind: 'circle',
+					key: geometryId(['plan', 'overlay', 'closure-cue']),
+					center: [...wallFirst.runStartPoint] as LayoutVec2,
+					radiusPx: 6,
+					style: 'snap-marker'
+				});
+			}
 		}
 	}
 
@@ -606,5 +702,118 @@ export function buildPlanInteractionProjection(
 				})
 		: [];
 
+	// P23.6 — canonical Junction handles: normally quiet, visible and
+	// interactive when tool/selection context requires them (chain sketching,
+	// or a Wall/Opening/Junction selected). Never global clutter: hidden below
+	// the Plan scale floor, and focused to the selected Wall's endpoints when
+	// a Wall selection owns the context.
+	if (wallFirst) {
+		const chainArmed = wallChainRoleForTool(interaction.tool) !== null;
+		const selection = interaction.selection;
+		const editContext =
+			chainArmed ||
+			selection.kind === 'physicalWall' ||
+			selection.kind === 'wallOpening' ||
+			selection.kind === 'junction';
+		if (editContext && interaction.planView.pixelsPerMeter >= JUNCTION_HANDLES_MIN_PX_PER_M) {
+			for (const junction of wallFirst.junctions) {
+				if (wallFirst.junctionFocus && !wallFirst.junctionFocus.has(junction.id)) continue;
+				handles.push({
+					kind: 'circle',
+					key: geometryId(['plan', 'overlay', 'junction-handle', junction.id]),
+					center: [...junction.point] as LayoutVec2,
+					radiusPx: 5,
+					style:
+						selection.kind === 'junction' && selection.junctionId === junction.id
+							? 'vertex-handle-selected'
+							: 'vertex-handle',
+					hit: { kind: 'junction', junctionId: junction.id }
+				});
+			}
+		}
+	}
+
+	// P23.6 — persistent Room names as presentation-only labels (never
+	// separately persisted annotations). Bounded density: only Rooms with a
+	// legible face area, hidden below the Plan scale floor. Lowest priority —
+	// the labels layer renders beneath selection/dimension feedback.
+	{
+		const legacyNames = new Map(rooms.map((room) => [room.id, room.name] as const));
+		for (const room of model.rooms) {
+			const name = wallFirst?.roomNames.get(room.roomId) ?? legacyNames.get(room.roomId) ?? room.roomId;
+			const polygon = room.floorPolygon;
+			if (polygon.length < 3) continue;
+			let twiceArea = 0;
+			for (let index = 0; index < polygon.length; index += 1) {
+				const current = polygon[index]!;
+				const next = polygon[(index + 1) % polygon.length]!;
+				twiceArea += current[0] * next[1] - next[0] * current[1];
+			}
+			if (Math.abs(twiceArea) / 2 < ROOM_LABEL_MIN_AREA_M2) continue;
+			if (interaction.planView.pixelsPerMeter < ROOM_LABEL_MIN_PX_PER_M) continue;
+			let x = 0;
+			let z = 0;
+			for (const point of polygon) {
+				x += point[0];
+				z += point[1];
+			}
+			labels.push({
+				kind: 'text',
+				key: geometryId(['plan', 'overlay', 'room-name', room.roomId]),
+				anchor: [x / polygon.length, z / polygon.length],
+				text: name,
+				style: 'room-name'
+			});
+		}
+	}
+
+	// P23.6 — committed topology/geometry diagnostics as Plan markers (state,
+	// not transient preview). Positioned from the affected source Wall/Room;
+	// the concise reason lives in the Inspector topology section. Issues
+	// without a resolvable target keep their count only — never a guess.
+	if (wallFirst) {
+		for (const issue of wallFirst.issues) {
+			const point = diagnosticPoint(model, issue.targetId);
+			if (!point) continue;
+			handles.push({
+				kind: 'circle',
+				key: geometryId(['plan', 'overlay', 'diagnostic', issue.code, issue.targetId ?? 'document']),
+				center: point,
+				radiusPx: 6,
+				style: 'layout-diagnostic'
+			});
+		}
+	}
+
 	return { selected: toPlanSelection(interaction.selection), selection, handles, drafts, labels, roomOverrides, objectOverrides };
+}
+
+/**
+ * P23.6 — resolve a diagnostic target to a Plan point: Walls (and hosted
+ * Openings via their Wall) read the canonical span midpoint, Rooms read
+ * their floor centroid. `undefined` when the target is absent or unmapped.
+ */
+function diagnosticPoint(
+	model: LayoutPreviewModel,
+	targetId: string | undefined
+): LayoutVec2 | null {
+	if (!targetId) return null;
+	let wallId = targetId;
+	const openingSpan = model.queries.spans.find(
+		(span) => span.kind === 'opening' && span.openingId === targetId
+	);
+	if (openingSpan) wallId = openingSpan.wallKey ?? openingSpan.segmentId;
+	const span = physicalWallSpan(model, wallId);
+	if (span) return [(span.start[0] + span.end[0]) / 2, (span.start[1] + span.end[1]) / 2];
+	const room = model.rooms.find((candidate) => candidate.roomId === targetId);
+	if (room && room.floorPolygon.length > 0) {
+		let x = 0;
+		let z = 0;
+		for (const point of room.floorPolygon) {
+			x += point[0];
+			z += point[1];
+		}
+		return [x / room.floorPolygon.length, z / room.floorPolygon.length];
+	}
+	return null;
 }

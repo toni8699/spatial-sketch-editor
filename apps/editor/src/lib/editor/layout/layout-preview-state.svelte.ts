@@ -28,6 +28,7 @@ import {
 	planExactLayoutObjectTransform,
 	planExactRectangleDimensions,
 	planExactWallAngle,
+	planExactWallHeight,
 	planExactWallLength,
 	planExactWallThickness,
 	planWallSubdivision,
@@ -37,6 +38,10 @@ import {
 	type PrecisionOperation,
 	type PrecisionPlan
 } from '$lib/layout/layout-wall-first-precision';
+import {
+	planWallRoleChange,
+	type LayoutWallRole as WallRoleChangeRole
+} from '$lib/layout/layout-wall-topology-ops';
 import type { NodingIdAllocator } from '$lib/layout/layout-wall-noding';
 import { planWallChain, planWallSegment, type LayoutWallRole as ChainWallRole } from '$lib/layout/layout-wall-chain';
 import { deleteInteriorAnchorOnSegment, insertInteriorAnchorOnSegment, pointInRoom, replaceRoomPoints, updateInteriorAnchorOnSegment } from './layout-editing';
@@ -1018,6 +1023,36 @@ export function updateWallFirstWallThickness(
 	const layout = wallFirstLayoutOrError(state);
 	if (!layout) return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
 	return applyWallFirstPrecisionPlan(state, planExactWallThickness(layout, wallId, thickness));
+}
+
+export function updateWallFirstWallHeight(
+	state: LayoutPreviewState,
+	wallId: string,
+	height: number
+): WallFirstPrecisionMutationResult {
+	const layout = wallFirstLayoutOrError(state);
+	if (!layout) return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
+	return applyWallFirstPrecisionPlan(state, planExactWallHeight(layout, wallId, height));
+}
+
+/**
+ * P23.6 — commit one canonical Wall role change as one Layout history entry.
+ * The planner runs face extraction + P23.8 correspondence reconciliation +
+ * the final gates; a rejection leaves the document and history untouched.
+ */
+export function commitWallRoleChange(
+	state: LayoutPreviewState,
+	wallId: string,
+	role: WallRoleChangeRole
+): WallFirstPrecisionMutationResult {
+	const layout = wallFirstLayoutOrError(state);
+	if (!layout) return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
+	const plan = planWallRoleChange(layout, wallId, role);
+	if (plan.kind === 'rejected') {
+		state.lastMutationMessage = plan.rejection.message;
+		return { success: false, message: plan.rejection.message };
+	}
+	return applyWallFirstDocumentPlan(state, plan.document, 'wall-role');
 }
 
 export function subdivideWallFirstWall(

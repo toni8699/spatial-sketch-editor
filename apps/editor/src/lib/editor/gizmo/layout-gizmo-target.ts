@@ -357,9 +357,10 @@ export function resolveLayoutGizmoTarget(
 			return resolveObject(layout, geometry, selection);
 		// P23.3 canonical wall-first Opening selection has no legacy Room-owned
 		// gizmo candidate (the wall-first gizmo adapter is a deferred cutover).
-		// P23.6 canonical Wall selection has none either, for the same reason.
+		// P23.6 canonical Wall/Junction selections have none either.
 		case 'wallOpening':
 		case 'physicalWall':
+		case 'junction':
 			return null;
 	}
 }

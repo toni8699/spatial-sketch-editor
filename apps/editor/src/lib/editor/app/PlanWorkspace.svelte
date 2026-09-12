@@ -103,8 +103,9 @@
 		}
 		const result = outcome.result;
 		if (result.success) {
-			const roomLabel = result.operation === 'wall-chain-commit' && result.roomIds.length > 0 ? ` + ${result.roomIds.length} room${result.roomIds.length === 1 ? '' : 's'}` : '';
-			setWallChainStatus(`Committed ${result.operation === 'wall-chain-commit' ? result.wallIds.length : 0} walls${roomLabel}`);
+			// P23.6 — no verbose success messaging: the born geometry/Room on
+			// Plan is the confirmation. Rejections still message below.
+			setWallChainStatus('');
 			// Bounded tools are atomic (not continuous runs): a birth may
 			// select through the existing authority.
 			if (result.operation === 'wall-chain-commit' && result.roomIds.length > 0) {
@@ -146,9 +147,8 @@
 			setWallChainStatus(`Wall rejected: unexpected commit result`);
 			return { success: false };
 		}
-		const roomLabel = result.roomIds.length > 0 ? ` + ${result.roomIds.length} room${result.roomIds.length === 1 ? '' : 's'}` : '';
-		const kindLabel = role === 'partition' ? 'partition' : 'wall';
-		setWallChainStatus(`Committed ${kindLabel}${roomLabel}`);
+		// P23.6 — the committed Wall on Plan is the confirmation; no counts.
+		setWallChainStatus('');
 		// Closure: boundary runs end when the final endpoint resolves to the
 		// canonical run-start Junction. Partitions end via Escape only.
 		const effectiveRunStart = runStartBefore ?? result.startJunctionId;

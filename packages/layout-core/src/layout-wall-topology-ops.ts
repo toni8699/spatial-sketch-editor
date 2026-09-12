@@ -25,7 +25,8 @@
 import type {
 	LayoutDocumentWallFirst,
 	LayoutWall,
-	LayoutWallFirstRoom
+	LayoutWallFirstRoom,
+	LayoutWallRole
 } from './layout-wall-first-types';
 import { validateWallFirstLayoutDocument } from './layout-wall-first-codec';
 import { compileWallFirstLayoutGeometry } from './layout-geometry';
@@ -35,7 +36,10 @@ import {
 	type TopologyDiagnostic
 } from './layout-face-extraction';
 import {
+	buildCorrespondenceComponents,
+	interiorWitness,
 	reconcileRooms,
+	roomBoundaryPolygon,
 	ROOM_CREATION_DEFAULTS,
 	type ComponentLineage,
 	type RoomIdAllocator
@@ -78,6 +82,9 @@ function allocateId(taken: ReadonlySet<string>, seed: string): string {
 
 /** Why a canonical birth operation rejected; stable machine codes. */
 export type WallFirstOpRejectionCode =
+	| 'unknown_wall'
+	| 'invalid_role'
+	| 'no_op'
 	| 'no_boundary_walls'
 	| 'no_enclosed_face'
 	| 'room_reconciliation_rejected'
@@ -311,6 +318,119 @@ export function planPartitionToBoundaryRoomBirth(options: {
 		allocator,
 		reject: (rejection) => ({ kind: 'rejected', rejection })
 	});
+}
+
+/**
+ * P23.6 — single-Wall role change through the canonical topology path.
+ *
+ * Flipping `role` is a topology-changing operation (P23.8 "Boundary versus
+ * Partition"), never a direct field assignment: the candidate runs face
+ * extraction + P23.8 correspondence reconciliation + the final canonical
+ * gates, exactly like the chain engine. Typical outcomes:
+ *
+ * - boundary → partition: the physical Wall remains; affected Room topology
+ *   reconciles canonically (faces that no longer close retire their Rooms);
+ * - partition → boundary: supported topology births/splits Rooms through the
+ *   same reconciliation; without a closed face the Wall simply flips role.
+ *
+ * Openings stay hosted on the physical Wall in both directions; portal Room
+ * references remap or reject inside reconciliation. One plan = one history
+ * entry at the caller. Invalid intent → no document.
+ */
+export function planWallRoleChange(
+	document: LayoutDocumentWallFirst,
+	wallId: string,
+	role: LayoutWallRole
+): WallFirstOpPlan {
+	const reject = (rejection: WallFirstOpRejection): WallFirstOpPlan => ({ kind: 'rejected', rejection });
+	const wall = document.walls.find((candidate) => candidate.id === wallId);
+	if (!wall) {
+		return reject({
+			code: 'unknown_wall',
+			message: `Unknown wall '${wallId}'`,
+			wallIds: [wallId]
+		});
+	}
+	if (role !== 'boundary' && role !== 'partition') {
+		return reject({
+			code: 'invalid_role',
+			message: `Wall role must be 'boundary' or 'partition'`,
+			wallIds: [wallId]
+		});
+	}
+	if (wall.role === role) {
+		return reject({
+			code: 'no_op',
+			message: `Wall '${wallId}' already ${role === 'boundary' ? 'defines a room boundary' : 'does not divide rooms'}`,
+			wallIds: [wallId]
+		});
+	}
+
+	const candidate: LayoutDocumentWallFirst = {
+		...document,
+		walls: document.walls.map((entry) => (entry.id === wallId ? { ...entry, role } : entry))
+	};
+
+	// --- room reconciliation (both directions) --------------------------------
+	// Same correspondence as the chain engine: predecessor polygons/witnesses
+	// come from the BASELINE rooms, components join predecessor rooms with
+	// candidate faces, and reconcileRooms owns birth/preservation/retirement.
+	let lineage: Array<{ faceKey: string; roomId: string; kind: 'created' }> = [];
+	let retiredRoomIds: readonly string[] = [];
+	const extraction = extractBoundaryCandidateFaces(candidate);
+	if (extraction.faces.length > 0 || document.rooms.length > 0) {
+		const predecessorPolygons = new Map<string, readonly LayoutVec2[]>();
+		const predecessorWitnesses = new Map<string, LayoutVec2>();
+		for (const room of document.rooms) {
+			const polygon = roomBoundaryPolygon(document, room.id);
+			if (!polygon) {
+				return reject({
+					code: 'room_reconciliation_rejected',
+					message: `Predecessor room '${room.id}' has an unresolvable boundary`,
+					roomIds: [room.id]
+				});
+			}
+			predecessorPolygons.set(room.id, polygon);
+			predecessorWitnesses.set(room.id, interiorWitness(polygon));
+		}
+		const components = buildCorrespondenceComponents(
+			extraction.faces,
+			document.rooms.map((room) => room.id),
+			predecessorWitnesses,
+			predecessorPolygons
+		);
+		const result = reconcileRooms({
+			baseline: document,
+			candidateDocument: candidate,
+			extraction,
+			components,
+			predecessorWitnesses,
+			predecessorPolygons,
+			allocator: createAuthoringRoomAllocator()
+		});
+		if ('rejection' in result) {
+			return reject({
+				code: 'room_reconciliation_rejected',
+				message: result.rejection.message,
+				...(result.rejection.roomIds ? { roomIds: result.rejection.roomIds } : {}),
+				...(result.rejection.faceKey ? { faceKey: result.rejection.faceKey } : {})
+			});
+		}
+		candidate.rooms = result.document.rooms;
+		candidate.objects = result.document.objects;
+		candidate.openings = result.document.openings;
+		lineage = result.lineage
+			.filter((record) => record.kind === 'created')
+			.map((record) => ({ faceKey: record.faceKey, roomId: record.roomId, kind: 'created' as const }));
+		retiredRoomIds = [...result.retiredRoomIds];
+	}
+
+	return validateAndCompile(candidate, reject, (committed) => ({
+		kind: 'success',
+		document: committed,
+		lineage,
+		retiredRoomIds
+	}));
 }
 
 /**

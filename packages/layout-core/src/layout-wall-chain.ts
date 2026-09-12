@@ -35,13 +35,14 @@ import { compileWallFirstLayoutGeometry } from './layout-geometry';
 import { hasBlockingLayoutIssues } from './layout-geometry-validation';
 import {
 	extractBoundaryCandidateFaces,
-	pointStrictlyInsidePolygon,
-	polygonIntersectionArea,
 	type DerivedCandidateFace,
 	type TopologyDiagnostic
 } from './layout-face-extraction';
 import {
+	buildCorrespondenceComponents,
+	interiorWitness,
 	reconcileRooms,
+	roomBoundaryPolygon,
 	type ComponentLineage
 } from './layout-room-reconciliation';
 import { createAuthoringRoomAllocator } from './layout-wall-topology-ops';
@@ -603,72 +604,6 @@ function validateChainTopology(document: LayoutDocumentWallFirst): WallChainReje
 }
 
 /** Oriented boundary polygon of a wall-first room (junction traversal order). */
-function roomBoundaryPolygon(
-	document: LayoutDocumentWallFirst,
-	roomId: string
-): readonly LayoutVec2[] | null {
-	const room = document.rooms.find((candidate) => candidate.id === roomId);
-	if (!room || room.boundary.length < 3) return null;
-	const junctionById = new Map(document.junctions.map((junction) => [junction.id, junction]));
-	const wallById = new Map(document.walls.map((wall) => [wall.id, wall]));
-	const polygon: LayoutVec2[] = [];
-	for (const ref of room.boundary) {
-		const wall = wallById.get(ref.wallId);
-		if (!wall) return null;
-		const start = junctionById.get(ref.direction === 'forward' ? wall.startJunctionId : wall.endJunctionId);
-		const end = junctionById.get(ref.direction === 'forward' ? wall.endJunctionId : wall.startJunctionId);
-		if (!start || !end) return null;
-		polygon.push([...start.point] as LayoutVec2);
-	}
-	return polygon;
-}
-
-/**
- * Deterministic interior witness for a predecessor room. The raw centroid can
- * land exactly ON a candidate divider (symmetric splits), where strict
- * containment is false for both faces and the correspondence degenerates.
- * Nudge by an infinitesimal diagonal from the centroid toward the polygon's
- * first vertex — order-independent enough for correspondence, and only used
- * as evidence (never persisted).
- */
-function interiorWitness(polygon: readonly LayoutVec2[]): LayoutVec2 {
-	const centroid = polygonCentroid(polygon);
-	for (const epsilon of [1e-9, 1e-7, 1e-5, 1e-3]) {
-		for (const [dx, dz] of [
-			[epsilon, epsilon],
-			[-epsilon, epsilon],
-			[epsilon, -epsilon],
-			[-epsilon, -epsilon]
-		] as const) {
-			const candidate: LayoutVec2 = [centroid[0] + dx, centroid[1] + dz];
-			if (pointStrictlyInsidePolygon(polygon, candidate)) return candidate;
-		}
-	}
-	return centroid;
-}
-
-/** Signed-area polygon centroid (falls back to the vertex mean when degenerate). */
-function polygonCentroid(points: readonly LayoutVec2[]): LayoutVec2 {
-	let twiceArea = 0;
-	let x = 0;
-	let z = 0;
-	for (let index = 0; index < points.length; index += 1) {
-		const current = points[index]!;
-		const next = points[(index + 1) % points.length]!;
-		const cross = current[0] * next[1] - next[0] * current[1];
-		twiceArea += cross;
-		x += (current[0] + next[0]) * cross;
-		z += (current[1] + next[1]) * cross;
-	}
-	if (Math.abs(twiceArea) <= 1e-12) {
-		return [
-			points.reduce((sum, point) => sum + point[0], 0) / points.length,
-			points.reduce((sum, point) => sum + point[1], 0) / points.length
-		];
-	}
-	return [x / (3 * twiceArea), z / (3 * twiceArea)];
-}
-
 /** Adapt the chain allocator to the noding allocator contract. */
 function nodingAllocatorAdapter(allocator: WallChainIdAllocator, document: LayoutDocumentWallFirst): NodingIdAllocator {
 	return {
@@ -679,71 +614,6 @@ function nodingAllocatorAdapter(allocator: WallChainIdAllocator, document: Layou
 			return allocator.nextJunctionId(new Set(baseDocument.junctions.map((junction) => junction.id)), seed);
 		}
 	};
-}
-
-/**
- * True P23.8 correspondence components: connected components of the
- * bipartite predecessor-Room ↔ candidate-face graph. An edge exists when the
- * predecessor witness lies strictly inside the face or the predecessor
- * polygon overlaps the face with positive area. Faces with no predecessor
- * form independent 0→1 birth components. Groups are sorted deterministically
- * by their smallest face key.
- */
-function buildCorrespondenceComponents(
-	faces: readonly DerivedCandidateFace[],
-	predecessorRoomIds: readonly string[],
-	predecessorWitnesses: ReadonlyMap<string, LayoutVec2>,
-	predecessorPolygons: ReadonlyMap<string, readonly LayoutVec2[]>
-): ComponentLineage[] {
-	const faceCount = faces.length;
-	const predecessorCount = predecessorRoomIds.length;
-	const parent = Array.from({ length: predecessorCount + faceCount }, (_, index) => index);
-	const find = (value: number): number => {
-		let root = value;
-		while (parent[root] !== root) root = parent[root]!;
-		while (parent[value] !== root) {
-			const next = parent[value]!;
-			parent[value] = root;
-			value = next;
-		}
-		return root;
-	};
-	const union = (a: number, b: number): void => {
-		const rootA = find(a);
-		const rootB = find(b);
-		if (rootA !== rootB) parent[rootB] = rootA;
-	};
-	faces.forEach((face, faceIndex) => {
-		predecessorRoomIds.forEach((roomId, predIndex) => {
-			const witness = predecessorWitnesses.get(roomId);
-			const polygon = predecessorPolygons.get(roomId);
-			const inside = witness !== undefined && pointStrictlyInsidePolygon(face.polygon, witness);
-			const overlap = polygon !== undefined && polygonIntersectionArea(polygon, face.polygon) > 1e-9;
-			if (inside || overlap) union(predIndex, predecessorCount + faceIndex);
-		});
-	});
-	const groups = new Map<number, { faces: string[]; predecessors: string[] }>();
-	faces.forEach((face, faceIndex) => {
-		const root = find(predecessorCount + faceIndex);
-		let group = groups.get(root);
-		if (!group) {
-			group = { faces: [], predecessors: [] };
-			groups.set(root, group);
-		}
-		group.faces.push(face.key);
-	});
-	predecessorRoomIds.forEach((roomId, predIndex) => {
-		const root = find(predIndex);
-		const group = groups.get(root);
-		if (!group) return;
-		group.predecessors.push(roomId);
-	});
-	return [...groups.values()]
-		.map((group) => ({
-			candidateFaceKeys: [...group.faces].sort(),
-			predecessorRoomIds: [...group.predecessors].sort()
-		}))
-		.sort((a, b) => (a.candidateFaceKeys[0]! < b.candidateFaceKeys[0]! ? -1 : 1));
 }
 
 /**

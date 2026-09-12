@@ -25,11 +25,11 @@
 		clearLayoutDraft,
 		clearLayoutSelection,
 		hasWallChainRun,
-		resolveWallChainEndpointAtLength,
 		restoreWallChainRun,
 		beginLayoutWallOpeningDrag,
 		cancelLayoutWallOpeningDrag,
 		selectLayoutInteriorAnchor,
+		selectLayoutJunction,
 		selectLayoutObject,
 		selectLayoutOpening,
 		selectLayoutPhysicalWall,
@@ -320,7 +320,39 @@
 			: interaction.polygonPoints
 	);
 	const rooms = $derived('floors' in preview.project.layout ? preview.project.layout.floors.flatMap((floor) => floor.rooms) : []);
-	const baseInteractionProjection = $derived(buildPlanInteractionProjection(interaction, rooms, model));
+	// P23.6 — wall-first presentation context (Junction handles, Room names,
+	// run-closure cue, diagnostic markers). Derived from the live document;
+	// nothing here is authored truth.
+	const wallFirstContext = $derived.by(() => {
+		const layout = preview.project.layout;
+		if (!('formatVersion' in layout)) return undefined;
+		const document = layout as unknown as {
+			junctions: { id: string; point: LayoutVec2 }[];
+			walls: { id: string; startJunctionId: string; endJunctionId: string }[];
+			rooms: { id: string; name: string }[];
+		};
+		const selection = interaction.selection;
+		let junctionFocus: Set<string> | null = null;
+		if (selection.kind === 'physicalWall' || selection.kind === 'wallOpening') {
+			const wall = document.walls.find((candidate) => candidate.id === selection.wallId);
+			junctionFocus = new Set(wall ? [wall.startJunctionId, wall.endJunctionId] : []);
+		}
+		return {
+			junctions: document.junctions.map((junction) => ({
+				id: junction.id,
+				point: [...junction.point] as LayoutVec2
+			})),
+			junctionFocus,
+			roomNames: new Map(document.rooms.map((room) => [room.id, room.name] as const)),
+			runStartPoint: interaction.wallChainRunStartJunctionId
+				? resolveJunctionPoint(interaction.wallChainRunStartJunctionId)
+				: null,
+			issues: preview.issues
+		};
+	});
+	const baseInteractionProjection = $derived(
+		buildPlanInteractionProjection(interaction, rooms, model, wallFirstContext)
+	);
 	const cameraProjection = $derived.by(() => {
 		if (interaction.planViewMode !== 'layout' || !interaction.planView.showTourOverlay) return undefined;
 		try {
@@ -1503,6 +1535,13 @@
 			}
 			return;
 		}
+		if (target.kind === 'wallEndpoint') {
+			// P23.6 — canonical Junction select: endpoint identity resolves
+			// through the wall-first document (same selection authority).
+			const junctionId = wallEndpointJunctionId(target.wallId, target.endpoint);
+			if (junctionId) selectLayoutJunction(interaction, junctionId);
+			return;
+		}
 		if (target.kind === 'interiorAnchor') {
 			if (!onLayoutTransactionBegin()) return;
 			beginInteriorAnchorDrag(event, target.roomId, target.segmentId, target.anchorId);
@@ -2117,49 +2156,21 @@
 		return junction ? ([...junction.point] as LayoutVec2) : null;
 	}
 
+	/** P23.6 — map a canonical Wall endpoint to its Junction ID (click-select). */
+	function wallEndpointJunctionId(wallId: string, endpoint: 0 | 1): string | null {
+		const layout = preview.project.layout;
+		if (!('formatVersion' in layout)) return null;
+		const wallFirst = layout as unknown as {
+			walls: { id: string; startJunctionId: string; endJunctionId: string }[];
+		};
+		const wall = wallFirst.walls.find((candidate) => candidate.id === wallId);
+		if (!wall) return null;
+		return endpoint === 0 ? wall.startJunctionId : wall.endJunctionId;
+	}
+
 	function finishPolygon() {
 		if (interaction.polygonPoints.length < 3) return;
 		if (onCommit([...interaction.polygonPoints])) clearLayoutDraft(interaction);
-	}
-
-	/**
-	 * P23.9 segment-first — exact length resolves the current candidate
-	 * endpoint (bypasses gesture grid snapping), commits exactly one segment
-	 * transaction, and makes the canonical end Junction the next start.
-	 */
-	let chainLengthDraft = $state('');
-
-	function addChainLengthLeg(event: SubmitEvent) {
-		event.preventDefault();
-		const length = Number(chainLengthDraft);
-		if (!chainLengthDraft.trim() || !Number.isFinite(length) || length <= 0) return;
-		if (!hasWallChainRun(interaction)) return;
-		const endpoint = resolveWallChainEndpointAtLength(interaction, length);
-		if (!endpoint) return;
-		const start = interaction.wallChainStart!;
-		const savedRun = captureWallChainRun(interaction);
-		const result = onWallSegmentCommit([...start], [...endpoint]);
-		if (!result.success) {
-			if (savedRun) restoreWallChainRun(interaction, savedRun);
-			draftedVersion = preview.previewVersion;
-			return;
-		}
-		if (result.startJunctionId === undefined || result.endJunctionId === undefined) {
-			cancelWallChainRun(interaction);
-			return;
-		}
-		chainLengthDraft = '';
-		const endPoint = resolveJunctionPoint(result.endJunctionId) ?? [...endpoint];
-		if (result.closedRun) {
-			cancelWallChainRun(interaction);
-		} else {
-			advanceWallChainContinuation(interaction, {
-				endPoint,
-				endJunctionId: result.endJunctionId,
-				startJunctionId: result.startJunctionId
-			});
-		}
-		draftedVersion = preview.previewVersion;
 	}
 
 	function onWheel(event: WheelEvent) {
@@ -2421,22 +2432,6 @@
 		<p class="plan-status" role="status">{preview.statusMessage}</p>
 	{/if}
 	<div class="plan-actions">
-		{#if wallChainRoleForTool(interaction.tool) !== null && hasWallChainRun(interaction)}
-			<form class="chain-length" onsubmit={addChainLengthLeg}>
-				<label for="plan-chain-length">Length</label>
-				<input
-					id="plan-chain-length"
-					type="number"
-					min="0.01"
-					step="0.01"
-					placeholder="m"
-					aria-label="Exact current segment length in meters"
-					value={chainLengthDraft}
-					oninput={(event) => (chainLengthDraft = event.currentTarget.value)}
-				/>
-				<button type="submit">Commit segment</button>
-			</form>
-		{/if}
 		{#if interaction.tool === 'polygon' && interaction.polygonPoints.length >= 3}
 			<button type="button" onclick={finishPolygon}>Finish polygon</button>
 		{/if}
@@ -2457,6 +2452,8 @@
 	.plan-viewport { position: absolute; inset: 0; z-index: 3; background: var(--editor-bg-app); }
 	/* P3.2 §9 — the plan is a bright drafting surface against the dark shell. */
 	.plan-canvas { display: block; position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; outline: none; background: var(--editor-plan-canvas-bg); }
+	/* P23.6 — keyboard focus stays visible on the drafting surface. */
+	.plan-canvas:focus-visible { outline: 2px solid var(--editor-plan-selection); outline-offset: -2px; }
 	.plan-canvas.rotation-handle-hover { cursor: grab; }
 	.plan-canvas.staging-rotation-handle-hover { cursor: grab; }
 	.plan-canvas.object-rotation-handle-hover { cursor: grab; }
@@ -2474,8 +2471,6 @@
 	.plan-actions { position: absolute; right: 0.8rem; bottom: 0.8rem; z-index: 10; display: flex; gap: 0.4rem; pointer-events: auto; }
 	.plan-actions button { padding: 0.44rem 0.6rem; border: 1px solid var(--editor-accent-border); border-radius: 0.32rem; background: var(--editor-bg-selected); color: var(--editor-text-primary); font: 600 0.7rem/1 var(--editor-font); cursor: pointer; }
 	.plan-actions button.secondary { border-color: var(--editor-border-normal); background: var(--editor-bg-panel-raised); color: var(--editor-text-secondary); }
-	.chain-length { display: flex; align-items: center; gap: 0.3rem; margin: 0; padding: 0 0.35rem; border: 1px solid var(--editor-border-normal); border-radius: 0.32rem; background: var(--editor-bg-panel-raised); color: var(--editor-text-secondary); font: 600 0.7rem/1 var(--editor-font); }
-	.chain-length input { width: 4.2rem; padding: 0.3rem 0.25rem; border: 1px solid var(--editor-border-normal); border-radius: 0.25rem; background: var(--editor-bg-input, var(--editor-bg-panel-raised)); color: var(--editor-text-primary); font: 600 0.7rem/1 var(--editor-font); }
 	.plan-meta { position: absolute; left: 0.8rem; bottom: 0.8rem; z-index: 2; display: flex; gap: 0.7rem; color: var(--editor-plan-muted); font: 0.68rem/1 var(--editor-font); pointer-events: none; }
 	.plan-meta .warning { color: var(--editor-danger-fg); }
 	@media (max-width: 44rem) {
