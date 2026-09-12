@@ -137,8 +137,16 @@
 	// room that never exists in a boot-empty editor project. Trim the slot to live
 	// layout room ids on model build (write only when it differs) so the first
 	// drafted room starts collapsed and toggles stay in sync with the registry.
+	// P23.6 — wall-first Rooms live in `wallFirstRooms`, not `rooms`: trimming
+	// to legacy ids alone evicts every canonical Room id, which ping-pongs
+	// against the pick-expand effect below (append → trim → append) until
+	// `effect_update_depth_exceeded` freezes the page on the first wall-first
+	// Room birth.
 	$effect(() => {
-		const liveRoomIds = new Set(model.rooms.map((room) => room.roomId));
+		const liveRoomIds = new Set([
+			...model.rooms.map((room) => room.roomId),
+			...model.wallFirstRooms.map((room) => room.roomId)
+		]);
 		const current = store.treeExpandedRoomIds;
 		if (current.some((id) => !liveRoomIds.has(id))) {
 			store.treeExpandedRoomIds = current.filter((id) => liveRoomIds.has(id));

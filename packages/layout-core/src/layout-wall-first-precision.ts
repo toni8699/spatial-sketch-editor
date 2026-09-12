@@ -74,6 +74,7 @@ export type PrecisionOperation =
 	| 'wall-length'
 	| 'wall-angle'
 	| 'wall-thickness'
+	| 'wall-role'
 	| 'wall-subdivision'
 	| 'rectangle-dimensions'
 	| 'layout-object-transform'

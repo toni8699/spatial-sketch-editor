@@ -169,11 +169,15 @@ describe('P3 structural visual contracts', () => {
 		expect(store).toContain('EDITOR_TIMELINE_DEFAULT_HEIGHT = 288');
 	});
 
-	it('renders architectural wall, window, and door primitives in the shared Plan SVG', () => {
+	it('renders architectural wall, window, and neutral door primitives in the shared Plan SVG', () => {
 		const plan = readLibSource('editor/layout/PlanSvg.svelte');
 
-		for (const primitive of ['wall-casing', 'window-frame', 'door-leaf', 'door-swing']) {
+		for (const primitive of ['wall-casing', 'window-frame', 'door-threshold']) {
 			expect(plan).toContain(primitive);
+		}
+		// P23.6 — no invented hinge/swing semantics: leaf and swing are gone.
+		for (const primitive of ['door-leaf', 'door-swing']) {
+			expect(plan).not.toContain(primitive);
 		}
 	});
 

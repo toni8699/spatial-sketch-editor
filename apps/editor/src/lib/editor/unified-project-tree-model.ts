@@ -506,7 +506,10 @@ export function layoutSelectionAncestorRoomId(
 				layout.objects.find((object) => object.id === selection.objectId)?.roomId ?? null
 			);
 		// P23.3 canonical wall-first Opening selection has no Room ancestor.
+		// P23.6 canonical Wall/Junction selections have none either.
 		case 'wallOpening':
+		case 'physicalWall':
+		case 'junction':
 		case 'none':
 			return null;
 	}

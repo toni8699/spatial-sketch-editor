@@ -154,11 +154,22 @@ export type LayoutSelection =
 	/**
 	 * P23.3 — canonical wall-first opening target on the same selection
 	 * authority: document-global `wallId` + `openingId`, no `roomId` and no
-	 * `segmentId`. Legacy opening selection keeps its room-anchored shape; the
-	 * full `(roomId, segmentId)` → `(wallId/junctionId)` cutover stays deferred
-	 * (P23.6/P23.7), so this is deliberately the only wall-first slot.
+	 * `segmentId`. Legacy opening selection keeps its room-anchored shape.
 	 */
-	| { kind: 'wallOpening'; wallId: string; openingId: string };
+	| { kind: 'wallOpening'; wallId: string; openingId: string }
+	/**
+	 * P23.6 — canonical wall-first Wall target on the same selection
+	 * authority: document-global `wallId`, no `roomId` and no `segmentId`.
+	 * Never a faked room-anchored `wall` hit. Junction selection and the full
+	 * legacy `(roomId, segmentId)` retirement stay deferred to P23.7.
+	 */
+	| { kind: 'physicalWall'; wallId: string }
+	/**
+	 * P23.6 — canonical wall-first Junction target on the same selection
+	 * authority: document-global `junctionId`. Click-select only (exact moves
+	 * stay in the Inspector); never a second store.
+	 */
+	| { kind: 'junction'; junctionId: string };
 
 /** P23.3 — which part of a canonical Opening a drag gesture is moving. */
 export type LayoutWallOpeningDragMode = 'body' | 'start-edge' | 'end-edge';
@@ -815,6 +826,24 @@ export function selectLayoutWallOpening(
 	cancelRoomEdit(state);
 }
 
+/**
+ * P23.6 — select one canonical wall-first Wall by document-global `wallId` on
+ * the existing selection authority (no second store, no fake `roomId`).
+ */
+export function selectLayoutPhysicalWall(state: LayoutInteractionState, wallId: string): void {
+	state.selection = { kind: 'physicalWall', wallId };
+	cancelRoomEdit(state);
+}
+
+/**
+ * P23.6 — select one canonical wall-first Junction by document-global
+ * `junctionId` on the existing selection authority.
+ */
+export function selectLayoutJunction(state: LayoutInteractionState, junctionId: string): void {
+	state.selection = { kind: 'junction', junctionId };
+	cancelRoomEdit(state);
+}
+
 export function clearLayoutSelection(state: LayoutInteractionState): void {
 	state.selection = { kind: 'none' };
 	cancelRoomEdit(state);
@@ -828,7 +857,9 @@ export function selectLayoutObject(state: LayoutInteractionState, objectId: stri
 export function selectedLayoutRoomId(state: Pick<LayoutInteractionState, 'selection'>): string | null {
 	return state.selection.kind === 'none' ||
 		state.selection.kind === 'object' ||
-		state.selection.kind === 'wallOpening'
+		state.selection.kind === 'wallOpening' ||
+		state.selection.kind === 'physicalWall' ||
+		state.selection.kind === 'junction'
 		? null
 		: state.selection.roomId;
 }
@@ -840,6 +871,20 @@ export function selectedLayoutWallOpening(
 	return state.selection.kind === 'wallOpening'
 		? { wallId: state.selection.wallId, openingId: state.selection.openingId }
 		: null;
+}
+
+/** P23.6 — the canonical wall-first Wall selection, or `null`. */
+export function selectedLayoutPhysicalWall(
+	state: Pick<LayoutInteractionState, 'selection'>
+): { wallId: string } | null {
+	return state.selection.kind === 'physicalWall' ? { wallId: state.selection.wallId } : null;
+}
+
+/** P23.6 — the canonical wall-first Junction selection, or `null`. */
+export function selectedLayoutJunction(
+	state: Pick<LayoutInteractionState, 'selection'>
+): { junctionId: string } | null {
+	return state.selection.kind === 'junction' ? { junctionId: state.selection.junctionId } : null;
 }
 
 export function beginLayoutObjectDrag(
@@ -1091,17 +1136,37 @@ export function reconcileLayoutSelection(
 	// Wall-first documents have no `.floors`. The minimal P23.3 canonical
 	// opening target survives when its own `(wallId, openingId)` record still
 	// exists and the touch-drag invariant holds: an Opening that survives a
-	// topology edit keeps its ID, so selection needs no re-derivation. Every
-	// other legacy target clears (the `(roomId, segmentId)` cutover is
-	// deferred); nothing here invents a roomless-wall rich selection.
+	// topology edit keeps its ID, so selection needs no re-derivation. P23.6
+	// adds the canonical Wall target with the same rule: it survives while its
+	// Wall record exists. Every other legacy target clears (the remaining
+	// `(roomId, segmentId)` retirement is deferred); nothing here invents a
+	// roomless-wall rich selection beyond these canonical slots.
 	if ('formatVersion' in layout) {
 		if (selection.kind === 'none' || selection.kind === 'object') return selection;
+		if (selection.kind === 'room') {
+			const wallFirst = layout as unknown as LayoutDocumentWallFirst;
+			return wallFirst.rooms.some((candidate) => candidate.id === selection.roomId)
+				? selection
+				: { kind: 'none' };
+		}
 		if (selection.kind === 'wallOpening') {
 			const wallFirst = layout as unknown as LayoutDocumentWallFirst;
 			const opening = wallFirst.openings.find(
 				(candidate) => candidate.id === selection.openingId
 			);
 			return opening && opening.wallId === selection.wallId
+				? selection
+				: { kind: 'none' };
+		}
+		if (selection.kind === 'physicalWall') {
+			const wallFirst = layout as unknown as LayoutDocumentWallFirst;
+			return wallFirst.walls.some((candidate) => candidate.id === selection.wallId)
+				? selection
+				: { kind: 'none' };
+		}
+		if (selection.kind === 'junction') {
+			const wallFirst = layout as unknown as LayoutDocumentWallFirst;
+			return wallFirst.junctions.some((candidate) => candidate.id === selection.junctionId)
 				? selection
 				: { kind: 'none' };
 		}
@@ -1144,6 +1209,8 @@ export function reconcileLayoutSelection(
 		// A canonical wall-first target cannot be validated against a legacy
 		// Room-owned document: clear rather than guess.
 		case 'wallOpening':
+		case 'physicalWall':
+		case 'junction':
 			return { kind: 'none' };
 	}
 }

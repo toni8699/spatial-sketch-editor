@@ -20,8 +20,10 @@ export type PlanStyleToken =
 	| 'wall-line'
 	| 'wall-line-selected'
 	| 'wall-line-opening-selected'
+	| 'wall-line-hovered'
 	| 'opening-line'
 	| 'opening-line-selected'
+	| 'opening-line-hovered'
 	| 'layout-object'
 	| 'layout-object-selected'
 	| 'layout-object-readonly'
@@ -71,7 +73,13 @@ export type PlanStyleToken =
 	// P23.9 — a Partition sketch is wall-like but must never read as a
 	// semantic Room boundary while it is being drawn.
 	| 'draft-outline-partition'
+	// P23.6 — a degenerate (zero-length) candidate leg: invalid before commit.
+	| 'draft-outline-invalid'
 	| 'draft-point'
+	// P23.6 — selected canonical Junction handle (same blue language).
+	| 'vertex-handle-selected'
+	// P23.6 — hovered canonical Junction handle (hover language, never selection).
+	| 'vertex-handle-hovered'
 	// P23.3 — canonical Opening width-handle affordances + transient drag preview.
 	| 'opening-handle'
 	| 'opening-drag-preview'
@@ -81,6 +89,12 @@ export type PlanStyleToken =
 	| 'snap-marker-grid'
 	| 'dimension-label'
 	| 'selection-label'
+	// P23.6 — persistent Room name (presentation of Room metadata, never a
+	// separately persisted annotation).
+	| 'room-name'
+	// P23.6 — committed topology/geometry diagnostic marker (state, not
+	// transient preview: distinct from draft/invalid blue/red language below).
+	| 'layout-diagnostic'
 	| 'scale-label';
 
 export type PlanHitIdentity =
@@ -92,11 +106,18 @@ export type PlanHitIdentity =
 	| { kind: 'room'; roomId: string }
 	/**
 	 * P23.3 — canonical wall-first opening identity: document-global `wallId` +
-	 * `openingId` and no `roomId`. Canonical physical Walls deliberately carry
-	 * **no** hit identity until the full `wallId`/`junctionId` selection cutover
-	 * (P23.6/P23.7) — never a faked room-anchored `wall` hit.
+	 * `openingId` and no `roomId`.
 	 */
-	| { kind: 'wallOpening'; wallId: string; openingId: string };
+	| { kind: 'wallOpening'; wallId: string; openingId: string }
+	/**
+	 * P23.6 — canonical wall-first Wall identity: document-global `wallId`,
+	 * no `roomId` and no `segmentId`. The full `(roomId, segmentId)` →
+	 * `(wallId/junctionId)` cutover starts here with the Wall slot; legacy
+	 * room-anchored `wall` hits stay untouched for legacy documents.
+	 */
+	| { kind: 'physicalWall'; wallId: string }
+	/** P23.6 — canonical wall-first Junction identity (`junctionId`). */
+	| { kind: 'junction'; junctionId: string };
 
 /**
  * Renderer-neutral selection descriptor. Mirrors the editor's selection shape
@@ -112,7 +133,11 @@ export type PlanSelection =
 	| { kind: 'interiorAnchor'; roomId: string; segmentId: string; anchorId: string }
 	| { kind: 'object'; objectId: string }
 	/** P23.3 — minimal canonical wall-first opening target (`wallId` + `openingId`). */
-	| { kind: 'wallOpening'; wallId: string; openingId: string };
+	| { kind: 'wallOpening'; wallId: string; openingId: string }
+	/** P23.6 — canonical wall-first Wall target (`wallId`, no `roomId`). */
+	| { kind: 'physicalWall'; wallId: string }
+	/** P23.6 — canonical wall-first Junction target (`junctionId`). */
+	| { kind: 'junction'; junctionId: string };
 
 export type PlanPolygonPrimitive = {
 	kind: 'polygon';
@@ -131,7 +156,7 @@ export type PlanPolylinePrimitive = {
 	 * dimensions and opening semantics; SVG remains a thin screen adapter.
 	 */
 	architecture?:
-		| { kind: 'wall'; thicknessMeters: number }
+		| { kind: 'wall'; thicknessMeters: number; role?: 'boundary' | 'partition' }
 		| {
 				kind: 'door' | 'window';
 				widthMeters: number;
@@ -297,6 +322,12 @@ export type PlanCameraAuthoringProjection = {
 export type PlanInteractionProjection = {
 	/** Committed primitives matching this identity are emitted with `-selected` tokens. */
 	selected?: PlanSelection;
+	/**
+	 * P23.6 — transient hover identity (presentation only, never a selection
+	 * slot). Matching committed primitives read `-hovered` tokens; selection
+	 * always wins over hover.
+	 */
+	hovered?: PlanHitIdentity;
 	selection: readonly PlanRenderPrimitive[];
 	handles: readonly PlanRenderPrimitive[];
 	drafts: readonly PlanRenderPrimitive[];
@@ -346,62 +377,128 @@ function conePolygon(origin: LayoutVec2, target: LayoutVec2, fovDegrees: number)
 
 /**
  * Promote a committed base token to its `-selected` variant when the primitive's
- * hit identity matches the selection. Matching is fully qualified (roomId +
- * segmentId [+ openingId/anchorId]) so cross-room duplicate IDs highlight only
- * the intended entity.
+ * hit identity matches the selection, or to `-hovered` when it matches the
+ * transient hover (selection always wins). Matching is fully qualified so
+ * cross-room duplicate IDs highlight only the intended entity.
  */
 function selectedStyle(
 	base: PlanStyleToken,
 	hit: PlanHitIdentity,
-	selected: PlanSelection | undefined
+	selected: PlanSelection | undefined,
+	hovered?: PlanHitIdentity
 ): PlanStyleToken {
-	if (!selected || selected.kind === 'none') return base;
+	if ((!selected || selected.kind === 'none') && !hovered) return base;
 	switch (base) {
 		case 'room-fill':
-			return selected.kind === 'room' && hit.kind === 'room' && selected.roomId === hit.roomId
+			return selected?.kind === 'room' && hit.kind === 'room' && selected.roomId === hit.roomId
 				? 'room-fill-selected'
 				: base;
 		case 'room-outline':
-			return selected.kind === 'room' && hit.kind === 'room' && selected.roomId === hit.roomId
+			return selected?.kind === 'room' && hit.kind === 'room' && selected.roomId === hit.roomId
 				? 'room-outline-selected'
 				: base;
 		case 'wall-line':
 			// Canonical wall-first opening selection highlights its hosting Wall the
 			// same way a legacy opening selection does.
 			if (hit.kind === 'wallOpening') {
-				return selected.kind === 'wallOpening' && selected.wallId === hit.wallId
-					? 'wall-line-opening-selected'
-					: base;
+				if (selected?.kind === 'wallOpening' && selected.wallId === hit.wallId) {
+					return 'wall-line-opening-selected';
+				}
+				// P23.6 — a hovered Opening tints its host with the hover
+				// language, never the selection language.
+				if (hovered?.kind === 'wallOpening' && hovered.wallId === hit.wallId) {
+					return 'wall-line-hovered';
+				}
+				return base;
+			}
+			// P23.6 — canonical physical Walls share the one selection language:
+			// selected Wall reads selected, Wall hosting the selected Opening
+			// reads opening-selected. Boundary/partition distinction is the
+			// architecture `role`, never a separate style token.
+			if (hit.kind === 'physicalWall') {
+				if (selected?.kind === 'physicalWall' && selected.wallId === hit.wallId) {
+					return 'wall-line-selected';
+				}
+				if (selected?.kind === 'wallOpening' && selected.wallId === hit.wallId) {
+					return 'wall-line-opening-selected';
+				}
+				if (hovered?.kind === 'physicalWall' && hovered.wallId === hit.wallId) {
+					return 'wall-line-hovered';
+				}
+				if (hovered?.kind === 'wallOpening' && hovered.wallId === hit.wallId) {
+					return 'wall-line-hovered';
+				}
+				return base;
 			}
 			if (hit.kind !== 'wall') return base;
-			if (selected.kind === 'wall' && selected.roomId === hit.roomId && selected.segmentId === hit.segmentId) {
+			if (selected?.kind === 'wall' && selected.roomId === hit.roomId && selected.segmentId === hit.segmentId) {
 				return 'wall-line-selected';
 			}
-			if (selected.kind === 'interiorAnchor' && selected.roomId === hit.roomId && selected.segmentId === hit.segmentId) {
+			if (selected?.kind === 'interiorAnchor' && selected.roomId === hit.roomId && selected.segmentId === hit.segmentId) {
 				return 'wall-line-selected';
 			}
-			if (selected.kind === 'opening' && selected.roomId === hit.roomId && selected.segmentId === hit.segmentId) {
+			if (selected?.kind === 'opening' && selected.roomId === hit.roomId && selected.segmentId === hit.segmentId) {
 				return 'wall-line-opening-selected';
+			}
+			// P23.6 — legacy Walls share the hover language (selection wins).
+			if (
+				hovered?.kind === 'wall' &&
+				hovered.roomId === hit.roomId &&
+				hovered.segmentId === hit.segmentId
+			) {
+				return 'wall-line-hovered';
+			}
+			if (
+				hovered?.kind === 'opening' &&
+				hovered.roomId === hit.roomId &&
+				hovered.segmentId === hit.segmentId
+			) {
+				return 'wall-line-hovered';
 			}
 			return base;
 		case 'opening-line':
 			if (hit.kind === 'wallOpening') {
-				return selected.kind === 'wallOpening' &&
+				if (
+					selected?.kind === 'wallOpening' &&
 					selected.wallId === hit.wallId &&
 					selected.openingId === hit.openingId
-					? 'opening-line-selected'
-					: base;
+				) {
+					return 'opening-line-selected';
+				}
+				if (
+					hovered?.kind === 'wallOpening' &&
+					hovered.wallId === hit.wallId &&
+					hovered.openingId === hit.openingId
+				) {
+					return 'opening-line-hovered';
+				}
+				return base;
 			}
-			return selected.kind === 'opening' && hit.kind === 'opening' &&
-				selected.roomId === hit.roomId && selected.segmentId === hit.segmentId && selected.openingId === hit.openingId
-				? 'opening-line-selected'
-				: base;
+			if (
+				selected?.kind === 'opening' &&
+				hit.kind === 'opening' &&
+				selected.roomId === hit.roomId &&
+				selected.segmentId === hit.segmentId &&
+				selected.openingId === hit.openingId
+			) {
+				return 'opening-line-selected';
+			}
+			if (
+				hovered?.kind === 'opening' &&
+				hit.kind === 'opening' &&
+				hovered.roomId === hit.roomId &&
+				hovered.segmentId === hit.segmentId &&
+				hovered.openingId === hit.openingId
+			) {
+				return 'opening-line-hovered';
+			}
+			return base;
 		case 'layout-object':
-			return selected.kind === 'object' && hit.kind === 'object' && selected.objectId === hit.objectId
+			return selected?.kind === 'object' && hit.kind === 'object' && selected.objectId === hit.objectId
 				? 'layout-object-selected'
 				: base;
 		case 'layout-object-readonly':
-			return selected.kind === 'object' && hit.kind === 'object' && selected.objectId === hit.objectId
+			return selected?.kind === 'object' && hit.kind === 'object' && selected.objectId === hit.objectId
 				? 'layout-object-readonly-selected'
 				: base;
 		default:
@@ -451,14 +548,14 @@ export function buildPlanRenderModel(
 			kind: 'polygon',
 			key: geometryId(['plan', 'fill', floorId, room.roomId]),
 			points: polygon,
-			style: selectedStyle('room-fill', { kind: 'room', roomId: room.roomId }, interaction?.selected),
+			style: selectedStyle('room-fill', { kind: 'room', roomId: room.roomId }, interaction?.selected, interaction?.hovered),
 			hit: { kind: 'room', roomId: room.roomId }
 		});
 		strokes.push({
 			kind: 'polygon',
 			key: geometryId(['plan', 'stroke', floorId, room.roomId]),
 			points: polygon,
-			style: selectedStyle('room-outline', { kind: 'room', roomId: room.roomId }, interaction?.selected),
+			style: selectedStyle('room-outline', { kind: 'room', roomId: room.roomId }, interaction?.selected, interaction?.hovered),
 			hit: { kind: 'room', roomId: room.roomId }
 		});
 		for (const wall of room.walls) {
@@ -468,7 +565,7 @@ export function buildPlanRenderModel(
 					key: geometryId(['plan', 'wall', floorId, room.roomId, wall.segmentId, String(index)]),
 					points: polyline.map(([x, z]) => [x, z] as LayoutVec2),
 					architecture: { kind: 'wall', thicknessMeters: wall.thickness },
-					style: selectedStyle('wall-line', { kind: 'wall', roomId: room.roomId, segmentId: wall.segmentId }, interaction?.selected),
+					style: selectedStyle('wall-line', { kind: 'wall', roomId: room.roomId, segmentId: wall.segmentId }, interaction?.selected, interaction?.hovered),
 					hit: { kind: 'wall', roomId: room.roomId, segmentId: wall.segmentId }
 				});
 			});
@@ -497,7 +594,7 @@ export function buildPlanRenderModel(
 				style: selectedStyle(
 					'opening-line',
 					{ kind: 'opening', roomId: room.roomId, segmentId: opening.segmentId, openingId: opening.openingId },
-					interaction?.selected
+					interaction?.selected, interaction?.hovered
 				),
 				hit: { kind: 'opening', roomId: room.roomId, segmentId: opening.segmentId, openingId: opening.openingId }
 			});
@@ -512,7 +609,7 @@ export function buildPlanRenderModel(
 			style: selectedStyle(
 				object.readonly ? 'layout-object-readonly' : 'layout-object',
 				{ kind: 'object', objectId: object.objectId },
-				interaction?.selected
+				interaction?.selected, interaction?.hovered
 			),
 			hit: { kind: 'object', objectId: object.objectId }
 		});
@@ -528,6 +625,7 @@ export function buildPlanRenderModel(
 		for (const opening of wall.openings) {
 			// One authored Opening renders once, with the canonical hit identity
 			// and the selection style derived from it (never per-Room duplicates).
+			const openingHit = { kind: 'wallOpening', wallId: wall.wallId, openingId: opening.openingId } as const;
 			openings.push({
 				kind: 'polyline',
 				key: geometryId(['plan', 'physical-opening', wall.floorId, wall.wallId, opening.openingId]),
@@ -538,17 +636,23 @@ export function buildPlanRenderModel(
 					wallThicknessMeters: wall.thickness,
 					inwardNormal: [...opening.center.normal] as LayoutVec2
 				},
-				style: 'opening-line',
+				style: selectedStyle('opening-line', openingHit, interaction?.selected, interaction?.hovered),
 				hit: { kind: 'wallOpening', wallId: wall.wallId, openingId: opening.openingId }
 			});
 		}
 		wall.solidCenterlinePolylines.forEach((polyline, index) => {
+			// P23.6 — every canonical Wall carries its hit identity so committed
+			// Walls are selectable/hoverable with no Room ownership; `role`
+			// presents the one-Wall boundary/partition truth, never a second
+			// object family.
+			const wallHit = { kind: 'physicalWall', wallId: wall.wallId } as const;
 			walls.push({
 				kind: 'polyline',
 				key: geometryId(['plan', 'physical-wall', wall.floorId, wall.wallId, String(index)]),
 				points: polyline.map(([x, z]) => [x, z] as LayoutVec2),
-				architecture: { kind: 'wall', thicknessMeters: wall.thickness },
-				style: 'wall-line'
+				architecture: { kind: 'wall', thicknessMeters: wall.thickness, role: wall.role },
+				style: selectedStyle('wall-line', wallHit, interaction?.selected, interaction?.hovered),
+				hit: { kind: 'physicalWall', wallId: wall.wallId }
 			});
 		});
 	}

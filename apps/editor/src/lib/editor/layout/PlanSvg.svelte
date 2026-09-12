@@ -20,7 +20,9 @@
 		'room-outline-selected': 'room-outline selected',
 		'wall-line-selected': 'wall-line selected',
 		'wall-line-opening-selected': 'wall-line opening-selected',
+		'wall-line-hovered': 'wall-line hovered',
 		'opening-line-selected': 'opening-line opening-selected',
+		'opening-line-hovered': 'opening-line hovered',
 		'scene-footprint-bridge-hover': 'scene-footprint bridge-hover',
 		'scene-footprint-active': 'scene-footprint active',
 		'scene-footprint-selected': 'scene-footprint selected',
@@ -30,6 +32,8 @@
 		// P3.3 — Arrange hover bridge-affordance outline.
 		'arrange-hover': 'arrange-hover',
 		'interior-anchor-selected': 'interior-anchor selected',
+		'vertex-handle-selected': 'vertex-handle selected',
+		'vertex-handle-hovered': 'vertex-handle hovered',
 		'primitive-ghost-circle': 'primitive-ghost circle',
 		'primitive-ghost-sphere': 'primitive-ghost sphere',
 		'primitive-ghost-invalid': 'primitive-ghost invalid',
@@ -89,19 +93,34 @@
 	function wallStateClass(style: PlanStyleToken): string {
 		if (style === 'wall-line-selected') return 'selected';
 		if (style === 'wall-line-opening-selected') return 'opening-selected';
+		if (style === 'wall-line-hovered') return 'hovered';
 		return '';
+	}
+
+	/**
+	 * P23.6 — one Wall concept: a `partition`-role Wall renders the same
+	 * wall-like stroke language with a subtle muted distinction (it does not
+	 * divide semantic Rooms). Selection classes still apply on top — selected
+	 * state stays unmistakable for both roles.
+	 */
+	function wallPartitionClass(primitive: PlanPolylinePrimitive): string {
+		return primitive.architecture?.kind === 'wall' && primitive.architecture.role === 'partition'
+			? 'partition'
+			: '';
 	}
 
 	function openingSelected(style: PlanStyleToken): boolean {
 		return style === 'opening-line-selected';
 	}
 
+	function openingHovered(style: PlanStyleToken): boolean {
+		return style === 'opening-line-hovered';
+	}
+
 	type OpeningSymbol = {
 		span: LayoutVec2[];
 		jambStart: LayoutVec2[];
 		jambEnd: LayoutVec2[];
-		doorLeaf?: LayoutVec2[];
-		doorSwing?: LayoutVec2[];
 		windowFrames?: LayoutVec2[][];
 	};
 
@@ -131,24 +150,9 @@
 			return symbol;
 		}
 
-		const leafEnd: LayoutVec2 = [
-			start[0] + normal[0] * architecture.widthMeters,
-			start[1] + normal[1] * architecture.widthMeters
-		];
-		symbol.doorLeaf = [start, leafEnd];
-		const startAngle = Math.atan2(leafEnd[1] - start[1], leafEnd[0] - start[0]);
-		const endAngle = Math.atan2(end[1] - start[1], end[0] - start[0]);
-		let delta = endAngle - startAngle;
-		while (delta > Math.PI) delta -= Math.PI * 2;
-		while (delta < -Math.PI) delta += Math.PI * 2;
-		const radius = Math.max(0.01, Math.hypot(end[0] - start[0], end[1] - start[1]));
-		symbol.doorSwing = Array.from({ length: 13 }, (_, index) => {
-			const angle = startAngle + delta * (index / 12);
-			return [
-				start[0] + Math.cos(angle) * radius,
-				start[1] + Math.sin(angle) * radius
-			] as LayoutVec2;
-		});
+		// P23.6 — neutral door treatment: the authored state carries no hinge
+		// side, handedness or swing direction, so none is drawn. Doors read as
+		// intentional Wall gaps (void + jambs + threshold) like windows.
 		return symbol;
 	}
 
@@ -166,12 +170,12 @@
 			{:else if primitive.kind === 'polyline'}
 				{#if primitive.architecture?.kind === 'wall'}
 					<polyline
-						class={`wall-casing ${wallStateClass(primitive.style)}`}
+						class={`wall-casing ${wallStateClass(primitive.style)} ${wallPartitionClass(primitive)}`}
 						points={polylinePointsAttr(primitive.points, primitive.endOffsetPx)}
 						style={architecturalStrokeStyle(primitive)}
 					/>
 					<polyline
-						class={tokenClass(primitive.style)}
+						class={`${tokenClass(primitive.style)} ${wallPartitionClass(primitive)}`}
 						points={polylinePointsAttr(primitive.points, primitive.endOffsetPx)}
 						style={architecturalStrokeStyle(primitive)}
 					/>
@@ -181,19 +185,18 @@
 						<polyline
 							class="opening-void"
 							class:selected={openingSelected(primitive.style)}
+							class:hovered={openingHovered(primitive.style)}
 							points={pointsAttr(symbol.span)}
 							style={architecturalStrokeStyle(primitive)}
 						/>
-						<polyline class="opening-jamb" class:selected={openingSelected(primitive.style)} points={pointsAttr(symbol.jambStart)} />
-						<polyline class="opening-jamb" class:selected={openingSelected(primitive.style)} points={pointsAttr(symbol.jambEnd)} />
+						<polyline class="opening-jamb" class:selected={openingSelected(primitive.style)} class:hovered={openingHovered(primitive.style)} points={pointsAttr(symbol.jambStart)} />
+						<polyline class="opening-jamb" class:selected={openingSelected(primitive.style)} class:hovered={openingHovered(primitive.style)} points={pointsAttr(symbol.jambEnd)} />
 						{#if symbol.windowFrames}
 							{#each symbol.windowFrames as frame, index (`${primitive.key}:window-frame:${index}`)}
-								<polyline class="window-frame" class:selected={openingSelected(primitive.style)} points={pointsAttr(frame)} />
+								<polyline class="window-frame" class:selected={openingSelected(primitive.style)} class:hovered={openingHovered(primitive.style)} points={pointsAttr(frame)} />
 							{/each}
-						{:else if symbol.doorLeaf && symbol.doorSwing}
-							<polyline class="door-threshold" points={pointsAttr(symbol.span)} />
-							<polyline class="door-leaf" class:selected={openingSelected(primitive.style)} points={pointsAttr(symbol.doorLeaf)} />
-							<polyline class="door-swing" class:selected={openingSelected(primitive.style)} points={pointsAttr(symbol.doorSwing)} />
+						{:else}
+							<polyline class="door-threshold" class:hovered={openingHovered(primitive.style)} points={pointsAttr(symbol.span)} />
 						{/if}
 					{/if}
 				{:else}
@@ -248,28 +251,34 @@
 	.opening-void,
 	.opening-jamb,
 	.window-frame,
-	.door-threshold,
-	.door-leaf,
-	.door-swing { fill: none; vector-effect: non-scaling-stroke; pointer-events: none; }
+	.door-threshold { fill: none; vector-effect: non-scaling-stroke; pointer-events: none; }
 	.wall-casing { stroke: var(--editor-plan-wall); stroke-width: calc(var(--architecture-width) + 2px); stroke-linecap: square; stroke-linejoin: miter; }
+	/* P23.6 — non-room-bounding Walls stay physical and wall-like with a subtle
+	   muted distinction (same selection language; `.selected` below wins). */
+	.wall-casing.partition { stroke: var(--editor-plan-muted); }
+	/* P23.6 — hover uses the hover language, never selection blue; states below win ties. */
+	.wall-casing.hovered { stroke: var(--editor-plan-hover-stroke); }
 	.wall-casing.selected { stroke: var(--editor-plan-selection); stroke-width: calc(var(--architecture-width) + 4px); }
 	.wall-casing.opening-selected { stroke: var(--editor-plan-hover-stroke); }
 	.wall-line { stroke: var(--editor-plan-wall-fill); stroke-width: var(--architecture-width); stroke-linecap: square; stroke-linejoin: miter; }
+	.wall-line.partition { stroke: color-mix(in srgb, var(--editor-plan-muted) 38%, var(--editor-plan-wall-fill)); }
+	.wall-line.hovered { stroke: color-mix(in srgb, var(--editor-plan-hover-stroke) 42%, var(--editor-plan-wall-fill)); }
 	.wall-line.selected { stroke: color-mix(in srgb, var(--editor-plan-selection) 42%, var(--editor-plan-wall-fill)); }
 	.wall-line.opening-selected { stroke: color-mix(in srgb, var(--editor-plan-hover-stroke) 34%, var(--editor-plan-wall-fill)); }
 	.opening-void { stroke: var(--editor-plan-room-bg); stroke-width: calc(var(--architecture-width) + 4px); }
+	.opening-void.hovered { stroke: color-mix(in srgb, var(--editor-plan-hover-stroke) 14%, var(--editor-plan-room-bg)); }
 	.opening-void.selected { stroke: color-mix(in srgb, var(--editor-plan-selection) 14%, var(--editor-plan-room-bg)); }
 	.opening-jamb { stroke: var(--editor-plan-wall); stroke-width: 2; }
 	.window-frame { stroke: var(--editor-plan-wall); stroke-width: 1.35; }
 	.door-threshold { stroke: var(--editor-plan-object-stroke); stroke-width: 1; }
-	.door-leaf { stroke: var(--editor-plan-wall); stroke-width: 2.25; }
-	.door-swing { stroke: var(--editor-plan-muted); stroke-width: 1.15; stroke-dasharray: 4 3; }
+	.opening-jamb.hovered,
+	.window-frame.hovered,
+	.door-threshold.hovered { stroke: var(--editor-plan-hover-stroke); }
 	.opening-jamb.selected,
-	.window-frame.selected,
-	.door-leaf.selected,
-	.door-swing.selected { stroke: var(--editor-plan-selection); }
+	.window-frame.selected { stroke: var(--editor-plan-selection); }
 	/* Fallback for renderer-neutral projections without architecture metadata. */
 	.opening-line { stroke: var(--editor-plan-object); stroke-width: 7; vector-effect: non-scaling-stroke; pointer-events: none; }
+	.opening-line.hovered { stroke: var(--editor-plan-hover-stroke); stroke-width: 8; }
 	.opening-line.opening-selected { stroke: var(--editor-plan-selection); stroke-width: 9; }
 	.layout-object { fill: var(--plan-layout-object-fill, var(--editor-plan-object-fill)); stroke: var(--plan-layout-object-stroke, var(--editor-plan-object-stroke)); stroke-width: 2; stroke-dasharray: var(--plan-layout-object-dasharray, none); vector-effect: non-scaling-stroke; pointer-events: none; }
 	.layout-object.selected { fill: rgb(47 140 255 / 24%); stroke: var(--editor-plan-selection); stroke-width: 3; }
@@ -345,6 +354,14 @@
 	.dimension-label { fill: var(--editor-plan-muted); font: 10px var(--editor-font); font-variant-numeric: tabular-nums; paint-order: stroke; stroke: var(--editor-plan-canvas-bg); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
 	.draft-outline { fill: rgb(47 140 255 / 10%); stroke: var(--editor-plan-selection); stroke-width: 2; stroke-dasharray: 8 4; vector-effect: non-scaling-stroke; }
 	.draft-outline-partition { fill: rgb(201 134 31 / 10%); stroke: #c9861f; stroke-width: 2; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+	/* P23.6 — degenerate candidate leg: invalid before commit, never committed. */
+	.draft-outline-invalid { fill: rgb(239 98 108 / 10%); stroke: var(--editor-danger); stroke-width: 2; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+	/* P23.6 — persistent Room names: quiet metadata labels, never interactive. */
+	.room-name { fill: var(--editor-plan-label); font: 600 11px var(--editor-font); text-anchor: middle; paint-order: stroke; stroke: var(--editor-plan-canvas-bg); stroke-width: 3px; stroke-linejoin: round; pointer-events: none; }
+	/* P23.6 — committed diagnostic state marker; the reason lives in Inspector. */
+	.layout-diagnostic { fill: rgb(239 98 108 / 14%); stroke: var(--editor-danger); stroke-width: 2; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; pointer-events: none; }
+	.vertex-handle.selected, .vertex-handle-selected { fill: var(--editor-plan-selection); stroke: var(--editor-plan-canvas-bg); }
+	.vertex-handle.hovered, .vertex-handle-hovered { fill: var(--editor-plan-hover-stroke); stroke: var(--editor-plan-canvas-bg); }
 	.draft-point { fill: var(--editor-plan-handle-fill); stroke: var(--editor-plan-handle-stroke); stroke-width: 2; vector-effect: non-scaling-stroke; }
 	/* P23.2 — session-only snap feedback (semantic rank above grid fallback). */
 	.snap-guide { fill: none; stroke: var(--editor-plan-selection); stroke-width: 1.25; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; pointer-events: none; }

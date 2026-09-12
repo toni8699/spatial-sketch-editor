@@ -25,13 +25,14 @@
 		clearLayoutDraft,
 		clearLayoutSelection,
 		hasWallChainRun,
-		resolveWallChainEndpointAtLength,
 		restoreWallChainRun,
 		beginLayoutWallOpeningDrag,
 		cancelLayoutWallOpeningDrag,
 		selectLayoutInteriorAnchor,
+		selectLayoutJunction,
 		selectLayoutObject,
 		selectLayoutOpening,
+		selectLayoutPhysicalWall,
 		selectLayoutRoom,
 		selectLayoutWall,
 		selectLayoutWallOpening,
@@ -102,6 +103,7 @@
 	import type { LayoutDocumentWallFirst } from '$lib/layout/layout-wall-first-types';
 	import { layoutRoomUnitPivot } from './layout-room-transform';
 	import { buildPlanRenderModel } from '$lib/layout/plan-render-model';
+	import type { PlanHitIdentity } from '$lib/layout/plan-render-model';
 	import { buildPlanSceneFootprintProjection } from './plan-scene-footprint';
 	import { resolvePlanSceneHitAtZoom, PLAN_SCENE_HIT_HALO_PX } from './plan-scene-hit';
 	import { resolveArrangeHit } from './arrange-hit';
@@ -122,6 +124,7 @@
 	} from './plan-scene-transform';
 	import type { PlanViewMode } from './layout-interaction';
 	import {
+		JUNCTION_HANDLES_MIN_PX_PER_M,
 		buildPlanInteractionProjection,
 		physicalWallSpan,
 		planHandleScreenPoints,
@@ -300,6 +303,10 @@
 	} | null>(null);
 	let stagingRotationHoverScreen = $state<LayoutVec2 | null>(null);
 	let arrangeLayoutRotationHoverScreen = $state<LayoutVec2 | null>(null);
+	// P23.6 — transient canonical hover (presentation only, never a selection
+	// slot): the same owner-aware hit the click path uses, resolved on
+	// pointermove and cleared on leave/click/drag. Hover never looks selected.
+	let layoutHover = $state<PlanHitIdentity | null>(null);
 	// P3.3 — presentation-only Arrange hover (which footprint/object the
 	// pointer is over). Derived from the same resolveArrangeHit call the click
 	// path uses; it never writes selection or document state.
@@ -319,7 +326,39 @@
 			: interaction.polygonPoints
 	);
 	const rooms = $derived('floors' in preview.project.layout ? preview.project.layout.floors.flatMap((floor) => floor.rooms) : []);
-	const baseInteractionProjection = $derived(buildPlanInteractionProjection(interaction, rooms, model));
+	// P23.6 — wall-first presentation context (Junction handles, Room names,
+	// run-closure cue, diagnostic markers). Derived from the live document;
+	// nothing here is authored truth.
+	const wallFirstContext = $derived.by(() => {
+		const layout = preview.project.layout;
+		if (!('formatVersion' in layout)) return undefined;
+		const document = layout as unknown as {
+			junctions: { id: string; point: LayoutVec2 }[];
+			walls: { id: string; startJunctionId: string; endJunctionId: string }[];
+			rooms: { id: string; name: string }[];
+		};
+		const selection = interaction.selection;
+		let junctionFocus: Set<string> | null = null;
+		if (selection.kind === 'physicalWall' || selection.kind === 'wallOpening') {
+			const wall = document.walls.find((candidate) => candidate.id === selection.wallId);
+			junctionFocus = new Set(wall ? [wall.startJunctionId, wall.endJunctionId] : []);
+		}
+		return {
+			junctions: document.junctions.map((junction) => ({
+				id: junction.id,
+				point: [...junction.point] as LayoutVec2
+			})),
+			junctionFocus,
+			roomNames: new Map(document.rooms.map((room) => [room.id, room.name] as const)),
+			runStartPoint: interaction.wallChainRunStartJunctionId
+				? resolveJunctionPoint(interaction.wallChainRunStartJunctionId)
+				: null,
+			issues: preview.issues
+		};
+	});
+	const baseInteractionProjection = $derived(
+		buildPlanInteractionProjection(interaction, rooms, model, wallFirstContext, layoutHover ?? undefined)
+	);
 	const cameraProjection = $derived.by(() => {
 		if (interaction.planViewMode !== 'layout' || !interaction.planView.showTourOverlay) return undefined;
 		try {
@@ -1421,7 +1460,8 @@
 			const target = resolvePlanHit(
 				model.queries,
 				point,
-				LAYOUT_PLAN_HIT_RADIUS_PX / interaction.planView.pixelsPerMeter
+				LAYOUT_PLAN_HIT_RADIUS_PX / interaction.planView.pixelsPerMeter,
+				planHitEndpointGate()
 			);
 			if (wallFirstLayoutDocument()) {
 				// P23.3 — canonical authoring resolves the hosting Wall by
@@ -1481,7 +1521,12 @@
 		}
 
 		if (interaction.tool !== 'select') return;
-		const target = resolvePlanHit(model.queries, point, LAYOUT_PLAN_HIT_RADIUS_PX / interaction.planView.pixelsPerMeter);
+		const target = resolvePlanHit(
+			model.queries,
+			point,
+			LAYOUT_PLAN_HIT_RADIUS_PX / interaction.planView.pixelsPerMeter,
+			planHitEndpointGate()
+		);
 		if (!target) {
 			// a Plan empty-click deselects whichever domain is active (a
 			// scene/camera pick may have survived into Plan); default keeps the
@@ -1500,6 +1545,13 @@
 				svgElement.setPointerCapture(event.pointerId);
 				beginRoomEdit(interaction, 'vertex', target.roomId, point, roomVertices(room), target.vertexIndex);
 			}
+			return;
+		}
+		if (target.kind === 'wallEndpoint') {
+			// P23.6 — canonical Junction select: endpoint identity resolves
+			// through the wall-first document (same selection authority).
+			const junctionId = wallEndpointJunctionId(target.wallId, target.endpoint);
+			if (junctionId) selectLayoutJunction(interaction, junctionId);
 			return;
 		}
 		if (target.kind === 'interiorAnchor') {
@@ -1570,13 +1622,26 @@
 			return;
 		}
 
-		// A canonical physical-Wall hit has no Room-unit target (and no canonical
-		// wall selection target until the P23.6/P23.7 cutover).
+		// P23.6 — a canonical physical-Wall hit selects the Wall on the one
+		// selection authority (no Room-unit target, no wall bend gesture yet).
+		if (target.kind === 'physicalWall') {
+			selectLayoutPhysicalWall(interaction, target.wallId);
+			return;
+		}
+
 		if (target.kind !== 'room') return;
-		const room = findLayoutRoom(rooms, target.roomId);
-		if (!room) return;
-		selectLayoutRoom(interaction, target.roomId);
-		beginRoomUnitDrag(event, room, 'translate', point);
+		const legacyRoom = findLayoutRoom(rooms, target.roomId);
+		if (legacyRoom) {
+			selectLayoutRoom(interaction, target.roomId);
+			beginRoomUnitDrag(event, legacyRoom, 'translate', point);
+			return;
+		}
+		// P23.6 — wall-first Room: select on the shared authority. Canonical
+		// Rooms have no Room-unit drag gesture (exact edits live in the
+		// Inspector); the legacy lookup above stays the only drag entry.
+		if (wallFirstLayoutDocument()?.rooms.some((room) => room.id === target.roomId)) {
+			selectLayoutRoom(interaction, target.roomId);
+		}
 	}
 
 	function onPointerMove(event: PointerEvent) {
@@ -1631,6 +1696,36 @@
 			}
 		} else if (arrangeHover) {
 			arrangeHover = null;
+		}
+		// P23.6 — canonical Wall/Junction/Opening hover in layout mode: same
+		// hit priority as click, presentation only. Quiescent select tool
+		// only; any drag, transaction gesture, or armed tool clears it.
+		if (
+			interaction.tool === 'select' &&
+			interaction.planViewMode === 'layout' &&
+			pointerId === null &&
+			panPointerId === null &&
+			!stagingGesture &&
+			!interaction.objectDrag &&
+			!interaction.roomUnitDrag &&
+			!interaction.editing &&
+			!interaction.wallOpeningDrag &&
+			!openingDrag &&
+			!pendingWallBend
+		) {
+			const hoverPoint = worldPoint(event);
+			const hoverHit =
+				hoverPoint === null
+					? null
+					: resolvePlanHit(
+							model.queries,
+							hoverPoint,
+							LAYOUT_PLAN_HIT_RADIUS_PX / interaction.planView.pixelsPerMeter,
+							planHitEndpointGate()
+						);
+			layoutHover = toLayoutHover(hoverHit);
+		} else if (layoutHover) {
+			layoutHover = null;
 		}
 		if (interaction.tool === 'select' && !interaction.roomUnitDrag) {
 			rotationHoverScreen = screenPoint(event);
@@ -2111,49 +2206,61 @@
 		return junction ? ([...junction.point] as LayoutVec2) : null;
 	}
 
-	function finishPolygon() {
-		if (interaction.polygonPoints.length < 3) return;
-		if (onCommit([...interaction.polygonPoints])) clearLayoutDraft(interaction);
+	/** P23.6 — canonical endpoints lose hit authority below the Junction-handle
+	 * LOD, so an invisible endpoint never outranks its visible Wall. */
+	function planHitEndpointGate(): { includeEndpoints: boolean } {
+		return {
+			includeEndpoints: interaction.planView.pixelsPerMeter >= JUNCTION_HANDLES_MIN_PX_PER_M
+		};
+	}
+
+	/** P23.6 — map a canonical Wall endpoint to its Junction ID (click-select). */
+	function wallEndpointJunctionId(wallId: string, endpoint: 0 | 1): string | null {
+		const layout = preview.project.layout;
+		if (!('formatVersion' in layout)) return null;
+		const wallFirst = layout as unknown as {
+			walls: { id: string; startJunctionId: string; endJunctionId: string }[];
+		};
+		const wall = wallFirst.walls.find((candidate) => candidate.id === wallId);
+		if (!wall) return null;
+		return endpoint === 0 ? wall.startJunctionId : wall.endJunctionId;
 	}
 
 	/**
-	 * P23.9 segment-first — exact length resolves the current candidate
-	 * endpoint (bypasses gesture grid snapping), commits exactly one segment
-	 * transaction, and makes the canonical end Junction the next start.
+	 * P23.6 — reduce a Plan hit to its hover identity. Only Walls, Junctions
+	 * and Openings carry hover affordances; every other hit (rooms, objects,
+	 * vertices, anchors) hovers nothing. Never writes selection or document.
 	 */
-	let chainLengthDraft = $state('');
+	function toLayoutHover(
+		hit: ReturnType<typeof resolvePlanHit>
+	): PlanHitIdentity | null {
+		if (!hit) return null;
+		switch (hit.kind) {
+			case 'physicalWall':
+				return { kind: 'physicalWall', wallId: hit.wallId };
+			case 'wall':
+				return { kind: 'wall', roomId: hit.roomId, segmentId: hit.segmentId };
+			case 'wallOpening':
+				return { kind: 'wallOpening', wallId: hit.wallId, openingId: hit.openingId };
+			case 'opening':
+				return {
+					kind: 'opening',
+					roomId: hit.roomId,
+					segmentId: hit.segmentId,
+					openingId: hit.openingId
+				};
+			case 'wallEndpoint': {
+				const junctionId = wallEndpointJunctionId(hit.wallId, hit.endpoint);
+				return junctionId ? { kind: 'junction', junctionId } : null;
+			}
+			default:
+				return null;
+		}
+	}
 
-	function addChainLengthLeg(event: SubmitEvent) {
-		event.preventDefault();
-		const length = Number(chainLengthDraft);
-		if (!chainLengthDraft.trim() || !Number.isFinite(length) || length <= 0) return;
-		if (!hasWallChainRun(interaction)) return;
-		const endpoint = resolveWallChainEndpointAtLength(interaction, length);
-		if (!endpoint) return;
-		const start = interaction.wallChainStart!;
-		const savedRun = captureWallChainRun(interaction);
-		const result = onWallSegmentCommit([...start], [...endpoint]);
-		if (!result.success) {
-			if (savedRun) restoreWallChainRun(interaction, savedRun);
-			draftedVersion = preview.previewVersion;
-			return;
-		}
-		if (result.startJunctionId === undefined || result.endJunctionId === undefined) {
-			cancelWallChainRun(interaction);
-			return;
-		}
-		chainLengthDraft = '';
-		const endPoint = resolveJunctionPoint(result.endJunctionId) ?? [...endpoint];
-		if (result.closedRun) {
-			cancelWallChainRun(interaction);
-		} else {
-			advanceWallChainContinuation(interaction, {
-				endPoint,
-				endJunctionId: result.endJunctionId,
-				startJunctionId: result.startJunctionId
-			});
-		}
-		draftedVersion = preview.previewVersion;
+	function finishPolygon() {
+		if (interaction.polygonPoints.length < 3) return;
+		if (onCommit([...interaction.polygonPoints])) clearLayoutDraft(interaction);
 	}
 
 	function onWheel(event: WheelEvent) {
@@ -2392,6 +2499,7 @@
 			rotationHoverScreen = null;
 			arrangeLayoutRotationHoverScreen = null;
 			arrangeHover = null;
+			layoutHover = null;
 			// P23.9 — the pending segment preview follows the pointer, so leaving
 			// the surface drops it rather than freezing a stale leg.
 			updateWallChainCursor(interaction, null);
@@ -2415,22 +2523,6 @@
 		<p class="plan-status" role="status">{preview.statusMessage}</p>
 	{/if}
 	<div class="plan-actions">
-		{#if wallChainRoleForTool(interaction.tool) !== null && hasWallChainRun(interaction)}
-			<form class="chain-length" onsubmit={addChainLengthLeg}>
-				<label for="plan-chain-length">Length</label>
-				<input
-					id="plan-chain-length"
-					type="number"
-					min="0.01"
-					step="0.01"
-					placeholder="m"
-					aria-label="Exact current segment length in meters"
-					value={chainLengthDraft}
-					oninput={(event) => (chainLengthDraft = event.currentTarget.value)}
-				/>
-				<button type="submit">Commit segment</button>
-			</form>
-		{/if}
 		{#if interaction.tool === 'polygon' && interaction.polygonPoints.length >= 3}
 			<button type="button" onclick={finishPolygon}>Finish polygon</button>
 		{/if}
@@ -2451,6 +2543,8 @@
 	.plan-viewport { position: absolute; inset: 0; z-index: 3; background: var(--editor-bg-app); }
 	/* P3.2 §9 — the plan is a bright drafting surface against the dark shell. */
 	.plan-canvas { display: block; position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; outline: none; background: var(--editor-plan-canvas-bg); }
+	/* P23.6 — keyboard focus stays visible on the drafting surface. */
+	.plan-canvas:focus-visible { outline: 2px solid var(--editor-plan-selection); outline-offset: -2px; }
 	.plan-canvas.rotation-handle-hover { cursor: grab; }
 	.plan-canvas.staging-rotation-handle-hover { cursor: grab; }
 	.plan-canvas.object-rotation-handle-hover { cursor: grab; }
@@ -2468,8 +2562,6 @@
 	.plan-actions { position: absolute; right: 0.8rem; bottom: 0.8rem; z-index: 10; display: flex; gap: 0.4rem; pointer-events: auto; }
 	.plan-actions button { padding: 0.44rem 0.6rem; border: 1px solid var(--editor-accent-border); border-radius: 0.32rem; background: var(--editor-bg-selected); color: var(--editor-text-primary); font: 600 0.7rem/1 var(--editor-font); cursor: pointer; }
 	.plan-actions button.secondary { border-color: var(--editor-border-normal); background: var(--editor-bg-panel-raised); color: var(--editor-text-secondary); }
-	.chain-length { display: flex; align-items: center; gap: 0.3rem; margin: 0; padding: 0 0.35rem; border: 1px solid var(--editor-border-normal); border-radius: 0.32rem; background: var(--editor-bg-panel-raised); color: var(--editor-text-secondary); font: 600 0.7rem/1 var(--editor-font); }
-	.chain-length input { width: 4.2rem; padding: 0.3rem 0.25rem; border: 1px solid var(--editor-border-normal); border-radius: 0.25rem; background: var(--editor-bg-input, var(--editor-bg-panel-raised)); color: var(--editor-text-primary); font: 600 0.7rem/1 var(--editor-font); }
 	.plan-meta { position: absolute; left: 0.8rem; bottom: 0.8rem; z-index: 2; display: flex; gap: 0.7rem; color: var(--editor-plan-muted); font: 0.68rem/1 var(--editor-font); pointer-events: none; }
 	.plan-meta .warning { color: var(--editor-danger-fg); }
 	@media (max-width: 44rem) {
