@@ -29,6 +29,7 @@ import {
 	planExactRectangleDimensions,
 	planExactWallAngle,
 	planExactWallLength,
+	planExactWallHeight,
 	planExactWallThickness,
 	planWallSubdivision,
 	type FixedWallEndpoint,
@@ -376,14 +377,12 @@ function buildWallMeshesByRoom(geometry: CompiledLayoutGeometry): {
 		}
 		issues.push(...result.issues);
 	}
+	// P23.6H — the canonical Wall's own authoritative height supplies the mesh
+	// vertical extent; no Floor-derived ceiling is passed (or derivable) here.
 	const floorElevationById = new Map(geometry.floors.map((floor) => [floor.floorId, floor.elevation] as const));
-	const ceilingElevationById = new Map(
-		geometry.floors.map((floor) => [floor.floorId, floor.elevation + floor.height] as const)
-	);
 	for (const wall of geometry.walls) {
 		const floorElevation = floorElevationById.get(wall.floorId) ?? 0;
-		const ceilingElevation = ceilingElevationById.get(wall.floorId) ?? floorElevation + 3;
-		const result = buildStandaloneWallMesh(wall, floorElevation, ceilingElevation);
+		const result = buildStandaloneWallMesh(wall, floorElevation);
 		if (result.mesh) wallMeshesByWall.set(wall.wallId, result.mesh);
 		issues.push(...result.issues);
 	}
@@ -1022,6 +1021,22 @@ export function updateWallFirstWallThickness(
 	const layout = wallFirstLayoutOrError(state);
 	if (!layout) return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
 	return applyWallFirstPrecisionPlan(state, planExactWallThickness(layout, wallId, thickness));
+}
+
+/**
+ * P23.6H — commit one canonical Wall height edit as one Layout history entry.
+ * The planner owns the Floor envelope and host-Wall Opening fit; a rejection
+ * leaves the document, the Opening and history untouched. UI code never assigns
+ * `wall.height` directly.
+ */
+export function updateWallFirstWallHeight(
+	state: LayoutPreviewState,
+	wallId: string,
+	height: number
+): WallFirstPrecisionMutationResult {
+	const layout = wallFirstLayoutOrError(state);
+	if (!layout) return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
+	return applyWallFirstPrecisionPlan(state, planExactWallHeight(layout, wallId, height));
 }
 
 /**

@@ -70,6 +70,13 @@ export type CompilerRoomSource = {
 	 * legacy cache keys byte-identical.
 	 */
 	wallThicknessBySegmentId?: Readonly<Record<string, number>>;
+	/**
+	 * P23.6H Per-wall Opening vertical limit keyed by boundary segment id (the
+	 * wall-first adapter supplies each Wall's authoritative `height`; the legacy
+	 * schema is floor-envelope and leaves this absent). Absent keeps the
+	 * historical `floor.height` rule and byte-identical legacy behavior.
+	 */
+	openingHeightLimitBySegmentId?: Readonly<Record<string, number>>;
 };
 
 /** Internal compiler-source floor frame (legacy floor maps 1:1). */
@@ -140,7 +147,14 @@ export function compileWallFirstLayoutGeometry(
 	const wallById = new Map(document.walls.map((wall) => [wall.id, wall]));
 
 	const wallThicknessBySegmentId: Record<string, number> = {};
-	for (const wall of document.walls) wallThicknessBySegmentId[wall.id] = wall.thickness;
+	// P23.6H — the same canonical per-Wall loop also supplies the Opening
+	// vertical limit, so Wall-owned thickness and Wall-owned height reach the
+	// compiler through one adapter.
+	const openingHeightLimitBySegmentId: Record<string, number> = {};
+	for (const wall of document.walls) {
+		wallThicknessBySegmentId[wall.id] = wall.thickness;
+		openingHeightLimitBySegmentId[wall.id] = wall.height;
+	}
 
 	const rooms: CompilerRoomSource[] = document.rooms.map((room) => {
 		const segments: DraftSegment[] = [];
@@ -192,7 +206,8 @@ export function compileWallFirstLayoutGeometry(
 			},
 			boundary: { closed: true, segments },
 			openings: roomOpenings,
-			wallThicknessBySegmentId
+			wallThicknessBySegmentId,
+			openingHeightLimitBySegmentId
 		};
 	});
 
@@ -267,21 +282,26 @@ function compileWallFirstWithPhysicalWalls(
 		const wallOpenings: CompilerOpening[] = document.openings
 			.filter((opening) => opening.wallId === wall.id)
 			.map((opening) => ({ ...opening, segmentId: opening.wallId }));
-		const sections = splitSampledWallAroundOpenings(sampled, segment, wallOpenings, floor.height);
+		// P23.6H — the Wall's own authoritative height decides its physical
+		// vertical extent (`topY = floor.elevation + wall.height`). Room/Floor
+		// envelopes stay Floor-derived; a partial-height Wall never lowers them.
+		const wallTop = floorElevation + wall.height;
+		const sections = splitSampledWallAroundOpenings(sampled, segment, wallOpenings, wall.height);
 		const compiledOpenings = wallOpenings.map((opening) =>
 			compileOpening(opening, sampled, floor.id, wall.id, cacheKeyOf(['physical-wall-geometry', floor.id, wall.id]))
 		);
 		const solidSpans = buildSolidSpans(sampled.samples, sections);
 		const solidCenterlinePolylines = wallPolylinesAroundOpenings(sampled.samples, wallOpenings);
 		const wallBounds2Value = wallBounds2(sampled.samples, wall.thickness);
-		const wallBounds3Value = wallBounds3(sampled.samples, wall.thickness, floorElevation, ceilingElevation);
+		const wallBounds3Value = wallBounds3(sampled.samples, wall.thickness, floorElevation, wallTop);
 		const compiled: CompiledPhysicalWall = {
 			id: geometryId(['physical-wall', floor.id, wall.id]),
-			cacheKey: cacheKeyOf(['physical-wall', floor.id, wall.id, segment, wallOpenings, wall.thickness, floor.elevation, floor.height]),
+			cacheKey: cacheKeyOf(['physical-wall', floor.id, wall.id, segment, wallOpenings, wall.thickness, floor.elevation, wall.height]),
 			wallId: wall.id,
 			role: wall.role,
 			floorId: floor.id,
 			thickness: wall.thickness,
+			height: wall.height,
 			length: sampled.length,
 			samples: sampled.samples,
 			sections,
@@ -578,7 +598,8 @@ export function compileLayoutGeometrySource(source: CompilerSource): CompiledLay
 					},
 					floor,
 					prepared.segments,
-					path
+					path,
+					roomSource.openingHeightLimitBySegmentId
 				)
 			];
 			issues.push(...roomIssues);

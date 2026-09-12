@@ -6,7 +6,7 @@
 **Depends on:** P22 complete, including hosted cold-visitor acceptance.  
 **Owner reconciliation ratified:** 2026-09-09.  
 **Evidence basis:** completed `P23-H1`, `P23-H2`, `P23-H3`, `P23-H5`, current Museum Editor code, and the staging wall-first proposal.  
-**Implementation status:** Foundation Gate shipped — P23.0/P23.8 F0 acceptance passed 2026-09-10 and the stage-6 flip (branch `p23-stage6-flip`) enabled wall-first writes; legacy room-owned behavior persists only as the compatibility read path. The Build-set slices below (P23.1 → P23.2 → P23.9 → P23.3 → P23.4/P23.5 → P23.6 → P23.6H → P23.6a → P23.6b → P23.7) are the live implementation order; P23.1 and P23.2 are merged on `main` (PRs #9 and #13); **P23.9 merged via PR #18 (`5f20aaa`)**; **P23.3 merged via PR #19 (`d1705b7`)**; **P23.4 merged via PR #21 (`c6601f2`)**; **P23.5 merged via PR #22 (`75a32ca`)**; **P23.6 merged via PR #23 (`3f6c78d`)**; P23.6H / P23.6a / P23.6b are implementation-ready child plans.
+**Implementation status:** Foundation Gate shipped — P23.0/P23.8 F0 acceptance passed 2026-09-10 and the stage-6 flip (branch `p23-stage6-flip`) enabled wall-first writes; legacy room-owned behavior persists only as the compatibility read path. The Build-set slices below (P23.1 → P23.2 → P23.9 → P23.3 → P23.4/P23.5 → P23.6 → P23.6H → P23.6a → P23.6b → P23.7) are the live implementation order; P23.1 and P23.2 are merged on `main` (PRs #9 and #13); **P23.9 merged via PR #18 (`5f20aaa`)**; **P23.3 merged via PR #19 (`d1705b7`)**; **P23.4 merged via PR #21 (`c6601f2`)**; **P23.5 merged via PR #22 (`75a32ca`)**; **P23.6 merged via PR #23 (`3f6c78d`)**; **P23.6H implemented on branch `P23.6-H`**; P23.6a / P23.6b are implementation-ready child plans.
 
 This is the reconciled P23 umbrella. The accepted reconciliation — informed by the harvests — supersedes conflicting earlier P23 and North-Star direction. Harvest artifacts remain evidence, not implementation authority.
 
@@ -493,6 +493,9 @@ P23.6 owns the Plan-side Wall-drawing UX: live passive candidate length readout 
 [Child plan](2026-09-12-P23.6H-vertical-wall-semantics.md)
 
 Makes `LayoutWall.height` authoritative physical Wall height on the one canonical compiler path (`compileLayoutGeometry()` → compiled vertical sections → editor + visitor mesh), with `floor.height` reduced to the birth default/Floor envelope, host-Wall Opening vertical fit, and one exact Height operation. Owns historical Wall-height compatibility (pre-H documents preserve previously visible Floor-derived extent, then canonicalize). Not part of the P23.6 presentation slice; required before P23.6b presents Height.
+
+**Implemented on branch `P23.6-H`** (see the child plan's §Implementation record): format 4 → 5 with `LAYOUT_PRE_AUTHORITATIVE_WALL_HEIGHT_FORMAT_VERSION` still loadable and normalized once at the compatible decode boundary; `layout-wall-heights.ts` birth/range rule; compiler/physical-Wall bounds + `CompiledPhysicalWall.height`; host-Wall Opening fit in both gates; `planExactWallHeight`; planner-backed Inspector `Height (m)`; and editor/visitor/museum mesh parity including the editor-app `LayoutMuseumShell.svelte` canonical `geometry.walls` path.
+
 
 ## P23.6a — Wall-first Room Unit Move
 

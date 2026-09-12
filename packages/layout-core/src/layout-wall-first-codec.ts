@@ -1,6 +1,6 @@
 /**
  * `layout-wall-first-codec.ts` — strict codec for the wall-first
- * `LayoutDocument` (`formatVersion: 4`), shared by P23.1 operations and the
+ * `LayoutDocument` (`formatVersion: 5`), shared by P23.1 operations and the
  * canonical project Save boundary.
  *
  * The codec intentionally provides:
@@ -28,7 +28,11 @@ import type {
 	LayoutWallOpening,
 	OrientedWallRef
 } from './layout-wall-first-types';
-import { LAYOUT_WALL_FIRST_FORMAT_VERSION, KNOWN_LAYOUT_FORMAT_VERSIONS } from './layout-wall-first-types';
+import {
+	LAYOUT_WALL_FIRST_FORMAT_VERSION,
+	KNOWN_LAYOUT_FORMAT_VERSIONS
+} from './layout-wall-first-types';
+import { validateWallHeight } from './layout-wall-heights';
 import type { LayoutDocumentIssue } from './layout-codec';
 import { LayoutDocumentValidationError } from './layout-codec';
 import type { LayoutObject, LayoutVec2 } from './layout-types';
@@ -150,7 +154,74 @@ export function parseWallFirstLayoutDocumentJson(json: string): WallFirstLayoutV
 	}
 }
 
+/**
+ * P23.6H — normalize one pre-H (`formatVersion: 4`) wall-first document into the
+ * canonical current format.
+ *
+ * Pre-H records carry a stored `wall.height` that was **not** authoritative for
+ * rendered geometry: the compiler drew every Wall from the Floor elevation to the
+ * Floor top, while the stored value could be a fixed birth default. Reinterpreting
+ * those values as authored intent would visibly change old projects, so the
+ * normalization rewrites every Wall to the *previously visible* Floor-derived
+ * extent — the one value that reproduces the old render exactly.
+ *
+ * Pure, non-mutating and deterministic: field rewrite only, no ID, ordering or
+ * allocation change, so Save diffs and history baselines stay comparable.
+ *
+ * **This is the only place a pre-H document becomes canonical.** It runs once at
+ * the compatible read/decode boundary (`layout-compat.ts`); canonical validators
+ * and writers operate on canonical current-format state and never normalize a
+ * historical payload (a stray `4` payload fails closed against the current rule).
+ */
+export function normalizePreHWallFirstLayout(
+	document: LayoutDocumentWallFirst
+): LayoutDocumentWallFirst {
+	return {
+		...document,
+		formatVersion: LAYOUT_WALL_FIRST_FORMAT_VERSION,
+		walls: document.walls.map((wall) => ({ ...wall, height: document.floor.height }))
+	};
+}
+
+/**
+ * P23.6H — the canonical *writer* format requirement (S1b).
+ *
+ * `validateWallFirstLayoutDocument()` stays deliberately tolerant: the compatible
+ * read/decode boundary must be able to validate a pre-H (`formatVersion: 4`)
+ * payload *before* normalizing it. The canonical writers are a different
+ * boundary — they receive canonical current-format state — so a document
+ * declaring any other format version rejects fail-closed instead of being
+ * persisted with fields whose meaning belongs to the previous generation (a
+ * pre-H `wall.height` was never authoritative for rendering; writing it as
+ * current-format state would silently reinterpret it).
+ *
+ * Returns `undefined` when the input is not an object at all, so structural
+ * validation owns that report.
+ */
+export function wallFirstCanonicalFormatVersionIssue(
+	input: unknown
+): LayoutDocumentIssue | undefined {
+	if (typeof input !== 'object' || input === null || Array.isArray(input)) return undefined;
+	const declared = (input as { formatVersion?: unknown }).formatVersion;
+	if (declared === LAYOUT_WALL_FIRST_FORMAT_VERSION) return undefined;
+	return {
+		path: '$.formatVersion',
+		code: 'unsupported_format_version',
+		message: `Canonical Layout Save requires formatVersion ${LAYOUT_WALL_FIRST_FORMAT_VERSION}; got ${String(
+			declared
+		)}. A pre-H payload must be decoded through the compatible read path first (it is normalized there) — canonical writers never migrate.`
+	};
+}
+
+/**
+ * Canonical Layout serialization. Throws on invalid input.
+ *
+ * Unlike validation, this is a **writer**: it requires canonical current-format
+ * state and rejects a historical payload by name (P23.6H, S1b).
+ */
 export function serializeWallFirstLayoutDocument(document: unknown): string {
+	const versionIssue = wallFirstCanonicalFormatVersionIssue(document);
+	if (versionIssue) throw new LayoutDocumentValidationError(versionIssue);
 	const result = validateWallFirstLayoutDocument(document);
 	if (!result.success) {
 		throw new LayoutDocumentValidationError(result.issues[0]!);
@@ -175,8 +246,19 @@ function parseDocument(
 	const formatVersion = readFormatVersion(record.formatVersion, `${path}.formatVersion`, issues);
 	const floor = parseFloor(record.floor, `${path}.floor`, issues);
 
+	// P23.6H — the Wall-height range rule is a *current-format* rule. A pre-H
+	// (`formatVersion: 4`) payload is validated with its own rule set (positive
+	// finite height only); the compatible decoder normalizes it afterwards, so a
+	// historical value above the Floor envelope can never reject a legacy load.
+	const wallHeightLimit =
+		formatVersion === LAYOUT_WALL_FIRST_FORMAT_VERSION && floor
+			? { floorHeight: floor.height }
+			: undefined;
+
 	const junctions = parseArray(record.junctions, `${path}.junctions`, issues, parseJunction);
-	const walls = parseArray(record.walls, `${path}.walls`, issues, parseWall);
+	const walls = parseArray(record.walls, `${path}.walls`, issues, (value, wallPath, wallIssues) =>
+		parseWall(value, wallPath, wallIssues, wallHeightLimit)
+	);
 	const rooms = parseArray(record.rooms, `${path}.rooms`, issues, parseRoom);
 	const openings = parseArray(record.openings, `${path}.openings`, issues, parseOpening);
 	const objects = parseArray(record.objects, `${path}.objects`, issues, parseObject);
@@ -377,7 +459,13 @@ function parseJunction(
 function parseWall(
 	input: unknown,
 	path: string,
-	issues: LayoutDocumentIssue[]
+	issues: LayoutDocumentIssue[],
+	/**
+	 * P23.6H — present only for the current canonical format, where
+	 * `wall.height` is authoritative and bounded by the Floor envelope. Pre-H
+	 * payloads pass nothing and keep the historical positive-finite rule.
+	 */
+	heightLimit?: { floorHeight: number }
 ): ParsedValue<LayoutWall> {
 	const record = readRecord(input, path, issues);
 	if (!record) return undefined;
@@ -406,6 +494,14 @@ function parseWall(
 			'invalid_value',
 			'A Wall must reference two distinct Junctions'
 		);
+	}
+	if (heightLimit) {
+		const heightIssue = validateWallHeight(
+			{ id, height },
+			{ height: heightLimit.floorHeight },
+			`${path}.height`
+		);
+		if (heightIssue) addIssue(issues, heightIssue.path, heightIssue.code, heightIssue.message);
 	}
 	return { id, startJunctionId, endJunctionId, role, thickness, height };
 }

@@ -85,7 +85,8 @@
 		const walls: AdaptedWall[] = [];
 		for (const wall of geometry.walls ?? []) {
 			const frame = floorFrameById.get(wall.floorId) ?? { elevation: 0, height: 3 };
-			const result = buildStandaloneWallMesh(wall, frame.elevation, frame.elevation + frame.height, { classifySurface: () => 'wall' });
+			// P23.6H — the compiled Wall's own height decides its vertical extent.
+			const result = buildStandaloneWallMesh(wall, frame.elevation, { classifySurface: () => 'wall' });
 			if (!result.mesh) {
 				walls.push({ wallId: wall.wallId, floorElevation: frame.elevation, ok: false, bounds: wall.bounds3 });
 				continue;

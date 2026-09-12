@@ -2,7 +2,8 @@
  * `layout-compat.ts` — P23.0a explicit Layout format identification.
  *
  * The single dispatch boundary between the legacy Room-owned Layout JSON and
- * the wall-first `formatVersion: 4` schema. Identification is **explicit,
+ * the wall-first Layout schema (current `formatVersion: 5` since P23.6H; the
+ * pre-H `4` generation stays loadable). Identification is **explicit,
  * never inferred from field shapes** (H5 §10.1: "Do not infer schema version
  * from presence/absence of arbitrary fields after the versioned cutover").
  *
@@ -10,9 +11,14 @@
  *
  * ```text
  * missing formatVersion  → legacy Room-owned decoder (only where it recognizes the shape)
- * formatVersion: 4       → wall-first decoder
+ * formatVersion: 4       → wall-first decoder (pre-H) + normalize to the current format
+ * formatVersion: 5       → wall-first decoder (current canonical format)
  * any other version      → unrecognized (rejected unless a real decoder exists)
  * ```
+ *
+ * The `4` path is the single compatibility-normalization boundary for P23.6H
+ * per-Wall height: normalization happens here (or upstream of it) exactly once,
+ * and canonical validators/writers never normalize a historical payload.
  *
  * P23.0a scaffolding note: the legacy branch revalidates the current
  * Room-owned document through the unchanged legacy codec — **no migration
@@ -32,9 +38,15 @@ import {
 	type LayoutDocumentIssue,
 	type LayoutDocumentValidationResult
 } from './layout-codec';
-import { validateWallFirstLayoutDocument } from './layout-wall-first-codec';
+import {
+	normalizePreHWallFirstLayout,
+	validateWallFirstLayoutDocument
+} from './layout-wall-first-codec';
 import type { LayoutDocumentWallFirst } from './layout-wall-first-types';
-import { KNOWN_LAYOUT_FORMAT_VERSIONS } from './layout-wall-first-types';
+import {
+	KNOWN_LAYOUT_FORMAT_VERSIONS,
+	LAYOUT_PRE_AUTHORITATIVE_WALL_HEIGHT_FORMAT_VERSION
+} from './layout-wall-first-types';
 
 /** Where Scene/Camera physical values must still be resolved from. */
 export type LayoutCoordinateSpace = 'legacy-room-local' | 'project-world';
@@ -49,10 +61,16 @@ export type LegacyLayoutDecode = {
 
 export type WallFirstLayoutDecode = {
 	kind: 'wall-first';
-	/** New canonical wall-first document. No migration was required. */
+	/** Canonical wall-first document (current format). */
 	document: LayoutDocumentWallFirst;
 	/** Wall-first documents are project/world-local by definition. */
 	sceneSpace: 'project-world';
+	/**
+	 * P23.6H — present when a pre-H (`formatVersion: 4`) payload was normalized to
+	 * the current format at this boundary. Additive: consumers keep branching on
+	 * `kind` alone, exactly as before.
+	 */
+	migratedFromVersion?: number;
 };
 
 /**
@@ -137,9 +155,24 @@ export function decodeLayoutValueCompatible(input: unknown): CompatibleLayoutDec
 		};
 	}
 		const result = validateWallFirstLayoutDocument(input);
-		return result.success
-			? { kind: 'wall-first', document: result.document, sceneSpace: 'project-world' }
-			: { kind: 'unrecognized', reason: 'unsupported-format-version', issues: result.issues };
+		if (!result.success) {
+			return { kind: 'unrecognized', reason: 'unsupported-format-version', issues: result.issues };
+		}
+		// P23.6H — the one compatibility-normalization boundary. A pre-H
+		// (`formatVersion: 4`) payload's stored `wall.height` was never
+		// authoritative for rendered geometry, so decoding rewrites every Wall to
+		// the previously visible Floor-derived extent and canonicalizes the
+		// document to the current format. Canonical Save validation never does
+		// this: it receives canonical current-format state only.
+		if (rawVersion === LAYOUT_PRE_AUTHORITATIVE_WALL_HEIGHT_FORMAT_VERSION) {
+			return {
+				kind: 'wall-first',
+				document: normalizePreHWallFirstLayout(result.document),
+				sceneSpace: 'project-world',
+				migratedFromVersion: LAYOUT_PRE_AUTHORITATIVE_WALL_HEIGHT_FORMAT_VERSION
+			};
+		}
+		return { kind: 'wall-first', document: result.document, sceneSpace: 'project-world' };
 	}
 
 	const legacy = validateLayoutDocument(input);

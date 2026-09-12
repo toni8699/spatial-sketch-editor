@@ -71,7 +71,8 @@ export function createEmptyProject(input: EmptyProjectInput): Project {
 /**
  * Authoring-empty WALL-FIRST project — the canonical new-project boot.
  *
- * One valid empty wall-first Layout (`formatVersion: 4`) plus one valid empty
+ * One valid empty wall-first Layout (current `LAYOUT_WALL_FIRST_FORMAT_VERSION`,
+ * `5` since P23.6H) plus one valid empty
  * world-local Scene (`formatVersion: 1`): the pair `validateProject` requires,
  * since a wall-first Layout carrying the recognized legacy Scene is rejected
  * by name. Booting the canonical pair is what makes the wall-first Layout path

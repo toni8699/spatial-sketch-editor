@@ -47,6 +47,7 @@ import {
 } from './layout-room-reconciliation';
 import { createAuthoringRoomAllocator } from './layout-wall-topology-ops';
 import { classifyWallIntersection, type TopologySegment } from './layout-wall-topology';
+import { canonicalWallBirthHeight } from './layout-wall-heights';
 import { planWallCrossing, planWallSplitAtPoint, type NodingIdAllocator } from './layout-wall-noding';
 import type { LayoutDocumentIssue } from './layout-codec';
 
@@ -55,10 +56,16 @@ function samePoint(a: LayoutVec2, b: LayoutVec2): boolean {
 	return a[0] === b[0] && a[1] === b[1];
 }
 
-/** Chain wall/junction defaults (same as the P23.0 seed helpers). */
+/**
+ * Chain wall/junction defaults (same as the P23.0 seed helpers).
+ *
+ * P23.6H removed the fixed `height: 3` default: a new Wall is **born at the
+ * baseline document's Floor height** (`canonicalWallBirthHeight`), so no runtime
+ * Wall-birth path may carry a literal height. Thickness stays a fixed sketch
+ * default (it is not a Floor-derived quantity).
+ */
 export const WALL_CHAIN_DEFAULTS = {
-	thickness: 0.2,
-	height: 3
+	thickness: 0.2
 } as const;
 
 /** Why a chain sketch rejected; stable machine codes. */
@@ -71,7 +78,9 @@ export type WallChainRejectionCode =
 	| 'noding_rejected'
 	| 'room_reconciliation_rejected'
 	| 'invalid_candidate_document'
-	| 'candidate_does_not_compile';
+	| 'candidate_does_not_compile'
+	/** P23.6H — the Floor frame cannot supply a Wall birth height. */
+	| 'invalid_floor_height';
 
 export type WallChainRejection = {
 	code: WallChainRejectionCode;
@@ -178,8 +187,18 @@ export function planWallChain(options: {
 }): WallChainPlan {
 	const allocator = options.allocator ?? defaultChainAllocator();
 	const thickness = options.thickness ?? WALL_CHAIN_DEFAULTS.thickness;
-	const height = options.height ?? WALL_CHAIN_DEFAULTS.height;
 	const reject = (rejection: WallChainRejection): WallChainPlan => ({ kind: 'rejected', rejection });
+
+	// P23.6H birth rule: a new Wall's authoritative height is the baseline
+	// document's own Floor height. An explicit override stays honored (and is
+	// still bounded by the final canonical gates); there is no fixed default.
+	const height = options.height ?? canonicalWallBirthHeight(options.baseline.floor);
+	if (height === undefined) {
+		return reject({
+			code: 'invalid_floor_height',
+			message: 'Wall height must be finite and greater than zero (the Floor height is the birth default)'
+		});
+	}
 
 	// --- draft normalization -------------------------------------------------
 	const points = options.points.map((point) => [...point] as LayoutVec2);

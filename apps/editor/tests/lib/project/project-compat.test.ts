@@ -6,6 +6,7 @@ import {
 	serializeProject
 } from '$lib/project/project-codec';
 import type { Project } from '$lib/project/project-types';
+import { LAYOUT_WALL_FIRST_FORMAT_VERSION } from '$lib/layout/layout-wall-first-types';
 import { decodeProjectCompatible } from '$lib/content/scene-format';
 import { identifySceneFormat } from '$lib/content/scene-format';
 
@@ -111,8 +112,9 @@ describe('project compatible decode (P23.0a)', () => {
 		expect(decoded.kind).toBe('migrated');
 		if (decoded.kind !== 'migrated') return;
 		expect(decoded.sceneSpace).toBe('project-world');
-		// The layout is now the wall-first shape with the floor descriptor.
-		expect(decoded.project.layout.formatVersion).toBe(4);
+		// The layout is now the wall-first shape with the floor descriptor, at
+		// the current canonical format (P23.6H bumped 4 → 5).
+		expect(decoded.project.layout.formatVersion).toBe(LAYOUT_WALL_FIRST_FORMAT_VERSION);
 		expect(decoded.project.layout.floor.id).toBe('floor-1');
 		expect(decoded.project.layout.rooms[0]!.id).toBe('room-a');
 		// The scene is world-local (discriminated) with no room-bound entities.
@@ -202,7 +204,7 @@ describe('project compatible decode (P23.0a)', () => {
 			...project,
 			layout: {
 				units: 'meters',
-				formatVersion: 4,
+				formatVersion: LAYOUT_WALL_FIRST_FORMAT_VERSION,
 				floor: { id: 'floor', name: 'Floor', elevation: 0, height: 3 },
 				junctions: [],
 				walls: [],
@@ -272,7 +274,7 @@ describe('P23.1 wall-first project codec', () => {
 			scene: { ...project.scene, formatVersion: 1 as const },
 			layout: {
 				units: 'meters',
-				formatVersion: 4,
+				formatVersion: LAYOUT_WALL_FIRST_FORMAT_VERSION,
 				floor: { id: 'floor', name: 'Floor', elevation: 0, height: 3 },
 				junctions: [],
 				walls: [],
