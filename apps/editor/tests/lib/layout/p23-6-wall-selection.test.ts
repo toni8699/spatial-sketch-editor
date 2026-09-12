@@ -18,6 +18,7 @@ import {
 	createLayoutInteractionState,
 	reconcileLayoutSelection,
 	selectLayoutPhysicalWall,
+	selectLayoutRoom,
 	selectedLayoutPhysicalWall
 } from '$lib/editor/layout/layout-interaction';
 import { resolvePlanHit } from '$lib/editor/layout/plan-hit';
@@ -203,5 +204,64 @@ describe('P23.6 single-Wall presentation — Partition leaves the toolbar', () =
 		const document = commitChain(baseDocument(), [p(0, 0), p(2, 0)], 'partition');
 		expect(document.walls.every((wall) => wall.role === 'partition')).toBe(true);
 		expect(document.rooms).toHaveLength(0);
+	});
+});
+
+describe('P23.6 wall-first Room selection', () => {
+	function roomed(): LayoutDocumentWallFirst {
+		const plan = planWallChain({
+			baseline: baseDocument(),
+			points: [p(0, 0), p(4, 0), p(4, 3), p(0, 3)],
+			role: 'boundary',
+			close: true
+		});
+		if (plan.kind !== 'success') throw new Error(`expected success: ${JSON.stringify(plan)}`);
+		return plan.document;
+	}
+
+	it('resolves a Plan hit inside the Room with no legacy context', () => {
+		const document = roomed();
+		const { geometry } = compileWallFirstLayoutGeometry(document);
+		const hit = resolvePlanHit(geometry.queries, [2, 1.5], 0.2);
+		expect(hit).toEqual({ kind: 'room', roomId: document.rooms[0]!.id });
+	});
+
+	it('selects and retains the Room on the shared authority', () => {
+		const document = roomed();
+		const roomId = document.rooms[0]!.id;
+		const state = createLayoutInteractionState();
+		selectLayoutRoom(state, roomId);
+		expect(state.selection).toEqual({ kind: 'room', roomId });
+		expect(reconcileLayoutSelection(state.selection, document as never)).toEqual(state.selection);
+		expect(reconcileLayoutSelection({ kind: 'room', roomId: 'room:gone' }, document as never)).toEqual({
+			kind: 'none'
+		});
+	});
+
+	it('renders the selected Room with the shared selected tokens', () => {
+		const document = roomed();
+		const { geometry } = compileWallFirstLayoutGeometry(document);
+		const model = buildPlanRenderModel(geometry, undefined, {
+			selected: { kind: 'room', roomId: document.rooms[0]!.id },
+			selection: [],
+			handles: [],
+			drafts: [],
+			labels: []
+		});
+		const styles = model.layers.flatMap((layer) => layer.primitives.map((primitive) => primitive.style));
+		expect(styles).toContain('room-fill-selected');
+		expect(styles).toContain('room-outline-selected');
+	});
+
+	it('wires the viewport room branch and the Inspector room panel for wall-first', () => {
+		const lib = fileURLToPath(new URL('../../../src/lib', import.meta.url));
+		const viewport = fs.readFileSync(path.join(lib, 'editor/layout/LayoutPlanViewport.svelte'), 'utf8');
+		// Legacy rooms keep the Room-unit drag entry; wall-first rooms select
+		// on the same authority without it.
+		expect(viewport).toMatch(
+			/if \(wallFirstLayoutDocument\(\)\?\.rooms\.some\(\(room\) => room\.id === target\.roomId\)\) \{\s*selectLayoutRoom\(interaction, target\.roomId\);/
+		);
+		const inspector = fs.readFileSync(path.join(lib, 'editor/EditorInspector.svelte'), 'utf8');
+		expect(inspector).toContain('aria-label="Selected wall-first room"');
 	});
 });

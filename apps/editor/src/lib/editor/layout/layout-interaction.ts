@@ -1143,6 +1143,12 @@ export function reconcileLayoutSelection(
 	// roomless-wall rich selection beyond these canonical slots.
 	if ('formatVersion' in layout) {
 		if (selection.kind === 'none' || selection.kind === 'object') return selection;
+		if (selection.kind === 'room') {
+			const wallFirst = layout as unknown as LayoutDocumentWallFirst;
+			return wallFirst.rooms.some((candidate) => candidate.id === selection.roomId)
+				? selection
+				: { kind: 'none' };
+		}
 		if (selection.kind === 'wallOpening') {
 			const wallFirst = layout as unknown as LayoutDocumentWallFirst;
 			const opening = wallFirst.openings.find(

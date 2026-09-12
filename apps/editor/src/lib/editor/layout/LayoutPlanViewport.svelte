@@ -1618,10 +1618,18 @@
 		}
 
 		if (target.kind !== 'room') return;
-		const room = findLayoutRoom(rooms, target.roomId);
-		if (!room) return;
-		selectLayoutRoom(interaction, target.roomId);
-		beginRoomUnitDrag(event, room, 'translate', point);
+		const legacyRoom = findLayoutRoom(rooms, target.roomId);
+		if (legacyRoom) {
+			selectLayoutRoom(interaction, target.roomId);
+			beginRoomUnitDrag(event, legacyRoom, 'translate', point);
+			return;
+		}
+		// P23.6 — wall-first Room: select on the shared authority. Canonical
+		// Rooms have no Room-unit drag gesture (exact edits live in the
+		// Inspector); the legacy lookup above stays the only drag entry.
+		if (wallFirstLayoutDocument()?.rooms.some((room) => room.id === target.roomId)) {
+			selectLayoutRoom(interaction, target.roomId);
+		}
 	}
 
 	function onPointerMove(event: PointerEvent) {

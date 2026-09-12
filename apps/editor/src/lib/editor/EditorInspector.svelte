@@ -360,6 +360,17 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 			? precisionWallEndpoints(wallFirstLayout, selectedWallFirstWall)
 			: null
 	);
+	// P23.6 — canonical wall-first Room Inspector target. Read-only identity
+	// presentation (no wall-first Room metadata operation exists yet);
+	// boundary/dimension truth stays in the compiled Plan model.
+	const selectedWallFirstRoomSelection = $derived(
+		layoutInteraction.selection.kind === 'room' ? layoutInteraction.selection : null
+	);
+	const selectedWallFirstRoom = $derived(
+		selectedWallFirstRoomSelection && wallFirstLayout
+			? (wallFirstLayout.rooms.find((room) => room.id === selectedWallFirstRoomSelection.roomId) ?? null)
+			: null
+	);
 	// P23.6 — canonical wall-first Junction Inspector target (coordinate
 	// readout + exact X/Z editing through the same guarded mutation path).
 	const selectedWallFirstJunctionSelection = $derived(
@@ -1961,6 +1972,12 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 						<button type="button" disabled={isWallFirstLayout} onclick={() => armOpeningTool('door')}>Door</button>
 						<button type="button" disabled={isWallFirstLayout} onclick={() => armOpeningTool('window')}>Window</button>
 					</div>
+				</div>
+			{:else if selectedWallFirstRoom}
+				<div class="layout-selected-room" aria-label="Selected wall-first room">
+					<strong>{selectedWallFirstRoom.name}</strong>
+					<span>{selectedWallFirstRoom.id}</span>
+					<span>{selectedWallFirstRoom.boundary.length} boundary walls · floor {selectedWallFirstRoom.floorThickness.toFixed(2)} m · ceiling {selectedWallFirstRoom.ceilingThickness.toFixed(2)} m</span>
 				</div>
 			{:else if selectedLayoutRoom && selectedLayoutBounds}
 				<div class="layout-selected-room" aria-label="Selected layout room">
