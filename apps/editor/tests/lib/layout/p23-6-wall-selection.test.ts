@@ -264,4 +264,13 @@ describe('P23.6 wall-first Room selection', () => {
 		const inspector = fs.readFileSync(path.join(lib, 'editor/EditorInspector.svelte'), 'utf8');
 		expect(inspector).toContain('aria-label="Selected wall-first room"');
 	});
+
+	it('keeps canonical Room ids live in tree expansion seeding', () => {
+		// Regression: seeding trimmed to legacy `model.rooms` only, so every
+		// wall-first Room birth ping-ponged against pick-expand
+		// (append → trim → append) into effect_update_depth_exceeded.
+		const lib = fileURLToPath(new URL('../../../src/lib', import.meta.url));
+		const tree = fs.readFileSync(path.join(lib, 'editor/UnifiedProjectTree.svelte'), 'utf8');
+		expect(tree).toContain('model.wallFirstRooms.map((room) => room.roomId)');
+	});
 });
