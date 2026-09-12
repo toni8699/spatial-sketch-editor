@@ -389,27 +389,34 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 	// P23.4 — reset explicit repeat defaults when the selection changes. The
 	// opening spacing defaults to width + gap; the room delta defaults to a
 	// non-overlapping east placement (room AABB width + 1 m) so the Duplicate
-	// button does not defeat itself on rooms wider than 1 m.
+	// button does not defeat itself on rooms wider than 1 m. Both auto-sync
+	// while pristine (keyed on id + measured width, so widening the selected
+	// record refreshes the default); a manual edit owns the field until the
+	// next record is selected.
 	$effect(() => {
 		const opening = selectedWallFirstOpening;
 		if (!opening) return;
-		if (opening.id === lastDuplicateOpeningId) return;
-		lastDuplicateOpeningId = opening.id;
-		openingRepeatCount = 3;
-		openingRepeatSpacing = opening.width + WALL_OPENING_DUPLICATE_GAP_M;
+		const key = `${opening.id}|${opening.width.toFixed(3)}`;
+		if (key === lastDuplicateOpeningKey) return;
+		const idChanged = lastDuplicateOpeningKey?.split('|')[0] !== opening.id;
+		lastDuplicateOpeningKey = key;
+		if (idChanged) {
+			openingRepeatTouched = false;
+			openingRepeatCount = 3;
+		}
+		if (!openingRepeatTouched) {
+			openingRepeatSpacing = opening.width + WALL_OPENING_DUPLICATE_GAP_M;
+		}
 	});
 	$effect(() => {
 		const room = selectedPrecisionRoom;
 		const layout = wallFirstLayout;
 		if (!room || !layout) return;
-		if (room.id === lastDuplicateRoomId) return;
-		lastDuplicateRoomId = room.id;
-		roomDuplicateDeltaZ = 0;
+		let minX = Number.POSITIVE_INFINITY;
+		let maxX = Number.NEGATIVE_INFINITY;
 		try {
 			const pointsById = new Map(layout.junctions.map((junction) => [junction.id, junction.point]));
 			const wallsById = new Map(layout.walls.map((wall) => [wall.id, wall]));
-			let minX = Number.POSITIVE_INFINITY;
-			let maxX = Number.NEGATIVE_INFINITY;
 			for (const ref of room.boundary) {
 				const wall = wallsById.get(ref.wallId);
 				if (!wall) continue;
@@ -420,9 +427,21 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 					if (point[0] > maxX) maxX = point[0];
 				}
 			}
-			roomDuplicateDeltaX = Number.isFinite(minX) && Number.isFinite(maxX) ? maxX - minX + 1 : 10;
 		} catch {
-			roomDuplicateDeltaX = 10;
+			minX = Number.POSITIVE_INFINITY;
+			maxX = Number.NEGATIVE_INFINITY;
+		}
+		const width = Number.isFinite(minX) && Number.isFinite(maxX) ? maxX - minX : Number.NaN;
+		const key = `${room.id}|${Number.isFinite(width) ? width.toFixed(3) : 'nan'}`;
+		if (key === lastDuplicateRoomKey) return;
+		const idChanged = lastDuplicateRoomKey?.split('|')[0] !== room.id;
+		lastDuplicateRoomKey = key;
+		if (idChanged) {
+			roomDuplicateTouched = false;
+			roomDuplicateDeltaZ = 0;
+		}
+		if (!roomDuplicateTouched) {
+			roomDuplicateDeltaX = Number.isFinite(width) ? width + 1 : 10;
 		}
 	});
 
@@ -940,8 +959,10 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 	let openingRepeatSpacing = $state(1.1);
 	let roomDuplicateDeltaX = $state(10);
 	let roomDuplicateDeltaZ = $state(0);
-	let lastDuplicateOpeningId: string | null = null;
-	let lastDuplicateRoomId: string | null = null;
+	let lastDuplicateOpeningKey: string | null = null;
+	let lastDuplicateRoomKey: string | null = null;
+	let openingRepeatTouched = false;
+	let roomDuplicateTouched = false;
 
 	const activeAlignReference = $derived.by<AlignReferenceOption | null>(() => {
 		if (alignReferenceOptions.length === 0) return null;
@@ -1479,8 +1500,8 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 								<label>Width Wall<select value={precisionRectangleWidthWall ?? selectedPrecisionRectangle.widthWallId} onchange={(event) => precisionRectangleWidthWall = (event.currentTarget as HTMLSelectElement).value || null}>{#each precisionRectangleWidthWallOptions as wallId}<option value={wallId}>{wallId}</option>{/each}</select></label>
 								<label>Width (m)<input type="number" min="0.001" step="0.01" value={selectedPrecisionRectangle.width} onchange={(event) => updatePrecisionRectangle('width', event)} /></label>
 								<label>Depth (m)<input type="number" min="0.001" step="0.01" value={selectedPrecisionRectangle.depth} onchange={(event) => updatePrecisionRectangle('depth', event)} /></label>
-								<label>Duplicate Δ X (m)<input type="number" step="0.1" value={roomDuplicateDeltaX} onchange={(event) => roomDuplicateDeltaX = Number((event.currentTarget as HTMLInputElement).value)} /></label>
-								<label>Duplicate Δ Z (m)<input type="number" step="0.1" value={roomDuplicateDeltaZ} onchange={(event) => roomDuplicateDeltaZ = Number((event.currentTarget as HTMLInputElement).value)} /></label>
+								<label>Duplicate Δ X (m)<input type="number" step="0.1" value={roomDuplicateDeltaX} onchange={(event) => { roomDuplicateTouched = true; roomDuplicateDeltaX = Number((event.currentTarget as HTMLInputElement).value); }} /></label>
+								<label>Duplicate Δ Z (m)<input type="number" step="0.1" value={roomDuplicateDeltaZ} onchange={(event) => { roomDuplicateTouched = true; roomDuplicateDeltaZ = Number((event.currentTarget as HTMLInputElement).value); }} /></label>
 								<button type="button" onclick={duplicateSelectedPrecisionRoom}>Duplicate room</button>
 								{#if layoutPreview.lastMutationMessage}<p class="layout-opening-warning" role="status">{layoutPreview.lastMutationMessage}</p>{/if}
 							</div>
@@ -1625,7 +1646,7 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 					<fieldset class="staging-transform-fields">
 						<legend>Linear repeat</legend>
 						<label>Copies (1–50)<input type="number" min="1" max="50" step="1" value={openingRepeatCount} onchange={(event) => openingRepeatCount = Number((event.currentTarget as HTMLInputElement).value)} /></label>
-						<label>Spacing (m)<input type="number" step="0.05" value={openingRepeatSpacing} onchange={(event) => openingRepeatSpacing = Number((event.currentTarget as HTMLInputElement).value)} /></label>
+						<label>Spacing (m)<input type="number" step="0.05" value={openingRepeatSpacing} onchange={(event) => { openingRepeatTouched = true; openingRepeatSpacing = Number((event.currentTarget as HTMLInputElement).value); }} /></label>
 					</fieldset>
 					<div class="layout-opening-actions">
 						<button type="button" onclick={repeatSelectedWallOpening}>Repeat ×{openingRepeatCount}</button>
