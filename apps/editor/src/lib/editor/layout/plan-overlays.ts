@@ -79,6 +79,8 @@ function toPlanSelection(selection: LayoutSelection): PlanSelection {
 			return { kind: 'object', objectId: selection.objectId };
 		case 'wallOpening':
 			return { kind: 'wallOpening', wallId: selection.wallId, openingId: selection.openingId };
+		case 'physicalWall':
+			return { kind: 'physicalWall', wallId: selection.wallId };
 	}
 }
 

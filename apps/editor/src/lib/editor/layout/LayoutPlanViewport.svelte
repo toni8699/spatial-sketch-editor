@@ -32,6 +32,7 @@
 		selectLayoutInteriorAnchor,
 		selectLayoutObject,
 		selectLayoutOpening,
+		selectLayoutPhysicalWall,
 		selectLayoutRoom,
 		selectLayoutWall,
 		selectLayoutWallOpening,
@@ -1570,8 +1571,13 @@
 			return;
 		}
 
-		// A canonical physical-Wall hit has no Room-unit target (and no canonical
-		// wall selection target until the P23.6/P23.7 cutover).
+		// P23.6 — a canonical physical-Wall hit selects the Wall on the one
+		// selection authority (no Room-unit target, no wall bend gesture yet).
+		if (target.kind === 'physicalWall') {
+			selectLayoutPhysicalWall(interaction, target.wallId);
+			return;
+		}
+
 		if (target.kind !== 'room') return;
 		const room = findLayoutRoom(rooms, target.roomId);
 		if (!room) return;

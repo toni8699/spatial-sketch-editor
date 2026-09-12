@@ -92,6 +92,18 @@
 		return '';
 	}
 
+	/**
+	 * P23.6 — one Wall concept: a `partition`-role Wall renders the same
+	 * wall-like stroke language with a subtle muted distinction (it does not
+	 * divide semantic Rooms). Selection classes still apply on top — selected
+	 * state stays unmistakable for both roles.
+	 */
+	function wallPartitionClass(primitive: PlanPolylinePrimitive): string {
+		return primitive.architecture?.kind === 'wall' && primitive.architecture.role === 'partition'
+			? 'partition'
+			: '';
+	}
+
 	function openingSelected(style: PlanStyleToken): boolean {
 		return style === 'opening-line-selected';
 	}
@@ -166,12 +178,12 @@
 			{:else if primitive.kind === 'polyline'}
 				{#if primitive.architecture?.kind === 'wall'}
 					<polyline
-						class={`wall-casing ${wallStateClass(primitive.style)}`}
+						class={`wall-casing ${wallStateClass(primitive.style)} ${wallPartitionClass(primitive)}`}
 						points={polylinePointsAttr(primitive.points, primitive.endOffsetPx)}
 						style={architecturalStrokeStyle(primitive)}
 					/>
 					<polyline
-						class={tokenClass(primitive.style)}
+						class={`${tokenClass(primitive.style)} ${wallPartitionClass(primitive)}`}
 						points={polylinePointsAttr(primitive.points, primitive.endOffsetPx)}
 						style={architecturalStrokeStyle(primitive)}
 					/>
@@ -252,9 +264,13 @@
 	.door-leaf,
 	.door-swing { fill: none; vector-effect: non-scaling-stroke; pointer-events: none; }
 	.wall-casing { stroke: var(--editor-plan-wall); stroke-width: calc(var(--architecture-width) + 2px); stroke-linecap: square; stroke-linejoin: miter; }
+	/* P23.6 — non-room-bounding Walls stay physical and wall-like with a subtle
+	   muted distinction (same selection language; `.selected` below wins). */
+	.wall-casing.partition { stroke: var(--editor-plan-muted); }
 	.wall-casing.selected { stroke: var(--editor-plan-selection); stroke-width: calc(var(--architecture-width) + 4px); }
 	.wall-casing.opening-selected { stroke: var(--editor-plan-hover-stroke); }
 	.wall-line { stroke: var(--editor-plan-wall-fill); stroke-width: var(--architecture-width); stroke-linecap: square; stroke-linejoin: miter; }
+	.wall-line.partition { stroke: color-mix(in srgb, var(--editor-plan-muted) 38%, var(--editor-plan-wall-fill)); }
 	.wall-line.selected { stroke: color-mix(in srgb, var(--editor-plan-selection) 42%, var(--editor-plan-wall-fill)); }
 	.wall-line.opening-selected { stroke: color-mix(in srgb, var(--editor-plan-hover-stroke) 34%, var(--editor-plan-wall-fill)); }
 	.opening-void { stroke: var(--editor-plan-room-bg); stroke-width: calc(var(--architecture-width) + 4px); }

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { BrickWall, DoorOpen, Grid2x2, MousePointer2, Pentagon, SeparatorVertical, Square, Trash2, X } from 'lucide-svelte';
+	import { BrickWall, DoorOpen, Grid2x2, MousePointer2, Pentagon, Square, Trash2, X } from 'lucide-svelte';
 	import {
 		cancelLayoutPresetDraft,
 		cancelLayoutPrimitiveDraft,
@@ -31,6 +31,11 @@
 	const WALL_FIRST_DRAFT_TOOLS: ReadonlySet<LayoutDraftTool> = new Set<LayoutDraftTool>([
 		'select',
 		'wall-chain',
+		// P23.6 — one primary Wall concept: `partition-chain` stays a valid
+		// tool (the internal `boundary | partition` role is authoritative and
+		// `wallChainRoleForTool` still maps it), but it is no longer a primary
+		// toolbar button. `partition` is an internal Wall semantic, not a
+		// separate user-facing object family.
 		'partition-chain',
 		'rectangle',
 		'polygon',
@@ -126,7 +131,10 @@
 		<button type="button" class:active={interaction.tool === 'select'} aria-pressed={interaction.tool === 'select'} onclick={() => chooseTool('select')}><MousePointer2 size={14} aria-hidden="true" /> Select</button>
 		{#if interaction.planViewMode === 'layout'}
 			<button type="button" disabled={!wallFirstLayout} title={!wallFirstLayout ? 'Wall sketching requires a wall-first layout' : undefined} class:active={interaction.tool === 'wall-chain'} aria-pressed={interaction.tool === 'wall-chain'} onclick={() => chooseTool('wall-chain')}><BrickWall size={14} aria-hidden="true" /> Wall</button>
-			<button type="button" disabled={!wallFirstLayout} title={!wallFirstLayout ? 'Partition sketching requires a wall-first layout' : undefined} class:active={interaction.tool === 'partition-chain'} aria-pressed={interaction.tool === 'partition-chain'} onclick={() => chooseTool('partition-chain')}><SeparatorVertical size={14} aria-hidden="true" /> Partition</button>
+			<!-- P23.6 — no separate Partition primary button: one Wall concept.
+			     Newly drawn Walls default to `boundary`; the per-Wall
+			     Defines-room-boundary control (P23.6 slice 2) flips the
+			     internal `partition` role on selected Walls. -->
 			<button type="button" title={wallFirstLayout ? 'Draws one closed boundary chain of canonical Walls' : undefined} class:active={interaction.tool === 'rectangle'} aria-pressed={interaction.tool === 'rectangle'} onclick={() => chooseTool('rectangle')}><Square size={14} aria-hidden="true" /> Rect Room</button>
 			<button type="button" title={wallFirstLayout ? 'Draws one closed boundary chain of canonical Walls' : undefined} class:active={interaction.tool === 'polygon'} aria-pressed={interaction.tool === 'polygon'} onclick={() => chooseTool('polygon')}><Pentagon size={14} aria-hidden="true" /> Poly Room</button>
 			<button type="button" title={wallFirstLayout ? 'Places one canonical Opening on the clicked Wall' : undefined} class:active={interaction.tool === 'door'} aria-pressed={interaction.tool === 'door'} onclick={() => chooseTool('door')}><DoorOpen size={14} aria-hidden="true" /> Door</button>

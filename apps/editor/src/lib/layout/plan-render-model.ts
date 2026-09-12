@@ -92,11 +92,16 @@ export type PlanHitIdentity =
 	| { kind: 'room'; roomId: string }
 	/**
 	 * P23.3 — canonical wall-first opening identity: document-global `wallId` +
-	 * `openingId` and no `roomId`. Canonical physical Walls deliberately carry
-	 * **no** hit identity until the full `wallId`/`junctionId` selection cutover
-	 * (P23.6/P23.7) — never a faked room-anchored `wall` hit.
+	 * `openingId` and no `roomId`.
 	 */
-	| { kind: 'wallOpening'; wallId: string; openingId: string };
+	| { kind: 'wallOpening'; wallId: string; openingId: string }
+	/**
+	 * P23.6 — canonical wall-first Wall identity: document-global `wallId`,
+	 * no `roomId` and no `segmentId`. The full `(roomId, segmentId)` →
+	 * `(wallId/junctionId)` cutover starts here with the Wall slot; legacy
+	 * room-anchored `wall` hits stay untouched for legacy documents.
+	 */
+	| { kind: 'physicalWall'; wallId: string };
 
 /**
  * Renderer-neutral selection descriptor. Mirrors the editor's selection shape
@@ -112,7 +117,9 @@ export type PlanSelection =
 	| { kind: 'interiorAnchor'; roomId: string; segmentId: string; anchorId: string }
 	| { kind: 'object'; objectId: string }
 	/** P23.3 — minimal canonical wall-first opening target (`wallId` + `openingId`). */
-	| { kind: 'wallOpening'; wallId: string; openingId: string };
+	| { kind: 'wallOpening'; wallId: string; openingId: string }
+	/** P23.6 — canonical wall-first Wall target (`wallId`, no `roomId`). */
+	| { kind: 'physicalWall'; wallId: string };
 
 export type PlanPolygonPrimitive = {
 	kind: 'polygon';
@@ -131,7 +138,7 @@ export type PlanPolylinePrimitive = {
 	 * dimensions and opening semantics; SVG remains a thin screen adapter.
 	 */
 	architecture?:
-		| { kind: 'wall'; thicknessMeters: number }
+		| { kind: 'wall'; thicknessMeters: number; role?: 'boundary' | 'partition' }
 		| {
 				kind: 'door' | 'window';
 				widthMeters: number;
@@ -373,6 +380,19 @@ function selectedStyle(
 					? 'wall-line-opening-selected'
 					: base;
 			}
+			// P23.6 — canonical physical Walls share the one selection language:
+			// selected Wall reads selected, Wall hosting the selected Opening
+			// reads opening-selected. Boundary/partition distinction is the
+			// architecture `role`, never a separate style token.
+			if (hit.kind === 'physicalWall') {
+				if (selected.kind === 'physicalWall' && selected.wallId === hit.wallId) {
+					return 'wall-line-selected';
+				}
+				if (selected.kind === 'wallOpening' && selected.wallId === hit.wallId) {
+					return 'wall-line-opening-selected';
+				}
+				return base;
+			}
 			if (hit.kind !== 'wall') return base;
 			if (selected.kind === 'wall' && selected.roomId === hit.roomId && selected.segmentId === hit.segmentId) {
 				return 'wall-line-selected';
@@ -528,6 +548,7 @@ export function buildPlanRenderModel(
 		for (const opening of wall.openings) {
 			// One authored Opening renders once, with the canonical hit identity
 			// and the selection style derived from it (never per-Room duplicates).
+			const openingHit = { kind: 'wallOpening', wallId: wall.wallId, openingId: opening.openingId } as const;
 			openings.push({
 				kind: 'polyline',
 				key: geometryId(['plan', 'physical-opening', wall.floorId, wall.wallId, opening.openingId]),
@@ -538,17 +559,23 @@ export function buildPlanRenderModel(
 					wallThicknessMeters: wall.thickness,
 					inwardNormal: [...opening.center.normal] as LayoutVec2
 				},
-				style: 'opening-line',
+				style: selectedStyle('opening-line', openingHit, interaction?.selected),
 				hit: { kind: 'wallOpening', wallId: wall.wallId, openingId: opening.openingId }
 			});
 		}
 		wall.solidCenterlinePolylines.forEach((polyline, index) => {
+			// P23.6 — every canonical Wall carries its hit identity so committed
+			// Walls are selectable/hoverable with no Room ownership; `role`
+			// presents the one-Wall boundary/partition truth, never a second
+			// object family.
+			const wallHit = { kind: 'physicalWall', wallId: wall.wallId } as const;
 			walls.push({
 				kind: 'polyline',
 				key: geometryId(['plan', 'physical-wall', wall.floorId, wall.wallId, String(index)]),
 				points: polyline.map(([x, z]) => [x, z] as LayoutVec2),
-				architecture: { kind: 'wall', thicknessMeters: wall.thickness },
-				style: 'wall-line'
+				architecture: { kind: 'wall', thicknessMeters: wall.thickness, role: wall.role },
+				style: selectedStyle('wall-line', wallHit, interaction?.selected),
+				hit: { kind: 'physicalWall', wallId: wall.wallId }
 			});
 		});
 	}
