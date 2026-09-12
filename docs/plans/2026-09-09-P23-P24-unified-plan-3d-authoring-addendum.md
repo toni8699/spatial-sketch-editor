@@ -22,9 +22,12 @@ Committed canonical selection **must survive** Plan ↔ 3D switching while the s
 
 An unfinished placement/transform gesture cancels on view switch with no history result unless a future explicitly specified cross-view continuation flow exists. View switching never silently commits.
 
-## Target ownership, not current shipped Layout
+## Target ownership and current wall-first Layout
 
-The following is the **ratified P23 target after the Foundation Gate**, not current shipped Layout structure:
+The following is the **ratified P23 wall-first Layout foundation**, now the
+current editable structure after the Foundation Gate shipped. Legacy
+Room-owned/Room-local behavior remains only as a compatibility read path for
+recognized legacy Projects:
 
 ```text
 LayoutDocument
@@ -39,8 +42,6 @@ SceneDocument
 ├─ Scene entities / clusters / materials / lights
 └─ Camera-authored records currently persist here
 ```
-
-Current Room-owned / Room-local behavior remains current implementation until P23 Foundation ships.
 
 `Camera` is a semantic subsystem/workspace authority, not a proposed third document.
 
