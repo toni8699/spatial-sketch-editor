@@ -9,7 +9,9 @@ import {
 } from './layout-interaction';
 import { worldToPlanScreen, type PlanViewportState } from './layout-plan-transform';
 import { geometryId } from '$lib/layout/layout-geometry-types';
-import type { SnapResolution } from '@portfolio/layout-core';
+import { layoutArchitecturalPreset } from '$lib/layout/layout-wall-first-precision';
+import { isLayoutPresetTool, type LayoutPresetTool } from './layout-interaction';
+import type { LayoutArchitecturalPresetId, SnapResolution } from '@portfolio/layout-core';
 import type {
 	PlanHitIdentity,
 	PlanInteractionProjection,
@@ -386,6 +388,41 @@ function ghostStyle(interaction: LayoutInteractionState): PlanStyleToken {
 	return 'primitive-ghost';
 }
 
+/** P23.5 — the preset ID a preset tool authors (`preset-column` → `column`). */
+export function presetIdForTool(tool: LayoutPresetTool): LayoutArchitecturalPresetId {
+	return tool.replace(/^preset-/, '') as LayoutArchitecturalPresetId;
+}
+
+/**
+ * P23.5 — one-click preset footprint preview (presentation only). Resolves
+ * the tool's preset dimensions; `null` when no candidate is live or the
+ * preset table is missing the tool (which would be a wiring bug).
+ */
+function presetGhostPoints(interaction: LayoutInteractionState): LayoutVec2[] | null {
+	const draft = interaction.presetDraft;
+	if (!draft) return null;
+	if (!isLayoutPresetTool(draft.tool)) return null;
+	const preset = layoutArchitecturalPreset(presetIdForTool(draft.tool));
+	if (!preset || !draft.valid) return null;
+	const [width, , depth] = preset.dimensions;
+	const [x, z] = draft.point;
+	const halfWidth = width / 2;
+	const halfDepth = depth / 2;
+	if (preset.kind === 'cylinder') {
+		const radius = Math.max(halfWidth, halfDepth);
+		return Array.from({ length: 32 }, (_, index) => {
+			const angle = (index / 32) * Math.PI * 2;
+			return [x + Math.cos(angle) * radius, z + Math.sin(angle) * radius] as LayoutVec2;
+		});
+	}
+	return [
+		[x - halfWidth, z - halfDepth],
+		[x + halfWidth, z - halfDepth],
+		[x + halfWidth, z + halfDepth],
+		[x - halfWidth, z + halfDepth]
+	];
+}
+
 export function buildPlanInteractionProjection(
 	interaction: LayoutInteractionState,
 	rooms: readonly LayoutRoom[],
@@ -492,6 +529,18 @@ export function buildPlanInteractionProjection(
 			key: geometryId(['plan', 'overlay', 'primitive-ghost']),
 			points: primitiveDraftFootprint(interaction.primitiveDraft),
 			style: ghostStyle(interaction)
+		});
+	}
+
+	// P23.5 — the preset candidate previews the same ghost language as a
+	// primitive draft (footprint of the object the preset will create).
+	const presetGhost = presetGhostPoints(interaction);
+	if (presetGhost) {
+		drafts.push({
+			kind: 'polygon',
+			key: geometryId(['plan', 'overlay', 'preset-ghost']),
+			points: presetGhost,
+			style: 'primitive-ghost'
 		});
 	}
 
