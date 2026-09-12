@@ -271,17 +271,23 @@ function nearestWallHit(
  * Resolve the locked-priority hit for a world-space plan point. `options.
  * allowedRoomIds` restricts room hits to authored room candidates (e.g. only
  * first-floor rooms during primitive placement); a contained room outside the
- * set yields no hit.
+ * set yields no hit. `options.includeEndpoints` gates canonical endpoint
+ * (Junction) hits — below the Junction-handle LOD the invisible endpoint
+ * must not outrank its Wall, so callers pass false and the physical Wall
+ * wins (default true preserves the full authority).
  */
 export function resolvePlanHit(
 	queries: CompiledLayoutQueryGeometry,
 	point: LayoutVec2,
 	tolerance: number,
-	options?: { allowedRoomIds?: ReadonlySet<string> }
+	options?: { allowedRoomIds?: ReadonlySet<string>; includeEndpoints?: boolean }
 ): PlanHitResult {
 	const vertex = nearestPointHit(queries, point, tolerance, 'vertex');
 	if (vertex) return vertex;
-	const endpoint = nearestCanonicalEndpointHit(queries, point, tolerance);
+	const endpoint =
+		options?.includeEndpoints === false
+			? null
+			: nearestCanonicalEndpointHit(queries, point, tolerance);
 	if (endpoint) return endpoint;
 	const anchor = nearestPointHit(queries, point, tolerance, 'interior-anchor');
 	if (anchor) return anchor;

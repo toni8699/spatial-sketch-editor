@@ -124,6 +124,7 @@
 	} from './plan-scene-transform';
 	import type { PlanViewMode } from './layout-interaction';
 	import {
+		JUNCTION_HANDLES_MIN_PX_PER_M,
 		buildPlanInteractionProjection,
 		physicalWallSpan,
 		planHandleScreenPoints,
@@ -1459,7 +1460,8 @@
 			const target = resolvePlanHit(
 				model.queries,
 				point,
-				LAYOUT_PLAN_HIT_RADIUS_PX / interaction.planView.pixelsPerMeter
+				LAYOUT_PLAN_HIT_RADIUS_PX / interaction.planView.pixelsPerMeter,
+				planHitEndpointGate()
 			);
 			if (wallFirstLayoutDocument()) {
 				// P23.3 — canonical authoring resolves the hosting Wall by
@@ -1519,7 +1521,12 @@
 		}
 
 		if (interaction.tool !== 'select') return;
-		const target = resolvePlanHit(model.queries, point, LAYOUT_PLAN_HIT_RADIUS_PX / interaction.planView.pixelsPerMeter);
+		const target = resolvePlanHit(
+			model.queries,
+			point,
+			LAYOUT_PLAN_HIT_RADIUS_PX / interaction.planView.pixelsPerMeter,
+			planHitEndpointGate()
+		);
 		if (!target) {
 			// a Plan empty-click deselects whichever domain is active (a
 			// scene/camera pick may have survived into Plan); default keeps the
@@ -1713,7 +1720,8 @@
 					: resolvePlanHit(
 							model.queries,
 							hoverPoint,
-							LAYOUT_PLAN_HIT_RADIUS_PX / interaction.planView.pixelsPerMeter
+							LAYOUT_PLAN_HIT_RADIUS_PX / interaction.planView.pixelsPerMeter,
+							planHitEndpointGate()
 						);
 			layoutHover = toLayoutHover(hoverHit);
 		} else if (layoutHover) {
@@ -2196,6 +2204,14 @@
 		const wallFirst = layout as unknown as { junctions: { id: string; point: LayoutVec2 }[] };
 		const junction = wallFirst.junctions.find((candidate) => candidate.id === junctionId);
 		return junction ? ([...junction.point] as LayoutVec2) : null;
+	}
+
+	/** P23.6 — canonical endpoints lose hit authority below the Junction-handle
+	 * LOD, so an invisible endpoint never outranks its visible Wall. */
+	function planHitEndpointGate(): { includeEndpoints: boolean } {
+		return {
+			includeEndpoints: interaction.planView.pixelsPerMeter >= JUNCTION_HANDLES_MIN_PX_PER_M
+		};
 	}
 
 	/** P23.6 — map a canonical Wall endpoint to its Junction ID (click-select). */

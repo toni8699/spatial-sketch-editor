@@ -450,7 +450,7 @@ describe('P23.6 exact inputs — presentation formatting, planner-owned validity
 		const wallId = document.walls[0]!.id;
 		// What the user types parses fully: the planner stores exactly what it
 		// is given — display rounding never feeds back into the document.
-		const length = planExactWallLength(document, wallId, 2.9999999999999999, 'start');
+		const length = planExactWallLength(document, wallId, 2.987654321, 'start');
 		if (length.kind !== 'success') throw new Error(`expected success: ${JSON.stringify(length)}`);
 		const moved = length.document.walls.find((wall) => wall.id === wallId)!;
 		expect(moved).toBeDefined();

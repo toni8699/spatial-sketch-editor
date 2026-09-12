@@ -334,3 +334,15 @@ describe('P23.6 hover affordances — selection always wins', () => {
 		).toBe('wall-line-hovered');
 	});
 });
+
+describe('P23.6 endpoint LOD — invisible endpoints lose hit authority', () => {
+	it('lets the physical Wall win below the Junction-handle zoom floor', () => {
+		const document = twoWallDocument();
+		const { geometry } = compileWallFirstLayoutGeometry(document);
+		const [first] = document.walls;
+		const near = resolvePlanHit(geometry.queries, [0.05, 0.02], 0.2);
+		expect(near?.kind).toBe('wallEndpoint');
+		const far = resolvePlanHit(geometry.queries, [0.05, 0.02], 0.2, { includeEndpoints: false });
+		expect(far).toMatchObject({ kind: 'physicalWall', wallId: first!.id });
+	});
+});

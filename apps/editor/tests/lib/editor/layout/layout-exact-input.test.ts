@@ -32,9 +32,9 @@ describe('parseExactNumber — blank is invalid, never zero', () => {
 	});
 
 	it('parses the full typed value without rounding', () => {
-		expect(parseExactNumber('2.9999999999999999', 4, formatMeters)).toEqual({
+		expect(parseExactNumber('2.987654321', 4, formatMeters)).toEqual({
 			ok: true,
-			value: 2.9999999999999999
+			value: 2.987654321
 		});
 		expect(parseExactNumber(' 0.2 ', 1, formatMeters)).toEqual({ ok: true, value: 0.2 });
 		expect(parseExactNumber('-3.5', 1, formatMeters)).toEqual({ ok: true, value: -3.5 });
@@ -43,7 +43,7 @@ describe('parseExactNumber — blank is invalid, never zero', () => {
 	it('bounds presentation formatting', () => {
 		expect(formatMeters(3)).toBe('3.00');
 		expect(formatMeters(0.2)).toBe('0.20');
-		expect(formatMeters(2.9999999999999999)).toBe('3.00');
+		expect(formatMeters(2.987654321)).toBe('2.99');
 		expect(formatDegrees(121.57596224827532)).toBe('121.6');
 	});
 });
