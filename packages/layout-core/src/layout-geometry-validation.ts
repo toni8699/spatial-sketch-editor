@@ -63,7 +63,15 @@ export function validatePreparedLayoutRoomGeometry(
 	room: Pick<LayoutRoom, 'id' | 'boundary'> & { openings: readonly LayoutRoom['openings'][number][] },
 	floor: Pick<LayoutFloor, 'id' | 'height'>,
 	prepared: readonly (SampledSegment | null)[],
-	path = `rooms.${room.id}`
+	path = `rooms.${room.id}`,
+	/**
+	 * P23.6H — optional per-boundary-segment vertical limit for Opening fit,
+	 * keyed by segment id (the wall-first compiler supplies each Wall's
+	 * authoritative height). Absent keeps the historical `floor.height` rule and
+	 * byte-identical legacy behavior/cache keys; exactly one fit rule remains
+	 * (this branch), never a second validator.
+	 */
+	openingHeightLimitBySegmentId?: Readonly<Record<string, number>>
 ): LayoutGeometryIssue[] {
 	const issues: LayoutGeometryIssue[] = [];
 	const segments = room.boundary.segments;
@@ -127,7 +135,8 @@ export function validatePreparedLayoutRoomGeometry(
 		if (!Number.isFinite(opening.width) || opening.width <= 0) issues.push({ path: `${path}.openings[${index}].width`, code: 'opening_width_invalid', message: 'Opening width must be finite and greater than zero.', targetId: opening.id });
 		if (!Number.isFinite(opening.height) || opening.height <= 0) issues.push({ path: `${path}.openings[${index}].height`, code: 'opening_height_invalid', message: 'Opening height must be finite and greater than zero.', targetId: opening.id });
 		if (!Number.isFinite(opening.sillHeight) || opening.sillHeight < 0) issues.push({ path: `${path}.openings[${index}].sillHeight`, code: 'opening_sill_invalid', message: 'Opening sill height must be finite and non-negative.', targetId: opening.id });
-		if (Number.isFinite(opening.sillHeight) && Number.isFinite(opening.height) && opening.sillHeight + opening.height > floor.height + LAYOUT_GEOMETRY_EPSILON) issues.push({ path: `${path}.openings[${index}]`, code: 'opening_over_height', message: 'Opening top exceeds floor height.', targetId: opening.id });
+		const heightLimit = openingHeightLimitBySegmentId?.[opening.segmentId] ?? floor.height;
+		if (Number.isFinite(opening.sillHeight) && Number.isFinite(opening.height) && opening.sillHeight + opening.height > heightLimit + LAYOUT_GEOMETRY_EPSILON) issues.push({ path: `${path}.openings[${index}]`, code: 'opening_over_height', message: heightLimit === floor.height ? 'Opening top exceeds floor height.' : `Opening top exceeds Wall '${opening.segmentId}' height ${heightLimit} m.`, targetId: opening.id });
 		if (Number.isFinite(opening.width) && Number.isFinite(opening.height)) {
 			const profileResult = buildArchProfile(opening.profile, opening.width, opening.height);
 			for (const profileIssue of profileResult.issues) issues.push({ path: `${path}.openings[${index}].profile`, code: profileIssue.code, message: profileIssue.message, targetId: opening.id });

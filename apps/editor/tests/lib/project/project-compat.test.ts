@@ -3,9 +3,15 @@ import { describe, expect, it } from 'vitest';
 import {
 	createEmptyProject,
 	parseProjectJson,
-	serializeProject
+	serializeProject,
+	validateProject,
+	ProjectValidationError
 } from '$lib/project/project-codec';
 import type { Project } from '$lib/project/project-types';
+import {
+	LAYOUT_PRE_AUTHORITATIVE_WALL_HEIGHT_FORMAT_VERSION,
+	LAYOUT_WALL_FIRST_FORMAT_VERSION
+} from '$lib/layout/layout-wall-first-types';
 import { decodeProjectCompatible } from '$lib/content/scene-format';
 import { identifySceneFormat } from '$lib/content/scene-format';
 
@@ -111,8 +117,9 @@ describe('project compatible decode (P23.0a)', () => {
 		expect(decoded.kind).toBe('migrated');
 		if (decoded.kind !== 'migrated') return;
 		expect(decoded.sceneSpace).toBe('project-world');
-		// The layout is now the wall-first shape with the floor descriptor.
-		expect(decoded.project.layout.formatVersion).toBe(4);
+		// The layout is now the wall-first shape with the floor descriptor, at
+		// the current canonical format (P23.6H bumped 4 → 5).
+		expect(decoded.project.layout.formatVersion).toBe(LAYOUT_WALL_FIRST_FORMAT_VERSION);
 		expect(decoded.project.layout.floor.id).toBe('floor-1');
 		expect(decoded.project.layout.rooms[0]!.id).toBe('room-a');
 		// The scene is world-local (discriminated) with no room-bound entities.
@@ -202,7 +209,7 @@ describe('project compatible decode (P23.0a)', () => {
 			...project,
 			layout: {
 				units: 'meters',
-				formatVersion: 4,
+				formatVersion: LAYOUT_WALL_FIRST_FORMAT_VERSION,
 				floor: { id: 'floor', name: 'Floor', elevation: 0, height: 3 },
 				junctions: [],
 				walls: [],
@@ -272,7 +279,7 @@ describe('P23.1 wall-first project codec', () => {
 			scene: { ...project.scene, formatVersion: 1 as const },
 			layout: {
 				units: 'meters',
-				formatVersion: 4,
+				formatVersion: LAYOUT_WALL_FIRST_FORMAT_VERSION,
 				floor: { id: 'floor', name: 'Floor', elevation: 0, height: 3 },
 				junctions: [],
 				walls: [],
@@ -283,5 +290,60 @@ describe('P23.1 wall-first project codec', () => {
 		};
 		const result = parseProjectJson(JSON.stringify(wallFirstProject));
 		expect(result.success).toBe(true);
+	});
+
+	it('the generic project serializer refuses a pre-H layout while the reader stays tolerant', () => {
+		// P23.6H S1b — one rule for every canonical writer. Both halves matter:
+		// the READ path must keep loading a stored pre-H payload (the API
+		// publication path validates persisted releases through `validateProject`),
+		// and the WRITE path must not emit that payload unchanged with pre-H
+		// `wall.height` meaning.
+		const project = validProject();
+		const preH = {
+			...project,
+			scene: { ...project.scene, formatVersion: 1 as const },
+			layout: {
+				units: 'meters',
+				formatVersion: LAYOUT_PRE_AUTHORITATIVE_WALL_HEIGHT_FORMAT_VERSION,
+				floor: { id: 'floor', name: 'Floor', elevation: 0, height: 3 },
+				junctions: [],
+				walls: [],
+				rooms: [],
+				openings: [],
+				objects: []
+			}
+		};
+
+		// Reader: still tolerant, so historical reads never break.
+		expect(validateProject(preH).success).toBe(true);
+
+		// Writer: fails closed by name, with the path prefixed onto the Layout half.
+		let thrown: unknown;
+		try {
+			serializeProject(preH);
+		} catch (error) {
+			thrown = error;
+		}
+		expect(thrown).toBeInstanceOf(ProjectValidationError);
+		const issue = (thrown as ProjectValidationError).issue;
+		expect(issue.code).toBe('unsupported_format_version');
+		expect(issue.path).toBe('$.layout.formatVersion');
+
+		// The compatible read path is what makes the same project writable: it
+		// normalizes to the current format, and the writer then succeeds.
+		const decoded = decodeProjectCompatible(preH);
+		if (decoded.kind !== 'wall-first' && decoded.kind !== 'migrated') {
+			throw new Error(`expected a wall-first decode: ${decoded.kind}`);
+		}
+		const migrated = {
+			id: decoded.project.id,
+			name: decoded.project.name,
+			layout: decoded.project.layout,
+			scene: decoded.project.scene
+		};
+		expect(validateProject(migrated).success).toBe(true);
+		expect(serializeProject(migrated)).toContain(
+			`"formatVersion": ${LAYOUT_WALL_FIRST_FORMAT_VERSION}`
+		);
 	});
 });

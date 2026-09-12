@@ -4,6 +4,7 @@ import {
 	compileWallFirstLayoutGeometry,
 	validateWallFirstLayoutDocument,
 	migrateLegacyLayoutDocument,
+	LAYOUT_WALL_FIRST_FORMAT_VERSION,
 	type LayoutDocument
 } from '@portfolio/layout-core';
 import type { LayoutVec2 } from '$lib/layout/layout-types';
@@ -85,7 +86,8 @@ describe('legacy → wall-first Layout migration (P23.0b / H5)', () => {
 		if (result.kind !== 'success') return;
 
 		const doc = result.document;
-		expect(doc.formatVersion).toBe(4);
+		// P23.6H — migration output is the current canonical format.
+		expect(doc.formatVersion).toBe(LAYOUT_WALL_FIRST_FORMAT_VERSION);
 		expect(doc.floor).toEqual({ id: 'floor-1', name: 'Floor 1', elevation: 0, height: 3 });
 
 		// 4 corners for room-a + 2 new for room-b's far side = 6 junctions.

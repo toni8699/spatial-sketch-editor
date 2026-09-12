@@ -21,20 +21,39 @@
 import type { LayoutObject, LayoutVec2 } from './layout-types';
 
 /**
- * Explicit wall-first format discriminator value.
+ * Explicit wall-first format discriminator value (current canonical format).
  *
  * Historical usage recheck (P23.0 requires this before freezing): the active
  * legacy Layout JSON carries no `formatVersion` key (the legacy codec rejects
  * it as `unknown_key`), so a missing version can only mean the Room-owned
  * legacy shape. Archived Museum terminology called the immediately preceding
- * Layout model "v3"; the least surprising wall-first number is therefore `4`
+ * Layout model "v3"; the least surprising wall-first number was therefore `4`
  * (H5 §10.1). Any other explicit value is rejected as unrecognized — a real
  * decoder must exist before a number becomes loadable.
+ *
+ * P23.6H bumps the canonical format to `5`: `LayoutWall.height` becomes the
+ * authoritative physical Wall height (`0 < height <= floor.height`). Format `4`
+ * stays loadable and is the **pre-H** generation whose stored `height` was never
+ * authoritative for rendering; the compatible read/decode boundary normalizes it
+ * to `5` (see `normalizePreHWallFirstLayout` in `layout-wall-first-codec.ts`).
  */
-export const LAYOUT_WALL_FIRST_FORMAT_VERSION = 4 as const;
+export const LAYOUT_WALL_FIRST_FORMAT_VERSION = 5 as const;
+
+/**
+ * P23.6H — the pre-authoritative-Wall-height generation.
+ *
+ * A `4` payload's `wall.height` values were written before any Wall-height
+effect on geometry; its visible extent was Floor-derived. Decoding a `4` payload
+normalizes every Wall to the *previously visible* Floor extent before the document
+enters canonical state, so old projects keep their appearance.
+ */
+export const LAYOUT_PRE_AUTHORITATIVE_WALL_HEIGHT_FORMAT_VERSION = 4 as const;
 
 /** All explicit `formatVersion` values the compatible decoder recognizes. */
-export const KNOWN_LAYOUT_FORMAT_VERSIONS = [LAYOUT_WALL_FIRST_FORMAT_VERSION] as const;
+export const KNOWN_LAYOUT_FORMAT_VERSIONS = [
+	LAYOUT_PRE_AUTHORITATIVE_WALL_HEIGHT_FORMAT_VERSION,
+	LAYOUT_WALL_FIRST_FORMAT_VERSION
+] as const;
 
 export type LayoutFormatVersion = (typeof KNOWN_LAYOUT_FORMAT_VERSIONS)[number];
 
@@ -51,11 +70,21 @@ export type LayoutJunction = {
  * One physical Wall between two explicit Junctions. A Wall exists once even
  * when it bounds two Rooms; no Wall stores or infers Room ownership.
  *
- * `height` is the birth default (floor height) carried as data. Authored
- * height editing is deferred: the canonical compiler, bounds, mesh, and
- * opening-fit validation all derive vertical geometry from the floor, so an
- * editor for this field would violate authored-state → compiler → render
- * until partial-height Wall semantics are designed (post-P23.6).
+ * `height` is the **authoritative physical height** of this Wall (P23.6H),
+ * measured upward from the Floor elevation:
+ *
+ * ```text
+ * bottomY = floor.elevation
+ * topY    = floor.elevation + wall.height
+ * ```
+ *
+ * It is finite, strictly positive, per physical Wall, shared by both sides of the
+ * Wall, and capped by the Floor envelope (`0 < height <= floor.height`, one shared
+ * `WALL_HEIGHT_EPSILON`). New Walls are born at `floor.height`; after birth the
+ * Floor height is **not** a live authority and never silently rewrites an authored
+ * Wall height. Wall height is consumed by the canonical compiler, bounds, mesh
+ * inputs and Opening fit — and is deliberately **not** part of Plan face
+ * extraction, so a height change alone never alters Room topology.
  */
 export type LayoutWall = {
   id: string;

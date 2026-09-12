@@ -219,6 +219,13 @@ export type CompiledPhysicalWall = CompiledIdentity & {
 	role: 'boundary' | 'partition';
 	floorId: string;
 	thickness: number;
+	/**
+	 * P23.6H — the Wall's authoritative physical height in meters, carried into
+	 * compiled output so downstream consumers (mesh builders, Inspector, Plan)
+	 * never have to re-read `LayoutDocument`. Vertical extent is
+	 * `[floor.elevation, floor.elevation + height]`.
+	 */
+	height: number;
 	length: number;
 	samples: CompiledCurveSample[];
 	sections: CompiledWallSection[];

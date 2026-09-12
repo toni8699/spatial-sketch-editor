@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createEmptyProject } from '$lib/project/project-codec';
+import { createEmptyProject, createEmptyWallFirstProject } from '$lib/project/project-codec';
+import { LAYOUT_PRE_AUTHORITATIVE_WALL_HEIGHT_FORMAT_VERSION } from '$lib/layout/layout-wall-first-types';
 import {
 	clearPendingCloudSave,
 	createProjectApi,
@@ -280,5 +281,30 @@ describe('project persistence client', () => {
 		writePendingCloudSave(project, storage, now);
 		clearPendingCloudSave(storage);
 		expect(values.has(PENDING_CLOUD_SAVE_KEY)).toBe(false);
+	});
+
+	it('refuses a pre-H project instead of persisting it', () => {
+		// P23.6H S1b — the session handoff is a writer, so it carries the same
+		// current-format gate as `serializeProject()`: storing a pre-H payload
+		// would freeze pre-H `wall.height` meaning into the handoff.
+		const values = new Map<string, string>();
+		const storage = {
+			getItem: (key: string) => values.get(key) ?? null,
+			setItem: (key: string, value: string) => values.set(key, value),
+			removeItem: (key: string) => values.delete(key)
+		};
+		const project = createEmptyWallFirstProject({ id: 'project:pre-h', name: 'Pre-H' });
+		const preH = {
+			...project,
+			layout: {
+				...project.layout,
+				formatVersion: LAYOUT_PRE_AUTHORITATIVE_WALL_HEIGHT_FORMAT_VERSION
+			}
+		};
+
+		expect(writePendingCloudSave(preH, storage, 1_000_000)).toBe(false);
+		expect(values.has(PENDING_CLOUD_SAVE_KEY)).toBe(false);
+		// The current-format document still writes normally.
+		expect(writePendingCloudSave(project, storage, 1_000_000)).toBe(true);
 	});
 });

@@ -25,6 +25,7 @@ import {
 	type WallFirstOpPlan
 } from '$lib/layout/layout-wall-topology-ops';
 import {
+	LAYOUT_PRE_AUTHORITATIVE_WALL_HEIGHT_FORMAT_VERSION,
 	LAYOUT_WALL_FIRST_FORMAT_VERSION,
 	validateWallFirstLayoutDocument
 } from '$lib/layout/layout-wall-first-codec';
@@ -373,7 +374,9 @@ describe('P23.0 stage 2 — canonical wall-first Project Save', () => {
 		if (!result.success) return;
 		expect(result.project.layout.formatVersion).toBe(LAYOUT_WALL_FIRST_FORMAT_VERSION);
 		expect(result.project.scene.formatVersion).toBe(1);
-		expect(result.layoutCanonicalJson).toContain('"formatVersion": 4');
+		expect(result.layoutCanonicalJson).toContain(
+			`"formatVersion": ${LAYOUT_WALL_FIRST_FORMAT_VERSION}`
+		);
 		expect(result.sceneCanonicalJson).toContain('"formatVersion": 1');
 		expect(result.canonicalJson.endsWith('\n')).toBe(true);
 		// The written layout document itself passes the wall-first codec.
@@ -471,6 +474,28 @@ describe('P23.0 stage 2 — canonical wall-first Project Save', () => {
 		expect(decoded.sceneSpace).toBe('project-world');
 		expect(decoded.project.layout.formatVersion).toBe(LAYOUT_WALL_FIRST_FORMAT_VERSION);
 		expect(decoded.project.scene.formatVersion).toBe(1);
+	});
+
+	it('rejects a pre-H layout by name — canonical Save never migrates (P23.6H S1b)', () => {
+		// The compatible read boundary is the one normalization seam; a payload
+		// that reaches Save still declaring the pre-H format must fail closed
+		// rather than be persisted with pre-H `wall.height` meaning.
+		const payload = {
+			...wallFirstProjectPayload(),
+			layout: {
+				...wallFirstProjectPayload().layout,
+				formatVersion: LAYOUT_PRE_AUTHORITATIVE_WALL_HEIGHT_FORMAT_VERSION
+			}
+		};
+		const result = validateWallFirstProject(payload);
+		expect(result.success).toBe(false);
+		if (result.success) return;
+		const versionIssue = result.issues.find(
+			(issue) => issue.code === 'unsupported_format_version'
+		);
+		expect(versionIssue?.side).toBe('layout');
+		expect(versionIssue?.message).toContain('compatible read path');
+		expect(() => serializeWallFirstProject(payload)).toThrow(WallFirstProjectValidationError);
 	});
 });
 

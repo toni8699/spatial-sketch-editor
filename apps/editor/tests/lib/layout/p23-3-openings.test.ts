@@ -246,7 +246,9 @@ describe('P23.3 canonical Opening domain operations', () => {
 		expect(fine.document.openings).toHaveLength(2);
 	});
 
-	it('rejects a vertical-fit failure (sill + height over the floor height)', () => {
+	it('rejects a vertical-fit failure (sill + height over the hosting Wall height)', () => {
+		// P23.6H — vertical fit is measured against the hosting Wall's
+		// authoritative height; the message names the Wall, not the Floor.
 		const plan = planCreateWallFirstOpening(BASE, {
 			wallId: 'wall-e',
 			kind: 'window',
@@ -257,7 +259,7 @@ describe('P23.3 canonical Opening domain operations', () => {
 		});
 		const rejected = rejection(plan);
 		expect(rejected.code).toBe('opening_set_invalid');
-		expect(rejected.message).toContain('floor height');
+		expect(rejected.message).toContain("does not fit Wall 'wall-e'");
 	});
 
 	it('updates exact fields, preserves the host/Wall ID, and rejects no-ops', () => {
