@@ -24,6 +24,7 @@ import type { LayoutDocumentWallFirst } from '$lib/layout/layout-wall-first-type
 import {
 	planExactJunctionMove,
 	planDeleteLayoutObject,
+	planCommitLayoutObjectPreset,
 	planExactLayoutObjectTransform,
 	planExactRectangleDimensions,
 	planExactWallAngle,
@@ -31,6 +32,7 @@ import {
 	planExactWallThickness,
 	planWallSubdivision,
 	type FixedWallEndpoint,
+	type LayoutArchitecturalPresetId,
 	type LayoutObjectTransformPatch,
 	type PrecisionOperation,
 	type PrecisionPlan
@@ -752,6 +754,56 @@ export function commitLayoutObject(
 	layout.objects = [...layout.objects, object];
 	const applied = applyLayoutMutation(state, layout);
 	return applied.success ? { success: true, objectId: object.id } : applied;
+}
+
+/**
+ * P23.5 — commit one architectural preset as ONE ordinary document-level
+ * LayoutObject through the canonical wall-first planner. The preset is a
+ * creation default only: no preset kind, no preset metadata, no Room
+ * containment requirement; the stored transform is project/world-local and
+ * the object edits through the exact same P23.1 object controls afterwards.
+ * Rejection installs nothing (no history).
+ */
+export function commitLayoutObjectPreset(
+	state: LayoutPreviewState,
+	presetId: LayoutArchitecturalPresetId,
+	point: LayoutVec2
+): LayoutObjectMutationResult {
+	const layout = wallFirstLayoutOrError(state);
+	if (!layout) return { success: false, message: state.lastMutationMessage ?? 'Wall-first layout is not active' };
+	const floorElevation = layout.floor.elevation;
+	const plan = planCommitLayoutObjectPreset(layout, presetId, point, floorElevation);
+	if (plan.kind === 'rejected') {
+		state.lastMutationMessage = plan.rejection.message;
+		return { success: false, message: plan.rejection.message };
+	}
+	// Fail closed: a success without the birthed object ID must never select
+	// an empty target — the planner always supplies it today, so a missing ID
+	// is a wiring bug, not a committable result.
+	const objectId = plan.createdObjectId;
+	if (!objectId) {
+		state.lastMutationMessage = 'Preset create returned no object ID';
+		return { success: false, message: 'Preset create returned no object ID' };
+	}
+	try {
+		const bundle = derivePreviewBundle(
+			state.project.id,
+			state.project.name,
+			plan.document,
+			state.project.scene
+		);
+		state.source = 'draft';
+		commitPreviewBundle(state, bundle);
+		state.previewVersion += 1;
+		state.lastMutationMessage = null;
+		state.statusMessage = null;
+		state.importError = null;
+		return { success: true, objectId };
+	} catch (error) {
+		const message = error instanceof Error ? error.message : 'Could not commit preset object';
+		state.lastMutationMessage = message;
+		return { success: false, message };
+	}
 }
 
 export function updateLayoutObjectFields(

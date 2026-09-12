@@ -58,7 +58,9 @@
 		selectedLayoutRoomId,
 		setLayoutDraftTool,
 		toggleLayoutAccordion,
+		isLayoutPresetTool,
 		type LayoutInteractionState,
+		type LayoutPresetTool,
 		type LayoutPrimitiveTool
 	} from './layout/layout-interaction';
 	import { roomBounds, roomEdgeLength } from './layout/layout-editing';
@@ -1044,11 +1046,22 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 		if (stagingTransformAvailable) store.deleteSelection();
 	}
 
-	function armLayoutPlaceTool(tool: 'door' | 'window' | LayoutPrimitiveTool) {
+	function armLayoutPlaceTool(tool: 'door' | 'window' | LayoutPrimitiveTool | LayoutPresetTool) {
 		// P23.3 — a wall-first document hosts canonical Openings, so the
 		// door/window place tools arm for it and author against a
 		// document-global `wallId`; only the legacy room-owned primitives stay
 		// unavailable (they have no canonical counterpart yet).
+		const preset = isLayoutPresetTool(tool);
+		// P23.5 — presets are wall-first-only creation defaults over ordinary
+		// LayoutObject kinds (no Room containment, no preset metadata).
+		if (preset && !isWallFirstLayout) {
+			store.setStatusMessage('Column, Platform and Plinth placement requires a wall-first layout.');
+			return;
+		}
+		if (preset && layoutInteraction.viewMode !== 'plan') {
+			store.setStatusMessage('Preset placement is Plan-only');
+			return;
+		}
 		const primitive = tool === 'box' || tool === 'cylinder' || tool === 'sphere';
 		if (primitive && isWallFirstLayout) {
 			store.setStatusMessage('Legacy primitive placement is unavailable for wall-first layouts; use Architecture · exact.');
@@ -1412,7 +1425,7 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 			</dl>
 			{#if layoutPreview.importError}<p class="layout-opening-warning" role="alert">Import failed: {layoutPreview.importError}</p>{/if}
 			<p class="layout-inspector-note">Openings are geometry-only in this phase. No room adjacency or portal semantics are inferred.</p>
-			{#if isWallFirstLayout}<p class="layout-inspector-note">Wall-first layout: use Architecture · exact for Junctions, Walls, Rooms, and existing object transforms. Door and Window place canonical Openings on a Wall; legacy room and primitive placement is unavailable.</p>{/if}
+			{#if isWallFirstLayout}<p class="layout-inspector-note">Wall-first layout: use Architecture · exact for Junctions, Walls, Rooms, and existing object transforms. Door and Window place canonical Openings on a Wall; Column, Platform and Plinth place ordinary objects; legacy room and primitive placement is unavailable.</p>{/if}
 
 			{#if isScenePlanLayout}
 			<div class="layout-accordion">
@@ -1424,6 +1437,9 @@ const WALL_OPENING_DUPLICATE_GAP_M = 0.2;
 						<button type="button" disabled={layoutInteraction.viewMode !== 'plan' || isWallFirstLayout} onclick={() => armLayoutPlaceTool('box')}>Box</button>
 						<button type="button" disabled={layoutInteraction.viewMode !== 'plan' || isWallFirstLayout} onclick={() => armLayoutPlaceTool('cylinder')}>Cylinder</button>
 						<button type="button" disabled={layoutInteraction.viewMode !== 'plan' || isWallFirstLayout} onclick={() => armLayoutPlaceTool('sphere')}>Sphere</button>
+						<button type="button" disabled={layoutInteraction.viewMode !== 'plan' || !isWallFirstLayout} title={isWallFirstLayout ? 'Places one ordinary Column object (cylinder creation default)' : 'Preset placement requires a wall-first layout'} onclick={() => armLayoutPlaceTool('preset-column')}>Column</button>
+						<button type="button" disabled={layoutInteraction.viewMode !== 'plan' || !isWallFirstLayout} title={isWallFirstLayout ? 'Places one ordinary Platform object (box creation default)' : 'Preset placement requires a wall-first layout'} onclick={() => armLayoutPlaceTool('preset-platform')}>Platform</button>
+						<button type="button" disabled={layoutInteraction.viewMode !== 'plan' || !isWallFirstLayout} title={isWallFirstLayout ? 'Places one ordinary Plinth object (box creation default)' : 'Preset placement requires a wall-first layout'} onclick={() => armLayoutPlaceTool('preset-plinth')}>Plinth</button>
 					</div>
 				{/if}
 			</div>

@@ -11,12 +11,14 @@
 		beginLayoutObjectRotateDrag,
 		beginLayoutRoomUnitDrag,
 		beginLayoutPrimitiveDraft,
+		beginLayoutPresetDraft,
 		beginRectangle,
 		beginRoomEdit,
 		beginWallChain,
 		cancelLayoutObjectDrag,
 		cancelLayoutRoomUnitDrag,
 		cancelLayoutPrimitiveDraft,
+		cancelLayoutPresetDraft,
 		cancelRoomEdit,
 		cancelWallChainRun,
 		captureWallChainRun,
@@ -40,6 +42,7 @@
 		removeLastPolygonPoint,
 		updateWallChainCursor,
 		resolveArrangeScenePick,
+		isLayoutPresetTool,
 		wallChainRoleForTool,
 		shouldBeginWallBend,
 		updateRectangle,
@@ -58,6 +61,7 @@
 	import {
 		captureLayoutPreviewSnapshot,
 		commitLayoutPrimitive,
+		commitLayoutObjectPreset,
 		commitLayoutRoomEdit,
 		previewLayoutRoomUnit,
 		deleteLayoutObject,
@@ -121,6 +125,7 @@
 		buildPlanInteractionProjection,
 		physicalWallSpan,
 		planHandleScreenPoints,
+		presetIdForTool,
 		rotationHandleScreenPoint,
 		wallOpeningEdgeWorldPoints,
 		withArrangeHoverOutline,
@@ -131,11 +136,13 @@
 	} from './plan-overlays';
 	import {
 		LAYOUT_PLAN_GRID_STEP,
+		layoutArchitecturalPreset,
 		resolveLayoutSnap,
 		resolveOpeningDragSnap,
 		resolveOpeningDragSnapUseMode,
 		snapOwnerKey,
 		wallOwnerKey,
+		type LayoutArchitecturalPresetId,
 		type OpeningDragAnchor,
 		type SnapFeatureKind,
 		type SnapInputContext,
@@ -1442,6 +1449,37 @@
 			return;
 		}
 
+		// P23.5 — one-click architectural preset: the snapped click point is the
+		// object's X/Z center; the canonical planner validates once and commits
+		// one ordinary document-level object (nothing on reject, no history).
+		// The tool stays armed for repeat placement; Escape disarms.
+		if (isLayoutPresetTool(interaction.tool)) {
+			if (!wallFirstLayoutDocument()) {
+				preview.statusMessage = 'Column, Platform and Plinth placement requires a wall-first layout.';
+				setLayoutDraftTool(interaction, 'select');
+				return;
+			}
+			const snapped = draftPoint(event, null);
+			if (!snapped) return;
+			if (!onLayoutTransactionBegin()) {
+				preview.statusMessage = 'Finish the current layout interaction first';
+				return;
+			}
+			const presetId: LayoutArchitecturalPresetId = presetIdForTool(interaction.tool);
+			const presetLabel = layoutArchitecturalPreset(presetId)?.label ?? presetId;
+			const result = commitLayoutObjectPreset(preview, presetId, snapped);
+			if (result.success) {
+				selectLayoutObject(interaction, result.objectId);
+				preview.statusMessage = `Created ${presetLabel}`;
+				onLayoutTransactionCommit();
+			} else {
+				preview.statusMessage = result.message;
+				onLayoutTransactionCancel();
+			}
+			cancelLayoutPresetDraft(interaction);
+			return;
+		}
+
 		if (interaction.tool !== 'select') return;
 		const target = resolvePlanHit(model.queries, point, LAYOUT_PLAN_HIT_RADIUS_PX / interaction.planView.pixelsPerMeter);
 		if (!target) {
@@ -1552,6 +1590,19 @@
 			} else if (interaction.wallChainCursor) {
 				updateWallChainCursor(interaction, null);
 			}
+		}
+		// P23.5 — an armed preset tool previews its footprint at the snapped
+		// cursor (presentation only; the click commits). Hover never opens a
+		// history transaction and never blocks other mutations.
+		if (
+			isLayoutPresetTool(interaction.tool) &&
+			interaction.planViewMode === 'layout' &&
+			pointerId === null &&
+			panPointerId === null
+		) {
+			const hover = draftPoint(event, null);
+			if (hover) beginLayoutPresetDraft(interaction, interaction.tool, hover);
+			else cancelLayoutPresetDraft(interaction);
 		}
 		if (stagingGesture?.pointerId === event.pointerId) {
 			previewStagingGesture(event);
@@ -1950,6 +2001,11 @@
 			cancelLayoutPrimitiveDraft(interaction);
 			pointerId = null;
 		}
+		// P23.5 — hover preview never opens a transaction, so cancel only
+		// clears the footprint (no commit/cancel callbacks to drive).
+		if (interaction.presetDraft) {
+			cancelLayoutPresetDraft(interaction);
+		}
 		if (interaction.roomUnitDrag && pointerId === event.pointerId) {
 			if (roomUnitSnapshot) restoreLayoutPreviewSnapshot(preview, roomUnitSnapshot);
 			onLayoutTransactionCancel();
@@ -2148,6 +2204,13 @@
 				pointerId = null;
 				return;
 			}
+			// P23.5 — Escape clears the preset footprint preview and disarms
+			// the tool (the document was never written, so no history).
+			if (isLayoutPresetTool(interaction.tool)) {
+				cancelLayoutPresetDraft(interaction);
+				setLayoutDraftTool(interaction, 'select');
+				return;
+			}
 			// P23.3 — Escape during a canonical Opening gesture restores the
 			// baseline with no history (the document was never written).
 			if (interaction.wallOpeningDrag) {
@@ -2332,6 +2395,8 @@
 			// P23.9 — the pending segment preview follows the pointer, so leaving
 			// the surface drops it rather than freezing a stale leg.
 			updateWallChainCursor(interaction, null);
+			// P23.5 — same for the preset footprint preview.
+			cancelLayoutPresetDraft(interaction);
 			clearLayoutSnapFeedback();
 		}}
 	>

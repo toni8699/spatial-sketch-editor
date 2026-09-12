@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { BrickWall, DoorOpen, Grid2x2, MousePointer2, Pentagon, SeparatorVertical, Square, Trash2, X } from 'lucide-svelte';
 	import {
+		cancelLayoutPresetDraft,
 		cancelLayoutPrimitiveDraft,
 		clearLayoutDraft,
+		isLayoutPresetTool,
 		setLayoutDraftTool,
 		setPlanViewMode,
 		setLayoutViewMode,
@@ -21,8 +23,10 @@
 	 * P23.9/P23.3 — tools a wall-first document can host. The chain tools and
 	 * the Rect/Polygon convenience frontends author canonical Junction/Wall
 	 * records; the door/window tools author canonical Openings against a
-	 * document-global `wallId` (P23.3). Only the legacy room-owned primitive
-	 * tools remain unavailable for wall-first layouts.
+	 * document-global `wallId` (P23.3). P23.5 presets author ordinary
+	 * document-level LayoutObjects through the canonical planner. Only the
+	 * legacy room-owned primitive tools remain unavailable for wall-first
+	 * layouts.
 	 */
 	const WALL_FIRST_DRAFT_TOOLS: ReadonlySet<LayoutDraftTool> = new Set<LayoutDraftTool>([
 		'select',
@@ -31,7 +35,10 @@
 		'rectangle',
 		'polygon',
 		'door',
-		'window'
+		'window',
+		'preset-column',
+		'preset-platform',
+		'preset-plinth'
 	]);
 
 	let {
@@ -75,6 +82,12 @@
 			preview.statusMessage = 'Wall and Partition sketching requires a wall-first layout; this project uses the legacy room-owned layout.';
 			return;
 		}
+		// P23.5 — presets commit through the wall-first planner only; a legacy
+		// room-owned layout keeps its drag-based primitive tools instead.
+		if (!wallFirstLayout && isLayoutPresetTool(tool)) {
+			preview.statusMessage = 'Column, Platform and Plinth placement requires a wall-first layout; this project uses the legacy room-owned layout.';
+			return;
+		}
 		if (interaction.roomUnitDrag) onCancelLayoutTransaction();
 		setLayoutDraftTool(interaction, tool);
 	}
@@ -88,7 +101,8 @@
 		if (interaction.roomUnitDrag) onCancelLayoutTransaction();
 		clearLayoutDraft(interaction);
 		cancelLayoutPrimitiveDraft(interaction);
-		if (interaction.tool === 'door' || interaction.tool === 'window') setLayoutDraftTool(interaction, 'select');
+		cancelLayoutPresetDraft(interaction);
+		if (interaction.tool === 'door' || interaction.tool === 'window' || isLayoutPresetTool(interaction.tool)) setLayoutDraftTool(interaction, 'select');
 	}
 </script>
 
@@ -117,6 +131,9 @@
 			<button type="button" title={wallFirstLayout ? 'Draws one closed boundary chain of canonical Walls' : undefined} class:active={interaction.tool === 'polygon'} aria-pressed={interaction.tool === 'polygon'} onclick={() => chooseTool('polygon')}><Pentagon size={14} aria-hidden="true" /> Poly Room</button>
 			<button type="button" title={wallFirstLayout ? 'Places one canonical Opening on the clicked Wall' : undefined} class:active={interaction.tool === 'door'} aria-pressed={interaction.tool === 'door'} onclick={() => chooseTool('door')}><DoorOpen size={14} aria-hidden="true" /> Door</button>
 			<button type="button" title={wallFirstLayout ? 'Places one canonical Opening on the clicked Wall' : undefined} class:active={interaction.tool === 'window'} aria-pressed={interaction.tool === 'window'} onclick={() => chooseTool('window')}><Grid2x2 size={14} aria-hidden="true" /> Window</button>
+			<button type="button" disabled={!wallFirstLayout} title={!wallFirstLayout ? 'Preset placement requires a wall-first layout' : 'Places one ordinary Column object (cylinder creation default)'} class:active={interaction.tool === 'preset-column'} aria-pressed={interaction.tool === 'preset-column'} onclick={() => chooseTool('preset-column')}>Column</button>
+			<button type="button" disabled={!wallFirstLayout} title={!wallFirstLayout ? 'Preset placement requires a wall-first layout' : 'Places one ordinary Platform object (box creation default)'} class:active={interaction.tool === 'preset-platform'} aria-pressed={interaction.tool === 'preset-platform'} onclick={() => chooseTool('preset-platform')}>Platform</button>
+			<button type="button" disabled={!wallFirstLayout} title={!wallFirstLayout ? 'Preset placement requires a wall-first layout' : 'Places one ordinary Plinth object (box creation default)'} class:active={interaction.tool === 'preset-plinth'} aria-pressed={interaction.tool === 'preset-plinth'} onclick={() => chooseTool('preset-plinth')}>Plinth</button>
 		{:else if onDeleteArrange}
 			<button type="button" aria-label="Delete arrange selection" onclick={() => onDeleteArrange?.()}><Trash2 size={14} aria-hidden="true" /> Delete</button>
 		{/if}
@@ -132,7 +149,7 @@
 	{:else}
 		<button type="button" class:active={preview.showCeilings} aria-pressed={preview.showCeilings} onclick={() => toggleLayoutCeilings(preview)}>Ceiling</button>
 	{/if}
-	{#if interaction.planViewMode === 'layout' && (interaction.polygonPoints.length > 0 || interaction.wallChainStart !== null || interaction.rectangleStart || interaction.primitiveDraft || interaction.roomUnitDrag || interaction.tool === 'door' || interaction.tool === 'window')}
+	{#if interaction.planViewMode === 'layout' && (interaction.polygonPoints.length > 0 || interaction.wallChainStart !== null || interaction.rectangleStart || interaction.primitiveDraft || interaction.presetDraft || isLayoutPresetTool(interaction.tool) || interaction.roomUnitDrag || interaction.tool === 'door' || interaction.tool === 'window')}
 		<button type="button" class="cancel" onclick={cancel}><X size={14} aria-hidden="true" /> Cancel</button>
 	{/if}
 </div>

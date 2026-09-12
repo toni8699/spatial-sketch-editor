@@ -9,7 +9,20 @@ export type LayoutViewMode = 'plan' | '3d';
 /** Scene → Plan's local authoring authority. Camera Plan never reads this. */
 export type PlanViewMode = 'layout' | 'staging';
 export type LayoutPrimitiveTool = 'box' | 'cylinder' | 'sphere';
-export type LayoutDraftTool = 'select' | 'rectangle' | 'polygon' | 'door' | 'window' | 'wall-chain' | 'partition-chain' | LayoutPrimitiveTool;
+
+/**
+ * P23.5 — small architectural preset set (creation defaults over existing
+ * LayoutObject kinds). A preset is only a creation default: it authors one
+ * ordinary document-level object that then edits/compiles/renders like every
+ * manually created primitive. No serialized preset kind ever exists.
+ */
+export type LayoutPresetTool = 'preset-column' | 'preset-platform' | 'preset-plinth';
+
+export function isLayoutPresetTool(tool: LayoutDraftTool): tool is LayoutPresetTool {
+	return tool === 'preset-column' || tool === 'preset-platform' || tool === 'preset-plinth';
+}
+
+export type LayoutDraftTool = 'select' | 'rectangle' | 'polygon' | 'door' | 'window' | 'wall-chain' | 'partition-chain' | LayoutPrimitiveTool | LayoutPresetTool;
 export type LayoutRoomDragMode = 'room' | 'vertex';
 
 /** P23.9 — role of the active wall-chain draft (Wall vs Partition tool). */
@@ -28,6 +41,18 @@ export type LayoutPrimitiveDraft = {
 	start: LayoutVec2;
 	current: LayoutVec2;
 	roomId?: string;
+	valid: boolean;
+};
+
+/**
+ * P23.5 — one-click preset placement candidate (never persisted, never a
+ * second selection store). The click point is the object's X/Z center in
+ * document meters; validity is finite coordinates, not Room containment —
+ * exterior placement stays valid where product geometry permits.
+ */
+export type LayoutPresetDraft = {
+	tool: LayoutPresetTool;
+	point: LayoutVec2;
 	valid: boolean;
 };
 
@@ -318,6 +343,8 @@ export type LayoutInteractionState = {
 	rectangleStart: LayoutVec2 | null;
 	rectangleCurrent: LayoutVec2 | null;
 	primitiveDraft: LayoutPrimitiveDraft | null;
+	/** P23.5 — transient one-click preset candidate (session-only). */
+	presetDraft: LayoutPresetDraft | null;
 	selection: LayoutSelection;
 	objectDrag: LayoutObjectDrag | null;
 	roomUnitDrag: LayoutRoomUnitDrag | null;
@@ -352,6 +379,7 @@ export function createLayoutInteractionState(): LayoutInteractionState {
 		rectangleStart: null,
 		rectangleCurrent: null,
 		primitiveDraft: null,
+		presetDraft: null,
 		selection: { kind: 'none' },
 		objectDrag: null,
 		roomUnitDrag: null,
@@ -434,6 +462,9 @@ export function hasLayoutTransientInteraction(
 		| 'wallChainStart'
 	>
 ): boolean {
+	// P23.5 — `presetDraft` is hover-only footprint feedback (like the
+	// wall-chain cursor, which is also excluded): a preset click commits
+	// synchronously, so there is never an in-progress preset gesture to guard.
 	return Boolean(
 		state.polygonPoints.length > 0 ||
 		state.wallChainStart !== null ||
@@ -453,6 +484,7 @@ export function setLayoutViewMode(state: LayoutInteractionState, viewMode: Layou
 	state.objectDrag = null;
 	state.roomUnitDrag = null;
 	state.primitiveDraft = null;
+	state.presetDraft = null;
 	state.wallOpeningDrag = null;
 }
 
@@ -463,6 +495,7 @@ export function setLayoutDraftTool(state: LayoutInteractionState, tool: LayoutDr
 	state.objectDrag = null;
 	state.roomUnitDrag = null;
 	state.primitiveDraft = null;
+	state.presetDraft = null;
 	state.wallOpeningDrag = null;
 }
 
@@ -543,6 +576,28 @@ export function primitiveDraftCenter(
 export function cancelLayoutPrimitiveDraft(state: LayoutInteractionState): void {
 	state.primitiveDraft = null;
 	if (state.tool === 'box' || state.tool === 'cylinder' || state.tool === 'sphere') state.tool = 'select';
+}
+
+/**
+ * P23.5 — one click arms a preset candidate at the snapped point. No
+ * document change, no history entry; the commit validates and writes once.
+ */
+export function beginLayoutPresetDraft(
+	state: LayoutInteractionState,
+	tool: LayoutPresetTool,
+	point: LayoutVec2
+): void {
+	state.tool = tool;
+	state.presetDraft = {
+		tool,
+		point: [...point],
+		valid: point.every(Number.isFinite)
+	};
+}
+
+/** P23.5 — clear the preset candidate; the tool re-arms for the next click. */
+export function cancelLayoutPresetDraft(state: LayoutInteractionState): void {
+	state.presetDraft = null;
 }
 
 export function beginRectangle(state: LayoutInteractionState, point: LayoutVec2): void {

@@ -26,6 +26,7 @@ import {
 } from './layout-wall-noding';
 import { classifyWallIntersection, type TopologySegment } from './layout-wall-topology';
 import type { LayoutObject, LayoutVec2 } from './layout-types';
+import type { Vec3 } from './types';
 
 const POINT_EPSILON = LAYOUT_GEOMETRY_EPSILON;
 
@@ -76,7 +77,8 @@ export type PrecisionOperation =
 	| 'wall-subdivision'
 	| 'rectangle-dimensions'
 	| 'layout-object-transform'
-	| 'layout-object-delete';
+	| 'layout-object-delete'
+	| 'layout-object-preset-create';
 
 export type PrecisionRejection = {
 	code:
@@ -109,6 +111,8 @@ export type PrecisionPlan =
 			changedJunctionIds: readonly string[];
 			changedWallIds: readonly string[];
 			changedObjectIds?: readonly string[];
+			/** P23.5 — the object a preset create birthed (its stored ID). */
+			createdObjectId?: string;
 		}
 	| {
 			kind: 'rejected';
@@ -314,6 +318,109 @@ export function planExactRectangleDimensions(
 		[...targetPoints.keys()],
 		[...new Set([...roomWallIds, widthWallId, depthWallId])]
 	);
+}
+
+// =====================================================================
+// P23.5 — small architectural preset set (creation defaults only).
+//
+// A preset is never a serialized kind, linked instance, library service or
+// renderer branch (P23.5 contract): it resolves to ONE ordinary document-level
+// LayoutObject of an existing primitive kind with finite/positive default
+// dimensions, floor-relative placement, and no roomId. After creation the
+// object edits/compiles/renders through the exact same P23.1 object controls
+// and canonical compiler as every manually created primitive.
+// =====================================================================
+
+/** P23.5 preset identifiers. No `Partition` preset: partitions are first-class wall-first Walls (P23.9). */
+export type LayoutArchitecturalPresetId = 'column' | 'platform' | 'plinth';
+
+export type LayoutArchitecturalPreset = {
+	id: LayoutArchitecturalPresetId;
+	/** Human label for tool buttons (toolbar / Inspector Place accordion). */
+	label: string;
+	/** Ordinary `LayoutObject.kind` the preset creates — never a new kind. */
+	kind: 'cylinder' | 'box';
+	/** Finite/positive X/Z/Y meters (eye-call defaults, not constraints). */
+	dimensions: Vec3;
+};
+
+/**
+ * The three shipped architectural presets.
+ *
+ * Column → cylinder (0.4 m diameter, 3 m tall); Platform → low wide box;
+ * Plinth → small display base. Defaults are an implementation/product
+ * eye-call and stay editable through the existing object dimension controls
+ * after creation.
+ */
+export const LAYOUT_ARCHITECTURAL_PRESETS: readonly LayoutArchitecturalPreset[] = [
+	{ id: 'column', label: 'Column', kind: 'cylinder', dimensions: [0.4, 3, 0.4] },
+	{ id: 'platform', label: 'Platform', kind: 'box', dimensions: [3, 0.2, 3] },
+	{ id: 'plinth', label: 'Plinth', kind: 'box', dimensions: [0.8, 1, 0.8] }
+] as const;
+
+export function layoutArchitecturalPreset(
+	id: string
+): LayoutArchitecturalPreset | undefined {
+	return LAYOUT_ARCHITECTURAL_PRESETS.find((preset) => preset.id === id);
+}
+
+/**
+ * Floor-relative placement for one preset: the object's stored world position
+ * sits half a height above the floor elevation (matching how the compiler
+ * centers primitives). Returns `undefined` for non-finite/zero-height input.
+ */
+export function layoutPresetPlacement(
+	preset: LayoutArchitecturalPreset,
+	point: LayoutVec2,
+	floorElevation: number
+): Vec3 | undefined {
+	const height = preset.dimensions[1];
+	if (!Number.isFinite(height) || !(height > 0) || !Number.isFinite(floorElevation)) return undefined;
+	return [point[0], floorElevation + height / 2, point[1]];
+}
+
+/**
+ * P23.5 — create one ordinary LayoutObject from a preset on a wall-first
+ * document. Click point is the object's X/Z center (document meters); the
+ * stored transform stays project/world-local with no Room containment and no
+ * preset metadata. Rejection codes reuse the canonical set so the shared
+ * status/message path needs no new surface.
+ */
+export function planCommitLayoutObjectPreset(
+	document: LayoutDocumentWallFirst,
+	presetId: LayoutArchitecturalPresetId,
+	point: LayoutVec2,
+	floorElevation: number
+): PrecisionPlan {
+	const preset = layoutArchitecturalPreset(presetId);
+	if (!preset) return reject('invalid_reference', `Unknown architectural preset '${presetId}'`, [presetId]);
+	if (!finitePoint(point)) return reject('invalid_value', 'Preset placement point must be finite', [presetId]);
+	if (!preset.dimensions.every((value) => Number.isFinite(value) && value > 0)) {
+		return reject('invalid_value', 'Preset dimensions must be finite and greater than zero', [presetId]);
+	}
+	const position = layoutPresetPlacement(preset, point, floorElevation);
+	if (!position) return reject('invalid_value', 'Preset placement requires a finite floor elevation', [presetId]);
+
+	const candidate = cloneDocument(document);
+	const objectId = nextLayoutObjectIdIn(candidate);
+	const object: LayoutObject = {
+		id: objectId,
+		kind: preset.kind,
+		position,
+		rotation: [0, 0, 0],
+		dimensions: [...preset.dimensions] as Vec3
+	};
+	candidate.objects = [...candidate.objects, object];
+	const finalized = finalizeCandidate(candidate, 'layout-object-preset-create', [], [], [objectId]);
+	return finalized.kind === 'success' ? { ...finalized, createdObjectId: objectId } : finalized;
+}
+
+/** Deterministic `layout-object-N` allocation from the pre-commit candidate. */
+function nextLayoutObjectIdIn(document: LayoutDocumentWallFirst): string {
+	const taken = new Set(document.objects.map((object) => object.id));
+	let index = document.objects.length + 1;
+	while (taken.has(`layout-object-${index}`)) index += 1;
+	return `layout-object-${index}`;
 }
 
 /** Set exact document-level LayoutObject transform fields in a wall-first document. */
